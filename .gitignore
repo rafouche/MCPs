@@ -1,0 +1,6 @@
+node_modules/
+.wrangler/
+*.zip
+MCPs.txt
+**/altec-mcp-server-*.json
+.DS_Store
