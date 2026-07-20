@@ -8,7 +8,7 @@ A collection of independent Cloudflare Worker MCP servers, each exposing one IT/
 
 Account workers.dev subdomain used throughout: `young-math-a33a` (e.g. `https://meraki-mcp.young-math-a33a.workers.dev`).
 
-This directory is **not a git repository** — there is no version control here. Treat file edits as directly affecting the only copy of the code.
+This is a git repository (`main` is the default branch), but as of this writing almost nothing is committed yet — only `CLAUDE.md` itself is tracked, and every `*-mcp/` folder plus `Dashboard/` shows as untracked (`git status` lists them all as `??`). Don't assume a folder being present means it's safe to reorganize/delete without checking `git status` first — most of it is uncommitted work, not history.
 
 ## Projects
 
@@ -18,7 +18,7 @@ This directory is **not a git repository** — there is no version control here.
 | `halopsa-mcp` | HaloPSA (PSA/ticketing) | tool-implementation | feeds Dashboard's Tickets zone |
 | `cipp-mcp` | CIPP (M365 via CIPP) | tool-implementation | feeds Dashboard's Security zone |
 | `m365-mcp` | Microsoft Graph (direct, multi-tenant) | tool-implementation | not yet wired into Dashboard |
-| `jumpcloud-mcp` | JumpCloud directory | tool-implementation | OAuth2 Service Account, org-scoped only — not yet wired into Dashboard |
+| `jumpcloud-mcp` | JumpCloud directory | tool-implementation | OAuth2 Service Account, org-scoped only — not yet wired into Dashboard. Contains a fully duplicated nested project at `jumpcloud-mcp/jumpcloud-mcp/` (own `wrangler.jsonc`/`src`/`package.json`, currently identical to the outer one) — treat the outer `jumpcloud-mcp/src/index.ts` as canonical and confirm which copy you're editing before making changes |
 | `ninjarmm-mcp` | NinjaRMM | tool-implementation | Dashboard's Ninja `/status` route is a known pending item |
 | `gworkspace-mcp` | Google Workspace | tool-implementation | uses a service-account JSON key file in-folder |
 | `3cx-mcp` | 3CX phone system | tool-implementation | |
@@ -33,17 +33,17 @@ This directory is **not a git repository** — there is no version control here.
 Every `*-mcp/` project uses the same scripts (run from inside that project's folder — there is no top-level script that operates across all of them):
 
 ```bash
-npm install          # only needed once per project; several projects (huntress-mcp, pax8-mcp, jumpcloud-mcp) currently have no node_modules committed
+npm install          # only needed once per project; m365-mcp currently has no node_modules installed
 wrangler dev          # local dev server
 wrangler deploy       # deploy — this is the only way changes take effect; there is no CI
 wrangler secret put <NAME>   # set a secret (never put values in wrangler.jsonc)
 wrangler secret list  # list secret names (not values) on the deployed worker
 ```
 
-Only `meraki-mcp` and `cipp-mcp` currently have vitest scaffolding (`test/index.spec.ts`), and it's the default Cloudflare template "Hello World" placeholder test, not real coverage of the worker's actual tool logic:
+`3cx-mcp`, `cipp-mcp`, `gworkspace-mcp`, `halopsa-mcp`, `meraki-mcp`, and `ninjarmm-mcp` have vitest scaffolding (`test/index.spec.ts`), but in every one of them it's still the unmodified default Cloudflare template "Hello World" test, not real coverage of the worker's actual tool logic:
 
 ```bash
-npx vitest            # run from inside meraki-mcp/ or cipp-mcp/
+npx vitest            # run from inside any of the six projects listed above
 ```
 
 Type-check a file without deploying (useful when validating a hand-edited/candidate `index.ts` before overwriting the live source):
@@ -94,4 +94,8 @@ Single self-contained HTML file — all CSS/JS inline, no build step, no framewo
 
 ## Secrets
 
-Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo.
+Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt`, `*.zip`, and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
+
+## Stray root-level files
+
+`halo-index.ts` at the repo root is a near-duplicate of `halopsa-mcp/src/index.ts` (byte-identical apart from a BOM) — almost certainly a leftover candidate/backup copy from an edit-and-diff workflow, not a file anything loads at runtime. `Altec-MCP-Complete-Bundle.zip` is a packaged export of the repo, also not part of any build. Neither should be treated as a source of truth; if asked to edit "the halo worker," edit `halopsa-mcp/src/index.ts`.

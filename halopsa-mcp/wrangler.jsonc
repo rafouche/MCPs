@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "halopsa-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": []
+  },
+  "migrations": [
+    {
+      "tag": "v2",
+      "deleted_classes": ["HaloPSAMCP"]
+    }
+  ]
+}

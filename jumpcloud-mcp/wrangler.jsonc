@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jumpcloud-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true }
+  // Secrets (set via wrangler secret put — do NOT put values here):
+  //   JUMPCLOUD_API_KEY   — required, JumpCloud Admin API key
+  //   JUMPCLOUD_ORG_ID    — optional, MSP multi-org only (adds x-org-id header)
+}

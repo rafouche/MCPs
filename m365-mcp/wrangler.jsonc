@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "m365-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true }
+  // Secrets (wrangler secret put — do NOT put values here):
+  //   M365_CLIENT_ID      — App registration client ID from Azure portal
+  //   M365_CLIENT_SECRET  — App registration client secret (shown once)
+  //   M365_TENANTS        — JSON object: {"altec":"tenant-id-guid","goldmechanical":"tenant-id-guid"}
+}

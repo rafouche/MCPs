@@ -1,0 +1,7 @@
+{
+  "name": "peplink-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "deploy": "wrangler deploy", "dev": "wrangler dev" },
+  "devDependencies": { "wrangler": "^3.60.0", "typescript": "^5.4.0" }
+}
