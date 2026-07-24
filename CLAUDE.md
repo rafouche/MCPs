@@ -26,6 +26,7 @@ This is a git repository (`main` is the default branch), but as of this writing 
 | `unifi-mcp` | UniFi | tool-implementation | |
 | `huntress-mcp` | Huntress EDR | **passthrough gateway** | plain JS, not TS |
 | `pax8-mcp` | Pax8 billing/provisioning | **passthrough gateway** | plain JS, not TS |
+| `teams-meeting-notes-worker` | Microsoft Graph + Teams + Claude API | **webhook automation** | not an MCP tool server — no `TOOLS`/`runTool`, no `/mcp` endpoint. Receives Graph change notifications when a Teams meeting transcript is ready, summarizes it via the Claude API, and posts to a Teams channel via Incoming Webhook. Plain JS, not TS. See its own README for the full secrets list and setup flow. |
 | `Dashboard/dashboard.html` | — | static wallboard client | no build step |
 
 ## Commands
