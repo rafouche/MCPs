@@ -1,29 +1,29 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "teams-meeting-notes-worker",
-  "main": "src/index.js",
-  "compatibility_date": "2026-07-01",
-
-  // Renew the Graph subscription daily — subscriptions to communications
-  // resources expire on a short cycle, so this must run more often than the
-  // expirationDateTime window set in src/index.js.
-  "triggers": {
-    "crons": ["0 13 * * *"] // 8am America/Chicago daily; adjust for DST as needed
-  },
-
-  "kv_namespaces": [
-    {
-      "binding": "MEETING_NOTES_KV",
-      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
-    }
-  ]
-
-  // Secrets — do NOT put real values here. Set with:
-  //   wrangler secret put GRAPH_TENANT_ID
-  //   wrangler secret put GRAPH_CLIENT_ID
-  //   wrangler secret put GRAPH_CLIENT_SECRET
-  //   wrangler secret put GRAPH_CLIENT_STATE
-  //   wrangler secret put CLAUDE_API_KEY
-  //   wrangler secret put TEAMS_WEBHOOK_URL
-  //   wrangler secret put WORKER_NOTIFICATION_URL
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "teams-meeting-notes-worker",
+	"main": "src/index.js",
+	"compatibility_date": "2026-07-01",
+	// Renew the Graph subscription daily — subscriptions to communications
+	// resources expire on a short cycle, so this must run more often than the
+	// expirationDateTime window set in src/index.js.
+	"triggers": {
+		"crons": [
+			"0 13 * * *"
+		] // 8am America/Chicago daily; adjust for DST as needed
+	},
+	"kv_namespaces": [
+		{
+			"binding": "MEETING_NOTES_KV",
+			"id": "fd7bd7624060433b97a383d4f7e1d285"
+		}
+	]
+	// Secrets — do NOT put real values here. Set with:
+	//   wrangler secret put GRAPH_TENANT_ID
+	//   wrangler secret put GRAPH_CLIENT_ID
+	//   wrangler secret put GRAPH_CLIENT_SECRET
+	//   wrangler secret put GRAPH_CLIENT_STATE
+	//   wrangler secret put AZURE_OPENAI_ENDPOINT
+	//   wrangler secret put AZURE_OPENAI_KEY
+	//   wrangler secret put TEAMS_WEBHOOK_URL
+	//   wrangler secret put WORKER_NOTIFICATION_URL
 }

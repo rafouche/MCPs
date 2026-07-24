@@ -9,20 +9,19 @@
  *   3. Worker fetches the transcript content from Graph (app-only token,
  *      client credentials flow, cached in KV).
  *   4. VTT is converted to plain speaker-labeled text.
- *   5. Transcript is sent to Claude for structured meeting notes.
+ *   5. Transcript is sent to Azure OpenAI for structured meeting notes.
  *   6. Notes are posted to Teams via an Incoming Webhook (see README for why
  *      this is the v1 approach instead of posting into the original chat).
  *
  * Bindings expected (see wrangler.toml):
  *   KV            - MEETING_NOTES_KV (token cache + processed-id dedupe)
  *   Secrets       - GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET,
- *                   GRAPH_CLIENT_STATE, CLAUDE_API_KEY, TEAMS_WEBHOOK_URL,
- *                   WORKER_NOTIFICATION_URL (this worker's own public /webhook URL,
- *                   used by the /subscribe and /renew routes)
+ *                   GRAPH_CLIENT_STATE, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY,
+ *                   TEAMS_WEBHOOK_URL, WORKER_NOTIFICATION_URL (this worker's own
+ *                   public /webhook URL, used by the /subscribe and /renew routes)
  */
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
-const CLAUDE_MODEL = "claude-sonnet-4-6";
 
 export default {
   async fetch(request, env, ctx) {
@@ -116,7 +115,7 @@ async function processNotifications(notifications, env) {
 }
 
 // ---------------------------------------------------------------------------
-// Transcript fetch + Claude + Teams post
+// Transcript fetch + Azure OpenAI + Teams post
 // ---------------------------------------------------------------------------
 
 async function processTranscript(resourcePath, env) {
@@ -147,7 +146,7 @@ async function processTranscript(resourcePath, env) {
     return;
   }
 
-  const notesMarkdown = await generateNotesWithClaude(plainTranscript, meeting, env);
+  const notesMarkdown = await generateNotesWithAzureOpenAI(plainTranscript, meeting, env);
   await postToTeams(notesMarkdown, meeting, env);
 }
 
@@ -218,7 +217,7 @@ function vttToPlainText(vtt) {
   return out.join(" ").replace(/\n /g, "\n").trim();
 }
 
-async function generateNotesWithClaude(transcript, meeting, env) {
+async function generateNotesWithAzureOpenAI(transcript, meeting, env) {
   const subject = meeting?.subject || "Teams Meeting";
 
   const prompt = `You are generating internal meeting notes for an MSP (Altec Solutions Group) from a raw Teams meeting transcript.
@@ -246,27 +245,25 @@ Transcript:
 ${transcript}
 """`;
 
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+  const resp = await fetch(env.AZURE_OPENAI_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": env.CLAUDE_API_KEY,
-      "anthropic-version": "2023-06-01",
+      "api-key": env.AZURE_OPENAI_KEY,
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
+      max_tokens: 1500,
     }),
   });
 
   if (!resp.ok) {
-    throw new Error(`Claude API error: ${resp.status} ${await resp.text()}`);
+    throw new Error(`Azure OpenAI error: ${resp.status} ${await resp.text()}`);
   }
 
   const data = await resp.json();
-  const textBlock = (data.content || []).find((b) => b.type === "text");
-  return textBlock ? textBlock.text : "_Claude returned no text content._";
+  const text = data.choices?.[0]?.message?.content;
+  return text || "_Azure OpenAI returned no text content._";
 }
 
 /**
