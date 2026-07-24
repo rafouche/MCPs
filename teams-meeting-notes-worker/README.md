@@ -51,14 +51,71 @@ These three values (tenant ID, client ID, client secret) go into
 `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, and `GRAPH_CLIENT_SECRET` below — as
 Cloudflare secrets, never in this file or any other tracked file.
 
-## 2. Teams Incoming Webhook
+## 2. Teams webhook (via Workflows / Power Automate)
+
+The classic "Incoming Webhook" connector Microsoft used to ship is being
+retired tenant by tenant, replaced by the Workflows app (which is Power
+Automate under the hood). The template catalog you see when you search
+"webhook" in Workflows varies by tenant/rollout wave and does **not**
+reliably include a direct Incoming-Webhook-equivalent template — build the
+flow manually instead. Confirmed working path:
 
 1. In Teams, go to the channel you want notes posted to (e.g. create a new
-   "Meeting Notes" channel).
-2. **⋯** on the channel → **Workflows** → search "Incoming Webhook" (this
-   replaced the legacy connector setup in most tenants now) → configure a
-   webhook, give it a name/icon.
-3. Copy the generated webhook URL — this is `TEAMS_WEBHOOK_URL`.
+   "Meeting Notes" channel) → **⋯** → **Workflows**.
+2. **Create** → **Create from scratch**.
+3. The trigger shortlist shown here (Schedule / SharePoint / Outlook /
+   Teams) does **not** include an HTTP/webhook trigger. Click
+   **"Build with Power Automate to see more triggers"** at the bottom of
+   the list — this opens the full flow designer at
+   `make.powerautomate.com`.
+4. In the trigger search box, search **"webhook"** and select
+   **When a Teams webhook request is received** (Microsoft Teams
+   connector) — this is the modern, supported replacement for the old
+   Incoming Webhook connector.
+5. Add a new step → search **"Post message"** → add
+   **Post message in a chat or channel** (Microsoft Teams connector).
+   Configure:
+   - **Post as:** Flow bot
+   - **Post in:** Channel
+   - **Team / Channel:** pick your target team and the channel from step 1
+6. Our worker POSTs a payload shaped like the old connector's envelope:
+   ```json
+   {
+     "type": "message",
+     "attachments": [
+       {
+         "contentType": "application/vnd.microsoft.card.adaptive",
+         "content": { "...": "the Adaptive Card object" }
+       }
+     ]
+   }
+   ```
+   On the **Post message in a chat or channel** action, switch the message
+   type to **Adaptive Card** and map the card content in from the
+   trigger's incoming request body — open the dynamic-content picker and
+   look for the body field from **When a Teams webhook request is
+   received**. If the picker won't let you drill directly into
+   `attachments[0].content`, use the expression editor with something
+   like:
+   ```
+   triggerBody()?['attachments']?[0]?['content']
+   ```
+   treating this as a starting point rather than a guarantee — Power
+   Automate's dynamic-content picker sometimes exposes field names that
+   don't exactly match the raw JSON path, so adjust to whatever the
+   picker actually offers you.
+7. **Save** the flow, then click back into the **When a Teams webhook
+   request is received** trigger step — it now displays the generated
+   HTTP POST URL. Copy it; this is `TEAMS_WEBHOOK_URL`.
+8. **Test before wiring up the real pipeline.** Set the secret
+   (`wrangler secret put TEAMS_WEBHOOK_URL`), then send a manual test POST
+   matching the same envelope shape the worker sends — from `cmd.exe`
+   (see the Windows shell note above for why):
+   ```cmd
+   curl -X POST "<your webhook URL>" -H "Content-Type: application/json" -d "{\"type\":\"message\",\"attachments\":[{\"contentType\":\"application/vnd.microsoft.card.adaptive\",\"content\":{\"type\":\"AdaptiveCard\",\"version\":\"1.4\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"test\"}]}}]}"
+   ```
+   Confirm an actual card renders in the channel (not blank, not raw JSON
+   dumped as text) before relying on it for a real meeting.
 
 ## 3. Azure OpenAI resource and deployment
 
