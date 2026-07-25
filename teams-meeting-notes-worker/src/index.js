@@ -253,7 +253,7 @@ ${transcript}
     },
     body: JSON.stringify({
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 1500,
+      max_completion_tokens: 1500,
     }),
   });
 
@@ -326,6 +326,12 @@ async function handleSubscribe(env) {
   const body = {
     changeType: "created",
     notificationUrl: env.WORKER_NOTIFICATION_URL, // this worker's /webhook, publicly reachable
+    // Graph requires this whenever expirationDateTime is more than 1 hour out.
+    // Reuses the same /webhook route — lifecycle events (reauthorizationRequired,
+    // subscriptionRemoved, missedNotifications) have no `changeType` field, so
+    // processNotifications' `changeType !== "created"` check safely no-ops on
+    // them today. They aren't acted on yet; see README "Known gaps".
+    lifecycleNotificationUrl: env.WORKER_NOTIFICATION_URL,
     resource: "communications/onlineMeetings/getAllTranscripts",
     expirationDateTime,
     clientState: env.GRAPH_CLIENT_STATE,

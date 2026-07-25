@@ -51,85 +51,146 @@ These three values (tenant ID, client ID, client secret) go into
 `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, and `GRAPH_CLIENT_SECRET` below — as
 Cloudflare secrets, never in this file or any other tracked file.
 
-## 2. Teams webhook (via Workflows / Power Automate)
+## 2. Teams webhook (via Power Automate)
 
-The classic "Incoming Webhook" connector Microsoft used to ship is being
-retired tenant by tenant, replaced by the Workflows app (which is Power
-Automate under the hood). The template catalog you see when you search
-"webhook" in Workflows varies by tenant/rollout wave and does **not**
-reliably include a direct Incoming-Webhook-equivalent template — build the
-flow manually instead. Confirmed working path:
+The classic "Incoming Webhook" connector Microsoft used to ship is retired.
+The replacement lives in Power Automate as a **built-in trigger** (not a
+regular connector) — it doesn't show up if you search for "webhook" in
+Teams' own Workflows template catalog, and it won't show up in Power
+Automate's "Automated cloud flow" creation dialog's trigger search either
+(that dialog only searches connector-based triggers). You have to reach it
+through the full flow designer's own trigger picker, under **Built-in
+tools**. Verified working path, done directly in Power Automate (no need to
+go through Teams at all):
 
-1. In Teams, go to the channel you want notes posted to (e.g. create a new
-   "Meeting Notes" channel) → **⋯** → **Workflows**.
-2. **Create** → **Create from scratch**.
-3. The trigger shortlist shown here (Schedule / SharePoint / Outlook /
-   Teams) does **not** include an HTTP/webhook trigger. Click
-   **"Build with Power Automate to see more triggers"** at the bottom of
-   the list — this opens the full flow designer at
-   `make.powerautomate.com`.
-4. In the trigger search box, search **"webhook"** and select
-   **When a Teams webhook request is received** (Microsoft Teams
-   connector) — this is the modern, supported replacement for the old
-   Incoming Webhook connector.
-5. Add a new step → search **"Post message"** → add
-   **Post message in a chat or channel** (Microsoft Teams connector).
-   Configure:
+1. Go to [make.powerautomate.com](https://make.powerautomate.com) → **Create**
+   (left nav) → **Automated cloud flow**.
+2. In the "Build an automated cloud flow" dialog, give it a name (e.g.
+   `Post Teams Meeting Notes`) and click **Skip** instead of searching for a
+   trigger — that dialog's search box won't find the one we need. Skipping
+   drops you on a blank flow canvas with an **"Add a trigger"** placeholder.
+3. Click **Add a trigger**. In the left panel, scroll to the
+   **Built-in tools** section (above "By connector") and click
+   **Microsoft Teams Webhook**, then select
+   **When a Teams webhook request is received**.
+4. On the trigger's **Parameters** tab, change **"Who can trigger the
+   flow?"** from the default **"Any user in my tenant"** to **"Anyone"**.
+   This is required — our worker calls this URL with a plain unauthenticated
+   POST (no Azure AD bearer token), and "Any user in my tenant" would 401
+   every call. The URL itself is the only thing securing it (same trust
+   model as the old classic connector), so treat it as a secret.
+5. Click the **+** below the trigger → **Add an action** → search
+   **"Post card in a chat or channel"** (Microsoft Teams connector) — not
+   "Post message in a chat or channel"; the "card" variant has a dedicated
+   Adaptive Card JSON field, which is a much cleaner fit for what our
+   worker sends. Configure:
    - **Post as:** Flow bot
    - **Post in:** Channel
-   - **Team / Channel:** pick your target team and the channel from step 1
-6. Our worker POSTs a payload shaped like the old connector's envelope:
-   ```json
-   {
-     "type": "message",
-     "attachments": [
-       {
-         "contentType": "application/vnd.microsoft.card.adaptive",
-         "content": { "...": "the Adaptive Card object" }
-       }
-     ]
-   }
+   - **Team:** your team
+   - **Channel:** your target channel (e.g. "Meeting Notes")
+   - **Adaptive Card:** click into the field, open the dynamic-content
+     picker (lightning-bolt icon), and select **"Attachments Adaptive
+     Card"** under the trigger. Power Automate parses this directly out of
+     our worker's payload envelope (`{ type: "message", attachments: [{
+     contentType: "application/vnd.microsoft.card.adaptive", content:
+     {...} }] }`) — no manual JSON expression needed.
+   - Because `attachments` is technically an array, Power Automate will
+     auto-wrap the action in a **"For each"** loop when you insert that
+     token. That's expected and correct — our worker always sends exactly
+     one attachment, so it's a loop of one.
+6. Rename the flow at the top-left if you haven't already, then **Save**.
+7. Click back into the trigger step — the **HTTP URL** field now shows the
+   generated webhook URL. Click the copy icon next to it rather than trying
+   to select/read the text — it's a bearer secret and the field is
+   typically visually truncated.
+8. Set the secret and paste when prompted (don't type it as a second
+   argument):
+   ```bash
+   wrangler secret put TEAMS_WEBHOOK_URL
    ```
-   On the **Post message in a chat or channel** action, switch the message
-   type to **Adaptive Card** and map the card content in from the
-   trigger's incoming request body — open the dynamic-content picker and
-   look for the body field from **When a Teams webhook request is
-   received**. If the picker won't let you drill directly into
-   `attachments[0].content`, use the expression editor with something
-   like:
+9. **Test before wiring up the real pipeline.** `%TEAMS_WEBHOOK_URL%` /
+   `$env:TEAMS_WEBHOOK_URL` will **not** work for this — it's a Cloudflare
+   Worker secret, not a local shell variable, so nothing expands it
+   locally. Paste the actual URL (or re-copy it from the trigger step) into
+   one of these instead:
+
+   PowerShell (pulls straight from the clipboard if you just copied it,
+   avoiding retyping a secret):
+   ```powershell
+   $url = Get-Clipboard
+   $body = @'
+   {"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","version":"1.4","body":[{"type":"TextBlock","text":"test"}]}}]}
+   '@
+   Invoke-RestMethod -Uri $url -Method Post -ContentType "application/json" -Body $body
    ```
-   triggerBody()?['attachments']?[0]?['content']
-   ```
-   treating this as a starting point rather than a guarantee — Power
-   Automate's dynamic-content picker sometimes exposes field names that
-   don't exactly match the raw JSON path, so adjust to whatever the
-   picker actually offers you.
-7. **Save** the flow, then click back into the **When a Teams webhook
-   request is received** trigger step — it now displays the generated
-   HTTP POST URL. Copy it; this is `TEAMS_WEBHOOK_URL`.
-8. **Test before wiring up the real pipeline.** Set the secret
-   (`wrangler secret put TEAMS_WEBHOOK_URL`), then send a manual test POST
-   matching the same envelope shape the worker sends — from `cmd.exe`
-   (see the Windows shell note above for why):
+
+   `cmd.exe` (see the Windows shell note above for why `curl` in
+   PowerShell doesn't work the same way — it's aliased to
+   `Invoke-WebRequest` there, with different flags):
    ```cmd
-   curl -X POST "<your webhook URL>" -H "Content-Type: application/json" -d "{\"type\":\"message\",\"attachments\":[{\"contentType\":\"application/vnd.microsoft.card.adaptive\",\"content\":{\"type\":\"AdaptiveCard\",\"version\":\"1.4\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"test\"}]}}]}"
+   curl -X POST "<paste your webhook URL here>" -H "Content-Type: application/json" -d "{\"type\":\"message\",\"attachments\":[{\"contentType\":\"application/vnd.microsoft.card.adaptive\",\"content\":{\"type\":\"AdaptiveCard\",\"version\":\"1.4\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"test\"}]}}]}"
    ```
+
    Confirm an actual card renders in the channel (not blank, not raw JSON
-   dumped as text) before relying on it for a real meeting.
+   dumped as text) before relying on it for a real meeting. Both commands
+   above return no output on success — check the channel, not the shell.
 
 ## 3. Azure OpenAI resource and deployment
 
 Two values come out of this section: `AZURE_OPENAI_ENDPOINT` (a full URL,
 not just a hostname) and `AZURE_OPENAI_KEY`.
 
+**Read this before picking a model.** Azure's OpenAI model catalog moves
+fast — `gpt-4o` and `gpt-4o-mini`, both commonly cited in older docs and
+tutorials, are **fully deprecated for new deployments** as of this
+writing (Microsoft's own replacement path points at the `gpt-5.x` line).
+Whatever model name you find in a blog post, ours included, may already be
+gone by the time you set this up. Don't hardcode a model choice from
+documentation — check what's actually deployable in your subscription and
+region first:
+
+```bash
+az cognitiveservices model list --location <region> \
+  --query "[?kind=='OpenAI'].{Model:model.name, Version:model.version, Status:model.lifecycleStatus}" \
+  -o table
+```
+
+Only `"GenerallyAvailable"` entries are safe bets; skip anything showing
+`"Deprecating"` or `"Deprecated"` — those will fail at deployment time even
+though they still show up in the catalog listing.
+
+**New subscriptions typically start with zero default quota** for
+`GlobalStandard` SKU on newer/premium models — a deployment attempt fails
+with `InsufficientQuota` even though the model itself is listed as
+available. Check what quota you actually have before attempting a
+deployment:
+
+```bash
+az cognitiveservices usage list --location <region> \
+  --query "[?contains(name.value, '<model-name>')].{Name:name.value, Limit:limit}" -o table
+```
+
+If `GlobalStandard` shows a 0 limit, look for a `DataZoneStandard` limit
+instead (often has usable default quota on a fresh subscription) —
+functionally fine for most orgs: it scopes processing to a broader
+US-wide data zone rather than a single specific region, not a single-region
+guarantee like `Standard`/`GlobalStandard`, but not a "your data leaves the
+country" concern either. Getting non-default quota approved for a specific
+model/SKU combination means filing a quota-increase request in the Azure
+Portal, which is a manual Microsoft approval — not instant.
+
 1. In the [Azure Portal](https://portal.azure.com), search for
    **Azure OpenAI** → **Create** (or reuse an existing resource if you
    already have one for this subscription/region).
    - Pick the **Subscription** and **Resource group** you want this billed
-     under.
+     under. If the subscription has never used Azure OpenAI / Cognitive
+     Services before, resource creation will fail until the
+     `Microsoft.CognitiveServices` resource provider is registered on it
+     (`az provider register --namespace Microsoft.CognitiveServices` — a
+     one-time step, takes a minute or two to complete).
    - Pick a **Region** that has capacity for the model you want to deploy
-     (not every region supports every model — check availability in the
-     portal's region picker before committing).
+     (not every region supports every model — check with the CLI query
+     above, or the portal's region picker, before committing).
    - Give it a **Name** — this becomes part of the endpoint hostname, e.g.
      a resource named `altec-meeting-notes` gives you
      `https://altec-meeting-notes.openai.azure.com`.
@@ -144,15 +205,16 @@ not just a hostname) and `AZURE_OPENAI_KEY`.
      `https://altec-meeting-notes.openai.azure.com/`) — you'll need it in
      step 4 below, but you do **not** set this bare value as the secret;
      the secret is the full chat-completions URL built in step 4.
-3. Deploy a chat-completions-capable model:
+3. Deploy a chat-completions-capable model — pick one from the live
+   `GenerallyAvailable` list above, with quota confirmed on whichever SKU
+   you're using:
    - Go to **Azure OpenAI Studio** (button on the resource's Overview page,
      or `https://oai.azure.com` with the resource selected) →
      **Deployments** → **Create new deployment**.
-   - Pick a model that supports chat completions (e.g. `gpt-4o` or
-     `gpt-4o-mini`) and give the deployment a **Deployment name** — pick
-     something short and memorable (e.g. `meeting-notes`), since you'll
-     paste this exact name into the endpoint URL next. This name does not
-     have to match the underlying model name.
+   - Give the deployment a **Deployment name** — pick something short and
+     memorable (e.g. `meeting-notes`), since you'll paste this exact name
+     into the endpoint URL next. This name does not have to match the
+     underlying model name.
    - Confirm the deployment — it typically becomes available within a
      minute or two.
 4. Assemble `AZURE_OPENAI_ENDPOINT` from the three pieces above (resource
@@ -172,8 +234,29 @@ not just a hostname) and `AZURE_OPENAI_KEY`.
    [Azure OpenAI API version lifecycle](https://learn.microsoft.com/azure/ai-services/openai/api-version-lifecycle)
    page — this changes over time as Microsoft retires older versions, so
    don't assume the example above is still current when you set this up.
+   `2024-08-01-preview` is confirmed working against the `chat/completions`
+   endpoint as of this writing (Azure lists it as part of a "Legacy API"
+   surface but still functional), even against current-generation models —
+   but verify against the lifecycle page rather than trusting that
+   indefinitely.
    This whole URL (not just the hostname) is what you paste in when you
    run `wrangler secret put AZURE_OPENAI_ENDPOINT` in step 5.
+5. **Test before wiring up the secrets.** Some current-generation models
+   reject the `max_tokens` parameter our worker's request body uses and
+   require `max_completion_tokens` instead — you'll get a `400
+   unsupported_parameter` error otherwise. Confirm with a direct call
+   first:
+   ```bash
+   curl -X POST "<your AZURE_OPENAI_ENDPOINT>" \
+     -H "api-key: <your AZURE_OPENAI_KEY>" \
+     -H "Content-Type: application/json" \
+     -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_completion_tokens\":5}"
+   ```
+   If it comes back complaining about `max_completion_tokens` instead
+   (i.e. the model wants the old `max_tokens` name), or the worker starts
+   throwing `Azure OpenAI error: 400 ... unsupported_parameter` after you
+   deploy, check `src/index.js`'s `generateNotesWithAzureOpenAI` function
+   and adjust which parameter name it sends to match your model.
 
 ## 4. Secrets Required
 
@@ -262,3 +345,24 @@ schedule accordingly so renewal always happens before expiry.
   specifically, not the video file. That's intentional (keeps Azure OpenAI
   calls cheap and fast) but worth confirming matches what you actually want
   archived per client.
+- **Lifecycle notifications are received but ignored.** Graph requires a
+  `lifecycleNotificationUrl` on any subscription with more than a 1-hour
+  expiration window (this worker requests 3 days out), so `/subscribe`
+  points it at the same `/webhook` route as regular change notifications.
+  Lifecycle events (`reauthorizationRequired`, `subscriptionRemoved`,
+  `missedNotifications`) have no `changeType` field, so
+  `processNotifications`' `changeType !== "created"` check silently drops
+  them today — they're received but nothing acts on them. The daily
+  `/renew` cron is the actual safety net against subscription expiry; a
+  `missedNotifications` event going unhandled means a transcript could
+  theoretically be missed without anything surfacing that fact. Worth
+  wiring into the same alerting pattern as the other known gaps here if
+  this goes into real production use.
+- **Per-app subscription limit is 1.** Graph allows only one active
+  subscription per resource type (`communications/onlineMeetings/
+  getAllTranscripts`) per app per tenant. If `/subscribe` ever fails with
+  `ExtensionError` / "has reached its limit of '1'... subscription", an
+  old subscription wasn't cleaned up — list and delete it via the Graph
+  API (`GET`/`DELETE /v1.0/subscriptions/{id}`) before retrying, or use
+  `/renew` instead of `/subscribe` if one already exists and just needs
+  its expiry extended.
