@@ -21,8 +21,8 @@ There are two ways to get notes back into Teams. This build uses the simpler
 one on purpose:
 
 - **Incoming Webhook to a fixed channel (what this uses):** every meeting's
-  notes land in one "Meeting Notes" channel per client tenant. Setup is a
-  few clicks in Teams, no extra Graph app permission needed, works
+  notes land in one "Meetings and Notes" channel per client tenant. Setup
+  is a few clicks in Teams, no extra Graph app permission needed, works
   immediately.
 - **Posting into the original meeting's own chat thread:** more "native"
   feeling, but requires resolving meeting ID → chat ID and app-level
@@ -87,7 +87,7 @@ go through Teams at all):
    - **Post as:** Flow bot
    - **Post in:** Channel
    - **Team:** your team
-   - **Channel:** your target channel (e.g. "Meeting Notes")
+   - **Channel:** your target channel (e.g. "Meetings and Notes")
    - **Adaptive Card:** click into the field, open the dynamic-content
      picker (lightning-bolt icon), and select **"Attachments Adaptive
      Card"** under the trigger. Power Automate parses this directly out of
