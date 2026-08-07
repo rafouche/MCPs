@@ -36,6 +36,9 @@
     border: 1px solid var(--hairline); border-radius: 10px; padding: 2px 8px;
     letter-spacing: 0.02em; cursor: default;
   }
+  .clock-group { display: flex; align-items: center; gap: 20px; }
+  .clock-block { display: flex; align-items: baseline; gap: 8px; }
+  .clock-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
   .clock { font-family: var(--mono); font-size: 18px; color: var(--text-muted); }
 
   #app { flex: 1; overflow: hidden; padding: var(--app-pad); min-height: 0; box-sizing: border-box; }
@@ -121,7 +124,11 @@
     <div class="wordmark">ALTEC <span>NETWORK OPERATIONS CENTER</span></div>
     <div class="version-badge" id="versionBadge" title="Bump minor (1.2, 1.2.5, 1.3...) for regular updates; bump to 2.0 for major/breaking changes"></div>
   </div>
-  <div class="clock" id="clock">--:--:--</div>
+  <div class="clock-group">
+    <div class="clock-block"><span class="clock-label">India</span><span class="clock" id="clockIndia">--:--:--</span></div>
+    <div class="clock-block"><span class="clock-label">Philippines</span><span class="clock" id="clockPhilippines">--:--:--</span></div>
+    <div class="clock-block"><span class="clock-label">Local</span><span class="clock" id="clock">--:--:--</span></div>
+  </div>
 </div>
 
 <div id="app"></div>
@@ -141,7 +148,7 @@
   // Bump this on every meaningful change: 1.1 -> 1.2 -> 1.2.5 -> 1.3 for
   // regular updates; jump to 2.0 only for a major/breaking change (new
   // zone structure, changed endpoint contract, etc).
-  const APP_VERSION = '1.3';
+  const APP_VERSION = '1.4';
   document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
   const ENDPOINTS = {
@@ -245,7 +252,10 @@
   });
 
   function tickClock() {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: true });
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { hour12: true });
+    document.getElementById('clockIndia').textContent = now.toLocaleTimeString('en-US', { hour12: true, timeZone: 'Asia/Kolkata' });
+    document.getElementById('clockPhilippines').textContent = now.toLocaleTimeString('en-US', { hour12: true, timeZone: 'Asia/Manila' });
   }
   setInterval(tickClock, 1000); tickClock();
 
