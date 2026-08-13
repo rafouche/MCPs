@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A collection of independent Cloudflare Worker MCP servers, each exposing one IT/MSP vendor's API (RMM, PSA, networking, identity, M365, etc.) as an MCP connector for Claude, plus a single static wallboard dashboard that polls several of them for a NOC-style status display. There is no root build system, monorepo tool, or shared package — every `*-mcp/` folder is deployed and versioned independently.
+A collection of independent Cloudflare Worker MCP servers, each exposing one IT/MSP vendor's API (RMM, PSA, networking, identity, M365, etc.) as an MCP connector for Claude. There is no root build system, monorepo tool, or shared package — every `*-mcp/` folder is deployed and versioned independently.
 
 Account workers.dev subdomain used throughout: `young-math-a33a` (e.g. `https://meraki-mcp.young-math-a33a.workers.dev`).
 
-This is a git repository (`main` is the default branch), but as of this writing almost nothing is committed yet — only `CLAUDE.md` itself is tracked, and every `*-mcp/` folder plus `Dashboard/` shows as untracked (`git status` lists them all as `??`). Don't assume a folder being present means it's safe to reorganize/delete without checking `git status` first — most of it is uncommitted work, not history.
+This repo is pushed to `https://github.com/rafouche/MCPs` (branch `main`) — that's the source of truth going forward, not just a local backup. Pull/check against `origin/main` before assuming the local checkout is current, and push after committing rather than treating local commits as sufficient on their own.
+
+A NOC-style wallboard dashboard (`dashboard.html`) polls several of these workers' `/status` routes for a status display, but it lives in its own separate repo now — `https://github.com/rafouche/Dashboard` — since it isn't itself an MCP server, just a consumer of these workers' data. See that repo for its own docs.
 
 ## Projects
 
@@ -27,7 +29,6 @@ This is a git repository (`main` is the default branch), but as of this writing 
 | `huntress-mcp` | Huntress EDR | **passthrough gateway** | plain JS, not TS |
 | `pax8-mcp` | Pax8 billing/provisioning | **passthrough gateway** | plain JS, not TS |
 | `teams-meeting-notes-worker` | Microsoft Graph + Teams + Claude API | **webhook automation** | not an MCP tool server — no `TOOLS`/`runTool`, no `/mcp` endpoint. Receives Graph change notifications when a Teams meeting transcript is ready, summarizes it via the Claude API, and posts to a Teams channel via Incoming Webhook. Plain JS, not TS. See its own README for the full secrets list and setup flow. |
-| `Dashboard/dashboard.html` | — | static wallboard client | no build step |
 
 ## Commands
 
@@ -84,19 +85,6 @@ These don't implement their own `TOOLS`/`runTool` at all. They relay `POST /mcp`
 
 Getting the auth type wrong for a given vendor is the most common cause of "tools/list works but every tools/call fails" — because every tool call in a tool-implementation worker re-derives its token/headers first, one bad credential fails 100% of tools uniformly. The repo convention across every project is to **never swallow API errors**: every `xGet`/`xPost`/etc. helper throws `Error(status + response body text)`, and the top-level `tools/call` catch puts that straight into the JSON-RPC `error.message` — so a real vendor HTTP status and response body should always be visible in the tool result, not a generic message. If a worker isn't doing this, that's a regression, not the intended pattern.
 
-## Dashboard (`Dashboard/dashboard.html`)
-
-Single self-contained HTML file — all CSS/JS inline, no build step, no framework. Opened directly in a browser (any TV, `file://` or hosted, doesn't matter).
-
-- Hardcoded `ENDPOINTS` map near the top of the `<script>` block points at each worker's `/status` (and `/licenses`) route. New workers must be added here manually — nothing is auto-discovered.
-- Query params: `?zone=network|tickets|security|business|all` (default `all`), `?demo=1` forces demo data everywhere, `?<name>=<url>` overrides any single endpoint at load time.
-- Each zone degrades independently — if one worker's `/status` is unreachable, that zone falls back to its own hardcoded `demo*()` data while unrelated zones keep showing live data.
-- `APP_VERSION` constant (shown in the header badge) should be bumped on every meaningful change to this file — minor bump for regular updates, jump to the next whole number for a breaking change (new zone structure, changed `/status` contract, etc).
-
 ## Secrets
 
-Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt`, `*.zip`, and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
-
-## Stray root-level files
-
-`halo-index.ts` at the repo root is a near-duplicate of `halopsa-mcp/src/index.ts` (byte-identical apart from a BOM) — almost certainly a leftover candidate/backup copy from an edit-and-diff workflow, not a file anything loads at runtime. `Altec-MCP-Complete-Bundle.zip` is a packaged export of the repo, also not part of any build. Neither should be treated as a source of truth; if asked to edit "the halo worker," edit `halopsa-mcp/src/index.ts`.
+Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt` and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
