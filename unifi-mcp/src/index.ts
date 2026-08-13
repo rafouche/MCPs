@@ -22,6 +22,21 @@
  *
  * SECRETS (wrangler secret put):
  *   UNIFI_API_KEY   — from unifi.ui.com -> Settings -> API
+ *
+ * CLIENT DEVICES (list_network_sites / list_network_devices / list_clients):
+ * these go through UniFi's Cloud Connector, which proxies a request to the
+ * console's own local Network Integration API — this works for self-hosted
+ * controllers too (e.g. unifi.altecusa.com), not just cloud-hosted consoles,
+ * as long as the console is linked to this UI.com account (already true,
+ * since list_hosts/list_devices work) and running Network app FW >= 5.0.3.
+ * No VPN or separate local credentials needed — same UNIFI_API_KEY, proxied
+ * via /v1/connector/consoles/{hostId}/proxy/network/integration{localPath}.
+ *
+ * Confirmed via UniFi's own OpenAPI schema: client records only carry
+ * "uplinkDeviceId" (which device/AP/switch they're connected to) on the
+ * WIRED/WIRELESS subtypes — it's not in the base client schema shown on the
+ * docs page, and isn't a server-side filterable field, so list_clients
+ * resolves it to a friendly device name and filters by device_id itself.
  */
 
 export interface Env {
@@ -40,6 +55,11 @@ async function unifiGet(env: Env, path: string, params?: Record<string, string>)
   return res.json();
 }
 
+// Proxies to a console's local Network Integration API via the Cloud Connector.
+async function connectorGet(env: Env, hostId: string, path: string, params?: Record<string, string>): Promise<unknown> {
+  return unifiGet(env, `/v1/connector/consoles/${hostId}/proxy/network/integration${path}`, params);
+}
+
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to the UniFi Site Manager API and verify the API key", inputSchema: { type: "object", properties: {}, required: [] } },
 
@@ -54,6 +74,11 @@ const TOOLS = [
 
   // ISP / connectivity metrics
   { name: "get_isp_metrics", description: "Get ISP uptime/latency metrics for a host's WAN connection(s)", inputSchema: { type: "object", properties: { host_id: { type: "string" } }, required: ["host_id"] } },
+
+  // Local Network Integration API (via Cloud Connector) — client devices
+  { name: "list_network_sites", description: "List local Network-application sites on a specific UniFi console/host. Works for self-hosted controllers too (proxied through the Cloud Connector). Needed to get the site_id used by list_network_devices and list_clients — most consoles have exactly one site, named 'Default'.", inputSchema: { type: "object", properties: { host_id: { type: "string", description: "Host/console ID from list_hosts" } }, required: ["host_id"] } },
+  { name: "list_network_devices", description: "List adopted UniFi devices (APs, switches, gateways) on one site via the local Network Integration API. Richer per-device detail than list_devices (ports, radios, uplink topology), and used internally by list_clients to resolve device names.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" } }, required: ["host_id", "site_id"] } },
+  { name: "list_clients", description: "List client devices (computers, phones, IoT, etc.) connected to a UniFi network, each resolved with the name of the specific AP/switch/gateway it's connected to. Optionally filter to only the clients connected to one device.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" }, device_id: { type: "string", description: "Optional: only return clients connected to this device (AP/switch/gateway) ID" }, limit: { type: "number", description: "Max clients to return, default 200" } }, required: ["host_id", "site_id"] } },
 ];
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
@@ -68,6 +93,45 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_device": return JSON.stringify(await unifiGet(env, `/v1/hosts/${args.host_id}/devices/${args.device_id}`), null, 2);
 
     case "get_isp_metrics": return JSON.stringify(await unifiGet(env, `/v1/hosts/${args.host_id}/isp-metrics`), null, 2);
+
+    case "list_network_sites": return JSON.stringify(await connectorGet(env, args.host_id as string, "/v1/sites"), null, 2);
+
+    case "list_network_devices": return JSON.stringify(await connectorGet(env, args.host_id as string, `/v1/sites/${args.site_id}/devices`), null, 2);
+
+    case "list_clients": {
+      const hostId = args.host_id as string;
+      const siteId = args.site_id as string;
+      const limit = Number(args.limit ?? 200);
+
+      const devicesResp = (await connectorGet(env, hostId, `/v1/sites/${siteId}/devices`, { limit: "200" })) as any;
+      const deviceNameById = new Map((devicesResp.data || []).map((d: any) => [d.id, d.name || d.model || d.id]));
+
+      const clients: any[] = [];
+      let offset = 0;
+      while (clients.length < limit) {
+        const pageLimit = Math.min(200, limit - clients.length);
+        const page = (await connectorGet(env, hostId, `/v1/sites/${siteId}/clients`, { offset: String(offset), limit: String(pageLimit) })) as any;
+        const batch = page.data || [];
+        clients.push(...batch);
+        offset += batch.length;
+        if (batch.length < pageLimit) break; // last page
+      }
+
+      const enriched = clients.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+        macAddress: c.macAddress,
+        ipAddress: c.ipAddress,
+        connectedAt: c.connectedAt,
+        uplinkDeviceId: c.uplinkDeviceId ?? null,
+        uplinkDeviceName: c.uplinkDeviceId ? deviceNameById.get(c.uplinkDeviceId) ?? c.uplinkDeviceId : null,
+        access: c.access,
+      }));
+
+      const filtered = args.device_id ? enriched.filter((c) => c.uplinkDeviceId === args.device_id) : enriched;
+      return JSON.stringify({ count: filtered.length, clients: filtered }, null, 2);
+    }
 
     default: throw new Error(`Unknown tool: ${name}`);
   }
