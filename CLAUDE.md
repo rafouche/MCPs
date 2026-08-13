@@ -21,7 +21,7 @@ A NOC-style wallboard dashboard (`dashboard.html`) polls several of these worker
 | `cipp-mcp` | CIPP (M365 via CIPP) | tool-implementation | feeds Dashboard's Security zone |
 | `m365-mcp` | Microsoft Graph (direct, multi-tenant) | tool-implementation | not yet wired into Dashboard |
 | `jumpcloud-mcp` | JumpCloud directory | tool-implementation | OAuth2 Service Account, org-scoped only — not yet wired into Dashboard. Contains a fully duplicated nested project at `jumpcloud-mcp/jumpcloud-mcp/` (own `wrangler.jsonc`/`src`/`package.json`, currently identical to the outer one) — treat the outer `jumpcloud-mcp/src/index.ts` as canonical and confirm which copy you're editing before making changes |
-| `ninjarmm-mcp` | NinjaRMM | tool-implementation | Dashboard's Ninja `/status` route is a known pending item |
+| `ninjarmm-mcp` | NinjaRMM | tool-implementation | feeds Dashboard's Network zone (individually-tracked devices) |
 | `gworkspace-mcp` | Google Workspace | tool-implementation | uses a service-account JSON key file in-folder |
 | `3cx-mcp` | 3CX phone system | tool-implementation | |
 | `peplink-mcp` | Peplink InControl2 | tool-implementation | also exposes `/licenses` |
