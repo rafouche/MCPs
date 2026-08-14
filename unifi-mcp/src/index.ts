@@ -60,6 +60,22 @@ async function connectorGet(env: Env, hostId: string, path: string, params?: Rec
   return unifiGet(env, `/v1/connector/consoles/${hostId}/proxy/network/integration${path}`, params);
 }
 
+// Auto-paginates a connector-proxied list endpoint (default page size 25 is too
+// small for real accounts — some consoles have 80+ sites) up to maxItems total.
+async function connectorGetAllPages(env: Env, hostId: string, path: string, maxItems: number): Promise<any[]> {
+  const items: any[] = [];
+  let offset = 0;
+  while (items.length < maxItems) {
+    const pageLimit = Math.min(200, maxItems - items.length);
+    const page = (await connectorGet(env, hostId, path, { offset: String(offset), limit: String(pageLimit) })) as any;
+    const batch = page.data || [];
+    items.push(...batch);
+    offset += batch.length;
+    if (batch.length < pageLimit || offset >= (page.totalCount ?? offset)) break;
+  }
+  return items;
+}
+
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to the UniFi Site Manager API and verify the API key", inputSchema: { type: "object", properties: {}, required: [] } },
 
@@ -76,8 +92,8 @@ const TOOLS = [
   { name: "get_isp_metrics", description: "Get ISP uptime/latency metrics for a host's WAN connection(s)", inputSchema: { type: "object", properties: { host_id: { type: "string" } }, required: ["host_id"] } },
 
   // Local Network Integration API (via Cloud Connector) — client devices
-  { name: "list_network_sites", description: "List local Network-application sites on a specific UniFi console/host. Works for self-hosted controllers too (proxied through the Cloud Connector). Needed to get the site_id used by list_network_devices and list_clients — most consoles have exactly one site, named 'Default'.", inputSchema: { type: "object", properties: { host_id: { type: "string", description: "Host/console ID from list_hosts" } }, required: ["host_id"] } },
-  { name: "list_network_devices", description: "List adopted UniFi devices (APs, switches, gateways) on one site via the local Network Integration API. Richer per-device detail than list_devices (ports, radios, uplink topology), and used internally by list_clients to resolve device names.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" } }, required: ["host_id", "site_id"] } },
+  { name: "list_network_sites", description: "List local Network-application sites on a specific UniFi console/host. Works for self-hosted controllers too (proxied through the Cloud Connector). Needed to get the site_id used by list_network_devices and list_clients — MSP/multi-site consoles can have many sites (auto-paginated, default up to 500), single-site consoles just have one named 'Default'.", inputSchema: { type: "object", properties: { host_id: { type: "string", description: "Host/console ID from list_hosts" }, search: { type: "string", description: "Optional: only return sites whose name contains this text (case-insensitive)" }, limit: { type: "number", description: "Max sites to return, default 500" } }, required: ["host_id"] } },
+  { name: "list_network_devices", description: "List adopted UniFi devices (APs, switches, gateways) on one site via the local Network Integration API. Richer per-device detail than list_devices (ports, radios, uplink topology), and used internally by list_clients to resolve device names.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" }, limit: { type: "number", description: "Max devices to return, default 200" } }, required: ["host_id", "site_id"] } },
   { name: "list_clients", description: "List client devices (computers, phones, IoT, etc.) connected to a UniFi network, each resolved with the name of the specific AP/switch/gateway it's connected to. Optionally filter to only the clients connected to one device.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" }, device_id: { type: "string", description: "Optional: only return clients connected to this device (AP/switch/gateway) ID" }, limit: { type: "number", description: "Max clients to return, default 200" } }, required: ["host_id", "site_id"] } },
 ];
 
@@ -94,28 +110,27 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     case "get_isp_metrics": return JSON.stringify(await unifiGet(env, `/v1/hosts/${args.host_id}/isp-metrics`), null, 2);
 
-    case "list_network_sites": return JSON.stringify(await connectorGet(env, args.host_id as string, "/v1/sites"), null, 2);
+    case "list_network_sites": {
+      const sites = await connectorGetAllPages(env, args.host_id as string, "/v1/sites", Number(args.limit ?? 500));
+      const search = (args.search as string | undefined)?.toLowerCase();
+      const filtered = search ? sites.filter((s: any) => (s.name || "").toLowerCase().includes(search)) : sites;
+      return JSON.stringify({ count: filtered.length, totalOnConsole: sites.length, sites: filtered }, null, 2);
+    }
 
-    case "list_network_devices": return JSON.stringify(await connectorGet(env, args.host_id as string, `/v1/sites/${args.site_id}/devices`), null, 2);
+    case "list_network_devices": {
+      const devices = await connectorGetAllPages(env, args.host_id as string, `/v1/sites/${args.site_id}/devices`, Number(args.limit ?? 200));
+      return JSON.stringify({ count: devices.length, devices }, null, 2);
+    }
 
     case "list_clients": {
       const hostId = args.host_id as string;
       const siteId = args.site_id as string;
       const limit = Number(args.limit ?? 200);
 
-      const devicesResp = (await connectorGet(env, hostId, `/v1/sites/${siteId}/devices`, { limit: "200" })) as any;
-      const deviceNameById = new Map((devicesResp.data || []).map((d: any) => [d.id, d.name || d.model || d.id]));
+      const devices = await connectorGetAllPages(env, hostId, `/v1/sites/${siteId}/devices`, 500);
+      const deviceNameById = new Map(devices.map((d: any) => [d.id, d.name || d.model || d.id]));
 
-      const clients: any[] = [];
-      let offset = 0;
-      while (clients.length < limit) {
-        const pageLimit = Math.min(200, limit - clients.length);
-        const page = (await connectorGet(env, hostId, `/v1/sites/${siteId}/clients`, { offset: String(offset), limit: String(pageLimit) })) as any;
-        const batch = page.data || [];
-        clients.push(...batch);
-        offset += batch.length;
-        if (batch.length < pageLimit) break; // last page
-      }
+      const clients = await connectorGetAllPages(env, hostId, `/v1/sites/${siteId}/clients`, limit);
 
       const enriched = clients.map((c: any) => ({
         id: c.id,
