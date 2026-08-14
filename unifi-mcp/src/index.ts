@@ -56,8 +56,26 @@ async function unifiGet(env: Env, path: string, params?: Record<string, string>)
 }
 
 // Proxies to a console's local Network Integration API via the Cloud Connector.
+// device_offline / DeviceTimeout from api.ui.com almost always means this
+// host_id is stale (e.g. left over from a controller migrated to UniFi OS,
+// which gets a brand-new host identity rather than updating in place) rather
+// than a real outage — so the hint below is worth surfacing every time,
+// not just diagnosing it by hand each time someone hits this.
 async function connectorGet(env: Env, hostId: string, path: string, params?: Record<string, string>): Promise<unknown> {
-  return unifiGet(env, `/v1/connector/consoles/${hostId}/proxy/network/integration${path}`, params);
+  try {
+    return await unifiGet(env, `/v1/connector/consoles/${hostId}/proxy/network/integration${path}`, params);
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg.includes("device_offline") || msg.includes("DeviceTimeout")) {
+      throw new Error(
+        `${msg} — HINT: host_id "${hostId}" may be stale, not actually offline. This commonly happens after a console is migrated to UniFi OS ` +
+        `(e.g. a self-hosted install upgraded to UniFi OS Server) — that creates a BRAND NEW host_id rather than updating the old one, and the old ` +
+        `host_id stays in list_hosts permanently reporting state:"disconnected". Call list_hosts and look for a DIFFERENT entry with ` +
+        `state:"connected" that represents the same console before assuming this is a real outage.`
+      );
+    }
+    throw err;
+  }
 }
 
 // Auto-paginates a connector-proxied list endpoint (default page size 25 is too
