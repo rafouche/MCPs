@@ -171,7 +171,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 }
 
 // ============================================================
-// Wallboard status route — device online/offline counts per host,
+// Wallboard status route — device online/offline counts per tile,
 // for the Network zone alongside Ninja, Meraki, and Peplink.
 //
 // CONFIRMED against a live payload (previous version was unverified
@@ -184,26 +184,115 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 // currently include cameras either, for consistency). Hosts with zero
 // network-class devices (e.g. camera-only Protect sites) are dropped
 // rather than showing an empty tile.
+//
+// One tile per HOST is wrong for a shared, self-hosted console that
+// manages many clients' sites (confirmed live: one such console has 87
+// sites bundled under a single hostName) — every client on it would get
+// merged into one tile under the console's own name. Consoles Altec
+// directly owns/administers expose the local Network Integration API
+// (list_network_sites/list_network_devices, same as the MCP tools above)
+// and can be split per-site instead; consoles Altec only has cloud-adopted
+// access to 403 on that call ("user is not the owner of this host") and
+// are single-tenant anyway, so their one cloud-level tile already
+// represents one real client. Which host is the shared one is discovered
+// dynamically from its site count each poll — nothing about a specific
+// host name or ID is hardcoded, so a console rename (or a client's
+// single-site console growing/shrinking) never needs a code change here.
+//
+// A host with MORE than ~40 sites is left as a single combined tile
+// rather than split, and NOT retried into splitting — confirmed live that
+// Cloudflare's per-invocation subrequest cap makes an 87-site fan-out fail
+// partway through consistently (a hard ceiling, not fixable by tuning
+// concurrency/retries), and a partial split would silently drop whichever
+// sites lost the race, which is worse than the original merge-everything
+// bug. Splitting a host that large for real needs a cached/incremental
+// refresh spread across multiple polls (e.g. via KV), not a one-shot fetch
+// — flagged as a known gap, not implemented here.
 // ============================================================
+
+// Bounded-concurrency map — firing 80+ proxied per-site requests at one
+// console in a single Promise.all risks tripping the Cloud Connector's own
+// throttling (confirmed live: an unbounded fan-out here made every site
+// fetch fail, silently collapsing the split below). A handful at a time
+// is gentler on the console and still far faster than doing them serially.
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function buildHostTiles(env: Env, h: any): Promise<Array<{ orgName: string; totalDevices: number; offlineCount: number; offlineDevices: unknown[] }>> {
+  const devices = (h.devices || []).filter((d: any) => d.productLine === "network");
+  if (devices.length === 0) return [];
+
+  let sites: any[] = [];
+  try {
+    sites = await connectorGetAllPages(env, h.hostId, "/v1/sites", 500);
+  } catch {
+    // Not owned (403) or otherwise unreachable via the local Integration
+    // API — fall through to the single cloud-level host tile below.
+  }
+
+  // A host with many sites (confirmed live: one console has 87) can't have
+  // all of them fetched in a single Worker invocation — Cloudflare caps
+  // subrequests per invocation (confirmed live: this host's fan-out started
+  // failing with "Too many subrequests" partway through, consistently,
+  // regardless of concurrency or retries — a hard ceiling, not something
+  // tunable away). A partial split would silently DROP whichever sites lost
+  // the race — worse than the original bug, since a missing client tile
+  // reads as "nothing to report" instead of "merged into the wrong tile".
+  // So the split is only trusted when every site resolves cleanly; anything
+  // less falls back to the honest single combined tile below. Hosts with a
+  // sensible number of sites split fine; a host too large to fit the
+  // subrequest budget needs a cached/incremental refresh across polls
+  // instead of a one-shot fetch — not implemented here yet.
+  if (sites.length > 1 && sites.length <= 40) {
+    let anyFailed = false;
+    const perSite = await mapWithConcurrency(sites, 4, async (s: any) => {
+      try {
+        const siteDevices = await connectorGetAllPages(env, h.hostId, `/v1/sites/${s.id}/devices`, 200);
+        if (siteDevices.length === 0) return null;
+        const offline = siteDevices.filter((d: any) => d.state === "OFFLINE");
+        return {
+          orgName: s.name || `Site ${s.id}`,
+          totalDevices: siteDevices.length,
+          offlineCount: offline.length,
+          offlineDevices: offline.map((d: any) => ({ name: d.name || d.macAddress, status: "offline" })),
+        };
+      } catch {
+        anyFailed = true;
+        return null;
+      }
+    });
+    if (!anyFailed) {
+      const tiles = perSite.filter((t): t is NonNullable<typeof t> => t !== null);
+      if (tiles.length > 0) return tiles;
+    }
+  }
+
+  const offline = devices.filter((d: any) => d.status === "offline");
+  return [{
+    orgName: h.hostName || `Host ${h.hostId}`,
+    totalDevices: devices.length,
+    offlineCount: offline.length,
+    offlineDevices: offline.map((d: any) => ({ name: d.name || d.mac, status: "offline" })),
+  }];
+}
 
 async function buildNetworkStatus(env: Env) {
   const resp = (await unifiGet(env, "/v1/devices")) as any;
   const hostGroups: any[] = resp.data || [];
 
-  const networks = hostGroups
-    .map((h) => {
-      const devices = (h.devices || []).filter((d: any) => d.productLine === "network");
-      const offline = devices.filter((d: any) => d.status === "offline");
-      return {
-        orgName: h.hostName || `Host ${h.hostId}`,
-        totalDevices: devices.length,
-        offlineCount: offline.length,
-        offlineDevices: offline.map((d: any) => ({ name: d.name || d.mac, status: "offline" })),
-      };
-    })
-    .filter((n) => n.totalDevices > 0);
+  const tiles = await Promise.all(hostGroups.map((h) => buildHostTiles(env, h)));
 
-  return { updated: new Date().toISOString(), networks };
+  return { updated: new Date().toISOString(), networks: tiles.flat() };
 }
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept" };
