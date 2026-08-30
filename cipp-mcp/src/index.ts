@@ -321,7 +321,7 @@ export default {
         const { id, method, params } = msg;
         if (id === undefined) continue;
         try {
-          if (method === "initialize") responses.push({ jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "CIPP MCP Server", version: "1.0.0" } } });
+          if (method === "initialize") responses.push({ jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "CIPP MCP Server", version: "0.1.0" } } });
           else if (method === "tools/list") responses.push({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
           else if (method === "tools/call") { const text = await runTool(params?.name as string, (params?.arguments ?? {}) as Record<string, unknown>, env); responses.push({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } }); }
           else if (method === "ping") responses.push({ jsonrpc: "2.0", id, result: {} });
