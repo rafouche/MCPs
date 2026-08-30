@@ -19,6 +19,14 @@
  * MCP" and "Setting Up SSO and Getting Access to CIPP" (Custom Roles)
  * pages.
  *
+ * Full API coverage: alongside the named tools above, cipp_api_get/cipp_api_post
+ * are a generic passthrough to ANY CIPP endpoint by name (message trace, quarantine,
+ * GDAP, transport rules, etc.) — added so this worker doesn't need a hand-written
+ * tool per CIPP endpoint to have full read/write coverage, mirroring why CIPP's own
+ * native MCP moved from listing 70+ tools directly to a search/exec pattern (see
+ * docs.cipp.app "CIPP-API & MCP" > Scoping Copilot Tool Imports). Endpoint names are
+ * documented at docs.cipp.app/api-documentation.
+ *
  * CIPP-NG note: CIPP's July-2026 "next generation" hosted infra move
  * changes the instance URL (to CIPPXXXX.azurewebsites.net or a
  * re-mapped custom domain) and re-issues the API client's Tenant ID /
@@ -134,6 +142,13 @@ const TOOLS = [
 
   // Standards
   { name: "list_standards", description: "List applied CIPP standards for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+
+  // Generic passthrough — every other CIPP API endpoint (message trace, quarantine,
+  // conditional access templates, GDAP, transport rules, etc.) that doesn't have a
+  // named tool above. Endpoint names match CIPP's own API docs (docs.cipp.app/api-documentation)
+  // and its PowerShell module cmdlet names 1:1 (e.g. ListMessageTrace, ExecGDAPTrace).
+  { name: "cipp_api_get", description: "Call any CIPP read (GET) API endpoint by name, for functionality with no dedicated tool above — e.g. ListMessageTrace, ListMailQuarantine, ListConditionalAccessPolicies, ListExchangeConnectors. Look up exact endpoint names and query params at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ListMessageTrace" }, params: { type: "object", description: "Query string parameters as key/value pairs, e.g. { tenantFilter: 'client.com' }", additionalProperties: { type: "string" } } }, required: ["endpoint"] } },
+  { name: "cipp_api_post", description: "Call any CIPP write (POST) API endpoint by name, for functionality with no dedicated tool above — e.g. ExecMailTest, ExecGDAPTrace, ExecTransportRule. Look up exact endpoint names and body shape at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ExecGDAPTrace" }, body: { type: "object", description: "JSON request body for the endpoint" } }, required: ["endpoint"] } },
 ];
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
@@ -192,6 +207,10 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     // Standards
     case "list_standards": return JSON.stringify(await cippGet(env, "ListStandardsRun", { tenantFilter: t! }), null, 2);
+
+    // Generic passthrough
+    case "cipp_api_get": return JSON.stringify(await cippGet(env, args.endpoint as string, args.params as Record<string, string> | undefined), null, 2);
+    case "cipp_api_post": return JSON.stringify(await cippPost(env, args.endpoint as string, args.body ?? {}), null, 2);
 
     default: throw new Error(`Unknown tool: ${name}`);
   }
