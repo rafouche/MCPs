@@ -1,4 +1,41 @@
-﻿export interface Env {
+﻿/**
+ * cipp-mcp
+ *
+ * Wraps CIPP's own API (client_credentials grant against Entra, then
+ * bearer-token REST calls to CIPP's /api/<Endpoint> routes) as an MCP
+ * tool server. Several tools below (add_user, disable_user/enable_user,
+ * reset_user_password, set_user_license, add/remove_group_member,
+ * set_mailbox_ooo, convert_mailbox, revoke_user_sessions) POST to
+ * write endpoints — this worker does not enforce read-only itself.
+ * Whether those calls actually succeed is decided entirely by the
+ * CIPP-API client's assigned role in CIPP (CIPP > Integrations >
+ * CIPP-API): a client on the `readonly` base role, or a custom role
+ * without ReadWrite on the relevant categories (Identity/Users, Groups,
+ * Exchange/Mailboxes, Sessions), gets 403s on every write call above
+ * even though this code sends them correctly. To enable writes, edit
+ * that API client in CIPP and assign it `editor` (or a custom role with
+ * ReadWrite on just those categories) instead of `readonly`, then
+ * Actions > Save Azure Configuration. See docs.cipp.app's "CIPP-API &
+ * MCP" and "Setting Up SSO and Getting Access to CIPP" (Custom Roles)
+ * pages.
+ *
+ * CIPP-NG note: CIPP's July-2026 "next generation" hosted infra move
+ * changes the instance URL (to CIPPXXXX.azurewebsites.net or a
+ * re-mapped custom domain) and re-issues the API client's Tenant ID /
+ * Token URL / API URL shown on the CIPP-API page. After migrating a
+ * tenant via management.cipp.app, re-check those values and re-copy the
+ * Application secret (Actions > Reset Application Secret rotates it) —
+ * a stale CIPP_URL or secret from the pre-migration instance fails
+ * every tool call, not just writes.
+ *
+ * SECRETS (wrangler secret put):
+ *   CIPP_URL            base URL of the CIPP instance (API URL from the CIPP-API page, no trailing /api)
+ *   CIPP_CLIENT_ID       Application (client) ID of the CIPP-API client
+ *   CIPP_CLIENT_SECRET   that client's Application secret
+ *   CIPP_TENANT_ID       Tenant ID shown on the CIPP-API page
+ */
+
+export interface Env {
   CIPP_URL: string;
   CIPP_CLIENT_ID: string;
   CIPP_CLIENT_SECRET: string;
