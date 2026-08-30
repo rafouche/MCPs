@@ -18,7 +18,7 @@ A NOC-style wallboard dashboard (`dashboard.html`) polls several of these worker
 |---|---|---|---|
 | `meraki-mcp` | Cisco Meraki | tool-implementation | also exposes `/licenses` |
 | `halopsa-mcp` | HaloPSA (PSA/ticketing) | tool-implementation | feeds Dashboard's Tickets zone |
-| `cipp-mcp` | CIPP (M365 via CIPP) | tool-implementation | feeds Dashboard's Security zone |
+| `cipp-mcp` | CIPP (M365 via CIPP) | tool-implementation | feeds Dashboard's Security zone. Points at the CyberDrain-hosted "CIPP-NG" instance `https://cipp.altecusa.com` (client-credentials against a dedicated, non-MCP-flagged CIPP-API client — separate from CIPP's own native MCP feature). Beyond its ~33 named tools it also exposes generic `cipp_api_get`/`cipp_api_post` tools that call any CIPP endpoint by name (see the file header comment in `cipp-mcp/src/index.ts`), giving it full read/write coverage of CIPP's API without one hand-written tool per endpoint — this is why the native CIPP MCP connector was retired in favor of this worker. |
 | `m365-mcp` | Microsoft Graph (direct, multi-tenant) | tool-implementation | not yet wired into Dashboard |
 | `jumpcloud-mcp` | JumpCloud directory | tool-implementation | OAuth2 Service Account, org-scoped only — not yet wired into Dashboard. Contains a fully duplicated nested project at `jumpcloud-mcp/jumpcloud-mcp/` (own `wrangler.jsonc`/`src`/`package.json`, currently identical to the outer one) — treat the outer `jumpcloud-mcp/src/index.ts` as canonical and confirm which copy you're editing before making changes |
 | `ninjarmm-mcp` | NinjaRMM | tool-implementation | feeds Dashboard's Network zone (individually-tracked devices) |
@@ -72,6 +72,8 @@ Each defines, in a single `src/index.ts`:
   - Some also add `GET /licenses` (Meraki, Peplink) for expiring-license wallboard data.
 
 When adding a tool to one of these, add it to both `TOOLS` (schema) and the `runTool` switch (implementation) — `tools/list` and `tools/call` are hand-kept in sync, nothing derives one from the other.
+
+**Keep this file current as you go, unprompted.** Whenever a change to any `*-mcp/` project is more than a one-line fix — a new tool, a changed auth/secrets setup, a new external dependency (like `cipp-mcp` pointing at a specific hosted instance), a design decision worth knowing before touching that project again — update its row in the Projects table (or the relevant section below) in the same commit. Don't wait to be asked; treat an undocumented change as an incomplete one.
 
 ### 2. Passthrough gateway workers (huntress-mcp, pax8-mcp)
 
