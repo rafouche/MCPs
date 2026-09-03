@@ -174,31 +174,35 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 // Wallboard status route — per-org device health, for the
 // wallboard's Network zone (merged there with Ninja firewall data).
 //
-// Fans out one /devices/statuses call per organization. Fine at
-// your current org count on a 30s poll; if that count grows a lot,
-// consider caching this response briefly (e.g. in KV) so repeated
-// polls don't re-fan-out every time.
+// Fans out one /devices/statuses call per organization, in PARALLEL —
+// confirmed live this was previously a sequential for-loop (one org
+// awaited before the next started), which at ~11-15 orgs took 13-25+
+// seconds total. That's dangerously close to the dashboard's own 30s
+// poll interval, so a slow-but-eventually-successful response could
+// race the next poll and produce exactly the "data flickers in and
+// out" symptom this was reported as. Org count here is small enough
+// that a plain Promise.all is nowhere near Cloudflare's per-invocation
+// subrequest cap — no batching/concurrency-limiting needed at this scale.
 // ============================================================
 
 async function buildNetworkStatus(env: Env) {
   const orgs: any[] = (await merakiGet(env, "/organizations")) as any[];
 
-  const networks = [];
-  for (const org of orgs) {
+  const networks = (await Promise.all(orgs.map(async (org) => {
     try {
       const statuses: any[] = (await merakiGet(env, `/organizations/${org.id}/devices/statuses`)) as any[];
       const offline = statuses.filter((d) => d.status === "offline" || d.status === "alerting");
-      networks.push({
+      return {
         orgName: org.name,
         totalDevices: statuses.length,
         offlineCount: offline.length,
         offlineDevices: offline.map((d) => ({ name: d.name || d.serial, status: d.status })),
-      });
+      };
     } catch {
       // Skip orgs that error (e.g. no devices/statuses permission) rather than failing the whole response.
-      continue;
+      return null;
     }
-  }
+  }))).filter((n): n is NonNullable<typeof n> => n !== null);
 
   return { updated: new Date().toISOString(), networks };
 }
@@ -220,25 +224,29 @@ async function buildLicenseStatus(env: Env) {
   const now = Date.now();
   const in60Days = now + 60 * 24 * 3600 * 1000;
 
-  const upcomingRenewals = [];
-  for (const org of orgs) {
+  // Same sequential-fan-out issue as buildNetworkStatus above — parallelized
+  // for the same reason (this route is polled by the Business zone on the
+  // same 30s cadence as /status is by the Network zone).
+  const perOrg = await Promise.all(orgs.map(async (org) => {
     try {
       const overview: any = await merakiGet(env, `/organizations/${org.id}/licensing/coterm/licenses`);
       if (overview.expirationDate) {
         const t = new Date(overview.expirationDate).getTime();
         if (t >= now && t < in60Days) { // exclude already-lapsed dates — assumed cancelled/not renewing
-          upcomingRenewals.push({
+          return {
             company: org.name,
             product: "Meraki License",
             renewalDate: new Date(overview.expirationDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
             source: "Meraki",
-          });
+          };
         }
       }
+      return null;
     } catch {
-      continue;
+      return null;
     }
-  }
+  }));
+  const upcomingRenewals = perOrg.filter((r): r is NonNullable<typeof r> => r !== null);
 
   return { updated: new Date().toISOString(), upcomingRenewals };
 }

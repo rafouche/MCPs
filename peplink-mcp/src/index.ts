@@ -85,39 +85,46 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 // TODO: the device-list response's online/offline field name is not
 // directly confirmed from docs — verify against a real payload once
 // credentials are in hand and adjust the filter below if needed.
+//
+// Both levels of this fan-out (org -> group -> devices) are PARALLEL —
+// confirmed live this was previously a fully sequential nested for-loop
+// (every group of every org awaited one at a time), which took 15-24+
+// seconds even with only 3 orgs, dangerously close to the dashboard's
+// own 30s poll interval. A slow-but-eventually-successful response
+// racing the next poll produces exactly a "data flickers in and out"
+// symptom. Org/group counts here are nowhere near Cloudflare's
+// per-invocation subrequest cap at this scale — no batching needed.
 // ============================================================
 
 async function buildNetworkStatus(env: Env) {
   const orgs = (await ic2Get(env, "/rest/o")) as any;
   const orgList: any[] = orgs.data || orgs || [];
 
-  const networks = [];
-  for (const org of orgList) {
+  const networks = (await Promise.all(orgList.map(async (org) => {
     try {
       const groupsResp = (await ic2Get(env, `/rest/o/${org.id}/g`)) as any;
       const groups: any[] = groupsResp.data || groupsResp || [];
 
-      let totalDevices = 0;
-      let offlineDevices: any[] = [];
-      for (const group of groups) {
+      const perGroup = await Promise.all(groups.map(async (group) => {
         const devicesResp = (await ic2Get(env, `/rest/o/${org.id}/g/${group.id}/d`)) as any;
         const devices: any[] = devicesResp.data || devicesResp || [];
-        totalDevices += devices.length;
-        offlineDevices = offlineDevices.concat(
-          devices.filter((d) => d.online === false || d.status === "offline").map((d) => ({ name: d.name || d.sn, status: "offline" }))
-        );
-      }
+        return devices;
+      }));
+      const devices = perGroup.flat();
+      const offlineDevices = devices
+        .filter((d) => d.online === false || d.status === "offline")
+        .map((d) => ({ name: d.name || d.sn, status: "offline" }));
 
-      networks.push({
+      return {
         orgName: org.name || `Org ${org.id}`,
-        totalDevices,
+        totalDevices: devices.length,
         offlineCount: offlineDevices.length,
         offlineDevices,
-      });
+      };
     } catch {
-      continue;
+      return null;
     }
-  }
+  }))).filter((n): n is NonNullable<typeof n> => n !== null);
 
   return { updated: new Date().toISOString(), networks };
 }
@@ -139,16 +146,19 @@ async function buildLicenseStatus(env: Env) {
   const now = Date.now();
   const in60Days = now + 60 * 24 * 3600 * 1000;
 
-  const upcomingRenewals = [];
-  for (const org of orgList) {
+  // Same sequential nested fan-out issue as buildNetworkStatus above —
+  // parallelized for the same reason (this route is polled by the
+  // Business zone on the same 30s cadence as /status is by Network).
+  const perOrg = await Promise.all(orgList.map(async (org) => {
     try {
       const groupsResp = (await ic2Get(env, `/rest/o/${org.id}/g`)) as any;
       const groups: any[] = groupsResp.data || groupsResp || [];
 
-      for (const group of groups) {
+      const perGroup = await Promise.all(groups.map(async (group) => {
         const devicesResp = (await ic2Get(env, `/rest/o/${org.id}/g/${group.id}/d`)) as any;
         const devices: any[] = devicesResp.data || devicesResp || [];
 
+        const renewals: Array<{ company: string; product: string; renewalDate: string; source: string }> = [];
         for (const d of devices) {
           const checks: Array<[string, string | undefined]> = [
             ["Warranty", d.expiry_date],
@@ -159,7 +169,7 @@ async function buildLicenseStatus(env: Env) {
             if (!dateStr) continue;
             const t = new Date(dateStr).getTime();
             if (t >= now && t < in60Days) { // exclude already-lapsed dates — assumed cancelled/not renewing
-              upcomingRenewals.push({
+              renewals.push({
                 company: org.name || `Org ${org.id}`,
                 product: `${d.name || d.sn || "Device"} — ${label}`,
                 renewalDate: new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -168,11 +178,14 @@ async function buildLicenseStatus(env: Env) {
             }
           }
         }
-      }
+        return renewals;
+      }));
+      return perGroup.flat();
     } catch {
-      continue;
+      return [];
     }
-  }
+  }));
+  const upcomingRenewals = perOrg.flat();
 
   return { updated: new Date().toISOString(), upcomingRenewals };
 }
