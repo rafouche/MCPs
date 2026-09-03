@@ -28,7 +28,7 @@ const TOOLS = [
   { name: "list_tickets", description: "List tickets from HaloPSA with optional filters", inputSchema: { type: "object", properties: { count: { type: "number" }, open_only: { type: "boolean" }, client_id: { type: "number" }, search: { type: "string" } } } },
   { name: "get_ticket", description: "Get full details of a single HaloPSA ticket by ID", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
   { name: "create_ticket", description: "Create a new ticket in HaloPSA", inputSchema: { type: "object", properties: { summary: { type: "string" }, details: { type: "string" }, client_id: { type: "number" }, user_id: { type: "number" }, team_id: { type: "number" }, agent_id: { type: "number" }, tickettype_id: { type: "number" }, priority_id: { type: "number" } }, required: ["summary"] } },
-  { name: "update_ticket", description: "Update a ticket - add a note, change status, or reassign", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, note_is_private: { type: "boolean" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" } }, required: ["ticket_id"] } },
+  { name: "update_ticket", description: "Update a ticket - add a note, change status, reassign, or triage (set category/priority). HaloPSA has no separate 'triage' API action — triaging a ticket just means setting category_1 (and priority_id/team_id/agent_id) and moving it off its initial status in one call.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, note_is_private: { type: "boolean" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, category_1: { type: "string", description: "Category, e.g. 'Infrastructure>Server' — use list_ticket_types/an existing ticket to see this tenant's category tree" }, priority_id: { type: "number", description: "Use list_priorities to find the ID" } }, required: ["ticket_id"] } },
   { name: "list_clients", description: "List clients/customers in HaloPSA", inputSchema: { type: "object", properties: { count: { type: "number" }, search: { type: "string" }, include_inactive: { type: "boolean" } } } },
   { name: "get_client", description: "Get full details for a single HaloPSA client by ID", inputSchema: { type: "object", properties: { client_id: { type: "number" } }, required: ["client_id"] } },
   { name: "list_contacts", description: "List end-user contacts in HaloPSA, optionally filtered by client", inputSchema: { type: "object", properties: { client_id: { type: "number" }, search: { type: "string" }, count: { type: "number" } } } },
@@ -42,6 +42,7 @@ const TOOLS = [
   { name: "list_ticket_types", description: "List all ticket types in HaloPSA with their IDs", inputSchema: { type: "object", properties: {} } },
   { name: "list_statuses", description: "List all ticket statuses in HaloPSA with their IDs", inputSchema: { type: "object", properties: { ticket_type: { type: "number" } } } },
   { name: "list_priorities", description: "List all ticket priorities in HaloPSA with their IDs and SLA targets", inputSchema: { type: "object", properties: {} } },
+  { name: "list_outcomes", description: "List valid Action outcome IDs in HaloPSA — required by update_ticket's note field (HaloPSA rejects a ticket note/action with no outcome_id set)", inputSchema: { type: "object", properties: { tickettype_id: { type: "number" } } } },
   { name: "list_slas", description: "List all SLA policies in HaloPSA with response and fix time targets", inputSchema: { type: "object", properties: { count: { type: "number" } } } },
   { name: "list_time_entries", description: "List ticket actions from HaloPSA (time entries/labor, but also notes, emails, and replies — this is the full action log, not billing-only)", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, client_id: { type: "number" }, agent_id: { type: "number" }, count: { type: "number" }, start_date: { type: "string" }, end_date: { type: "string" } } } },
   { name: "get_ticket_time_entries", description: "Get a ticket's full action log: labor/time entries, internal notes, and agent-to-client conversation (emails/replies) — this is also the way to see what a prior agent already told the client", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
@@ -67,7 +68,25 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "list_tickets": { const p: Record<string, string> = { count: String(args.count ?? 20) }; if (args.open_only !== false) p.open_only = "true"; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Tickets", p), null, 2); }
     case "get_ticket": return JSON.stringify(await haloGet(env, `/Tickets/${args.ticket_id}`), null, 2);
     case "create_ticket": { const payload: Record<string, unknown> = { summary: args.summary, details: args.details ?? "" }; if (args.client_id) payload.client_id = args.client_id; if (args.user_id) payload.user_id = args.user_id; if (args.team_id) payload.team_id = args.team_id; if (args.agent_id) payload.agent_id = args.agent_id; if (args.tickettype_id) payload.tickettype_id = args.tickettype_id; if (args.priority_id) payload.priority_id = args.priority_id; return JSON.stringify(await haloPost(env, "/Tickets", [payload]), null, 2); }
-    case "update_ticket": { const payload: Record<string, unknown> = { id: args.ticket_id }; if (args.status_id) payload.status_id = args.status_id; if (args.agent_id) payload.agent_id = args.agent_id; if (args.team_id) payload.team_id = args.team_id; if (args.note) payload.actions = [{ note: args.note, note_is_private: args.note_is_private ?? false, actiontype_id: 1 }]; return JSON.stringify(await haloPost(env, "/Tickets", [payload]), null, 2); }
+    case "update_ticket": {
+      const results: Record<string, unknown> = {};
+      const fieldPayload: Record<string, unknown> = { id: args.ticket_id };
+      let hasFieldChange = false;
+      if (args.status_id) { fieldPayload.status_id = args.status_id; hasFieldChange = true; }
+      if (args.agent_id) { fieldPayload.agent_id = args.agent_id; hasFieldChange = true; }
+      if (args.team_id) { fieldPayload.team_id = args.team_id; hasFieldChange = true; }
+      if (args.category_1) { fieldPayload.category_1 = args.category_1; hasFieldChange = true; }
+      if (args.priority_id) { fieldPayload.priority_id = args.priority_id; hasFieldChange = true; }
+      if (hasFieldChange) results.ticket = await haloPost(env, "/Tickets", [fieldPayload]);
+      // Notes are a separate resource in HaloPSA (POST /Actions) — nesting an
+      // "actions" array inside a POST /Tickets payload is silently ignored by
+      // the API (no error, no action created), so this must be a second call.
+      // outcome_id is mandatory on every Action — HaloPSA rejects a note with none.
+      // 7 = "Private Note" in this tenant's Outcome list (list_outcomes); visibility
+      // to the client is controlled separately via hiddenfromuser, not this field.
+      if (args.note) results.action = await haloPost(env, "/Actions", [{ ticket_id: args.ticket_id, note: args.note, hiddenfromuser: args.note_is_private ?? false, outcome_id: 7 }]);
+      return JSON.stringify(results, null, 2);
+    }
     case "list_clients": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.search) p.search = String(args.search); if (args.include_inactive) p.includeinactive = "true"; return JSON.stringify(await haloGet(env, "/Client", p), null, 2); }
     case "get_client": return JSON.stringify(await haloGet(env, `/Client/${args.client_id}`), null, 2);
     case "list_contacts": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Users", p), null, 2); }
@@ -93,6 +112,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "list_ticket_types": return JSON.stringify(await haloGet(env, "/TicketType"), null, 2);
     case "list_statuses": { const p: Record<string, string> = {}; if (args.ticket_type) p.tickettype_id = String(args.ticket_type); return JSON.stringify(await haloGet(env, "/Status", p), null, 2); }
     case "list_priorities": return JSON.stringify(await haloGet(env, "/Priority"), null, 2);
+    case "list_outcomes": { const p: Record<string, string> = {}; if (args.tickettype_id) p.tickettype_id = String(args.tickettype_id); return JSON.stringify(await haloGet(env, "/Outcome", p), null, 2); }
     case "list_slas": return JSON.stringify(await haloGet(env, "/SLA", { count: String(args.count ?? 50) }), null, 2);
     case "list_time_entries": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.ticket_id) p.ticket_id = String(args.ticket_id); if (args.client_id) p.client_id = String(args.client_id); if (args.agent_id) p.agent_id = String(args.agent_id); if (args.start_date) p.start_date = String(args.start_date); if (args.end_date) p.end_date = String(args.end_date); return JSON.stringify(await haloGet(env, "/Actions", p), null, 2); }
     case "get_ticket_time_entries": return JSON.stringify(await haloGet(env, "/Actions", { ticket_id: String(args.ticket_id), count: "100" }), null, 2);
