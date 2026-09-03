@@ -33,6 +33,7 @@ const TOOLS = [
   { name: "get_client", description: "Get full details for a single HaloPSA client by ID", inputSchema: { type: "object", properties: { client_id: { type: "number" } }, required: ["client_id"] } },
   { name: "list_contacts", description: "List end-user contacts in HaloPSA, optionally filtered by client", inputSchema: { type: "object", properties: { client_id: { type: "number" }, search: { type: "string" }, count: { type: "number" } } } },
   { name: "get_contact", description: "Get full details for a single contact/end-user by ID", inputSchema: { type: "object", properties: { contact_id: { type: "number" } }, required: ["contact_id"] } },
+  { name: "create_contact", description: "Create a new end-user contact in HaloPSA and associate them with a client/company. HaloPSA requires a specific site, not just a client — use list_clients to find the client_id, then list_sites filtered by that client_id to find the site_id (most clients only have one site).", inputSchema: { type: "object", properties: { client_id: { type: "number", description: "The company/client this contact belongs to" }, site_id: { type: "number", description: "Required — the specific site under that client. Look it up with list_sites first." }, firstname: { type: "string" }, surname: { type: "string" }, name: { type: "string", description: "Full display name; if omitted, derived from firstname + surname" }, emailaddress: { type: "string" }, phonenumber: { type: "string" }, mobilenumber: { type: "string" }, title: { type: "string", description: "Job title" }, send_welcome_email: { type: "boolean", description: "Whether HaloPSA should email the new contact a portal welcome/login message" } }, required: ["client_id", "site_id"] } },
   { name: "list_sites", description: "List sites (physical locations) in HaloPSA, optionally filtered by client", inputSchema: { type: "object", properties: { client_id: { type: "number" }, search: { type: "string" }, count: { type: "number" } } } },
   { name: "get_site", description: "Get full details for a single site by ID", inputSchema: { type: "object", properties: { site_id: { type: "number" } }, required: ["site_id"] } },
   { name: "list_assets", description: "List assets/devices in HaloPSA", inputSchema: { type: "object", properties: { count: { type: "number" }, client_id: { type: "number" }, search: { type: "string" } } } },
@@ -71,6 +72,19 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_client": return JSON.stringify(await haloGet(env, `/Client/${args.client_id}`), null, 2);
     case "list_contacts": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Users", p), null, 2); }
     case "get_contact": return JSON.stringify(await haloGet(env, `/Users/${args.contact_id}`), null, 2);
+    case "create_contact": {
+      const name = args.name ?? [args.firstname, args.surname].filter(Boolean).join(" ");
+      const payload: Record<string, unknown> = { client_id: args.client_id, name };
+      if (args.site_id) payload.site_id = args.site_id;
+      if (args.firstname) payload.firstname = args.firstname;
+      if (args.surname) payload.surname = args.surname;
+      if (args.emailaddress) payload.emailaddress = args.emailaddress;
+      if (args.phonenumber) payload.phonenumber = args.phonenumber;
+      if (args.mobilenumber) payload.mobilenumber = args.mobilenumber;
+      if (args.title) payload.title = args.title;
+      if (args.send_welcome_email) payload.sendwelcomeemail = args.send_welcome_email;
+      return JSON.stringify(await haloPost(env, "/Users", [payload]), null, 2);
+    }
     case "list_sites": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Site", p), null, 2); }
     case "get_site": return JSON.stringify(await haloGet(env, `/Site/${args.site_id}`), null, 2);
     case "list_assets": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Asset", p), null, 2); }
