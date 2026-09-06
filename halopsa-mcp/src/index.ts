@@ -321,6 +321,38 @@ async function buildTicketStatus(env: Env) {
   };
 }
 
+// HelpDeskAgent's own cheap pre-flight check, run from PowerShell via a
+// plain HTTP GET (no Claude/LLM call at all) before deciding whether a
+// scheduled cycle needs to invoke the classifier. Real incident: without
+// this, every 15-minute cycle invoked the classifier LLM regardless of
+// whether anything had actually changed, at real per-cycle cost even on
+// the vast majority of cycles that found nothing. This route answers
+// "is there anything worth a real check" using only cheap, count-only or
+// single-ticket Halo calls - it never returns full ticket bodies for the
+// unassigned/stuck-claimed buckets, only counts, and only fetches full
+// detail for the small, explicitly-named tracked ticket set.
+async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trackedIds: string[]) {
+  const [unassignedData, stuckData, trackedResults] = await Promise.all([
+    haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: "1", pageinate: "true", page_no: "1", page_size: "1" }),
+    haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: agentId, pageinate: "true", page_no: "1", page_size: "10" }),
+    Promise.all(trackedIds.slice(0, 50).map(async (id) => {
+      try {
+        const t = (await haloGet(env, `/Tickets/${id}`)) as any;
+        return { id: Number(id), found: true, last_update: t.last_update ?? null, agent_id: t.agent_id ?? null, status_id: t.status_id ?? null };
+      } catch {
+        return { id: Number(id), found: false };
+      }
+    })),
+  ]);
+  const stuckTickets: any[] = (stuckData as any).tickets || [];
+  return {
+    unassigned_count: (unassignedData as any).record_count ?? 0,
+    stuck_claimed_count: (stuckData as any).record_count ?? stuckTickets.length,
+    stuck_claimed_ids: stuckTickets.map((t: any) => t.id),
+    tracked: trackedResults,
+  };
+}
+
 function humanizeDelta(ms: number): string {
   const abs = Math.abs(ms);
   const h = Math.floor(abs / 3600000);
@@ -340,6 +372,18 @@ export default {
       try {
         const status = await buildTicketStatus(env);
         return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
+      }
+    }
+    if (url.pathname === "/helpdesk-gate") {
+      const teamId = url.searchParams.get("team_id");
+      const agentId = url.searchParams.get("agent_id");
+      if (!teamId || !agentId) return new Response(JSON.stringify({ error: "team_id and agent_id query params are required" }), { status: 400, headers: JSON_HEADERS });
+      const trackedIds = (url.searchParams.get("tracked_ids") || "").split(",").map((s) => s.trim()).filter(Boolean);
+      try {
+        const gate = await buildHelpDeskGate(env, teamId, agentId, trackedIds);
+        return new Response(JSON.stringify(gate), { headers: JSON_HEADERS });
       } catch (err) {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
       }
@@ -364,6 +408,6 @@ export default {
       if (out === null) return new Response(null, { status: 204, headers: CORS });
       return new Response(JSON.stringify(out), { headers: JSON_HEADERS });
     }
-    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /health", { status: 200, headers: CORS });
+    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /helpdesk-gate, GET /health", { status: 200, headers: CORS });
   },
 };
