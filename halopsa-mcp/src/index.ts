@@ -337,7 +337,17 @@ async function buildTicketStatus(env: Env) {
 // detail for the small, explicitly-named tracked ticket set.
 async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trackedIds: string[]) {
   const [unassignedData, stuckData, trackedResults] = await Promise.all([
-    haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: "1", pageinate: "true", page_no: "1", page_size: "1" }),
+    // page_size 15 (not the original 1) - a bare count can't tell the caller
+    // WHICH tickets are unassigned, only how many, so a queue that always
+    // has a few non-actionable tickets sitting at agent_id: 1 (Halo clears
+    // assignment as a side effect of statuses like "AI Waiting Approval" or
+    // "Dispatch Needed" - see resolver-prompt.md) always reports count > 0
+    // and never lets the caller skip the classifier, even when literally
+    // none of those specific tickets have changed since the last check.
+    // Matches classifier-prompt.md's own page_size for this same bucket, so
+    // this fingerprint covers the same window the classifier would actually
+    // see.
+    haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: "1", pageinate: "true", page_no: "1", page_size: "15" }),
     haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: agentId, pageinate: "true", page_no: "1", page_size: "10" }),
     Promise.all(trackedIds.slice(0, 50).map(async (id) => {
       try {
@@ -348,9 +358,14 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
       }
     })),
   ]);
+  const unassignedTickets: any[] = (unassignedData as any).tickets || [];
   const stuckTickets: any[] = (stuckData as any).tickets || [];
   return {
     unassigned_count: (unassignedData as any).record_count ?? 0,
+    // Slim projection, not full ticket bodies - just enough for the caller
+    // to fingerprint "did this specific set of tickets change" the same way
+    // it already does for the tracked list below.
+    unassigned: unassignedTickets.map((t: any) => ({ id: t.id, last_update: t.last_update ?? null, status_id: t.status_id ?? null })),
     stuck_claimed_count: (stuckData as any).record_count ?? stuckTickets.length,
     stuck_claimed_ids: stuckTickets.map((t: any) => t.id),
     tracked: trackedResults,
