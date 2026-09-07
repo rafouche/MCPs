@@ -111,15 +111,29 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         // REAL INCIDENT: every note/action created via this OAuth
         // client_credentials app was attributed to whichever agent that app
         // is bound to in Halo's own admin config ("Login Type: Agent" on the
-        // API application), never to any field this tool sent. HaloPSA's
-        // /Actions schema accepts an explicit who_agentid to override this
-        // per-action. This deliberately reads note_agent_id, NOT agent_id -
-        // agent_id is ticket ASSIGNMENT and is routinely set to Halo's
-        // "Unassigned" agent (1) in the very same call that logs a final
-        // note (see HelpDeskAgent's resolver-prompt.md "Claim the ticket"
-        // section), so reusing it here would have attributed most notes to
-        // "Unassigned" instead of fixing anything.
-        if (args.note_agent_id) actionPayload.who_agentid = args.note_agent_id;
+        // API application), never to any field this tool sent. This
+        // deliberately reads note_agent_id, NOT agent_id - agent_id is
+        // ticket ASSIGNMENT and is routinely set to Halo's "Unassigned"
+        // agent (1) in the very same call that logs a final note (see
+        // HelpDeskAgent's resolver-prompt.md "Claim the ticket" section), so
+        // reusing it here would have attributed most notes to "Unassigned"
+        // instead of fixing anything.
+        //
+        // FOLLOW-UP INCIDENT: the who_agentid-only version of this fix
+        // shipped, but live tickets kept showing the generic integration
+        // identity regardless - verified directly against Halo action logs
+        // spanning 18+ hours after that fix deployed, so it wasn't a
+        // propagation-lag false alarm. GET /Actions returns both who_agentid
+        // and agentid on every real (human-authored) action, always equal -
+        // who_agentid looks like a read-only display field computed from the
+        // actual writable column, which is plainer old agentid, matching the
+        // same GET-vs-POST field-naming mismatch already found once in this
+        // file's list_agents (includedisabled vs includeinactive). Sending
+        // both costs nothing if only one turns out to be honored.
+        if (args.note_agent_id) {
+          actionPayload.who_agentid = args.note_agent_id;
+          actionPayload.agentid = args.note_agent_id;
+        }
         results.action = await haloPost(env, "/Actions", [actionPayload]);
       }
       return JSON.stringify(results, null, 2);
