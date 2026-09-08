@@ -335,19 +335,37 @@ async function buildTicketStatus(env: Env) {
 // single-ticket Halo calls - it never returns full ticket bodies for the
 // unassigned/stuck-claimed buckets, only counts, and only fetches full
 // detail for the small, explicitly-named tracked ticket set.
+// Real incident: a single page_size:15/page 1 pull silently assumed Halo's
+// /Tickets response is ordered newest-activity-first. Verified directly
+// against a live tenant that it is NOT - it's ordered by ticket ID/creation
+// date descending, which is not the same thing. A ticket with an older ID
+// that just got a fresh client reply can have a newer last_update than
+// several tickets "ahead" of it in that ordering, so a fixed single-page
+// pull can miss the exact change this fingerprint exists to catch. Fixed by
+// paging through the whole bucket (like stuck-claimed/Ready-for-AI already
+// do) instead of trusting page 1 alone - capped at maxPages purely as a
+// runaway-cost guard against an unbounded queue, not because paging itself
+// is expensive: this all happens in one Worker invocation with no LLM
+// involved, so extra pages cost a few extra Halo API round-trips, nothing
+// more.
+async function fetchAllTickets(env: Env, params: Record<string, string>, pageSize: number, maxPages: number): Promise<{ tickets: any[]; record_count: number; truncated: boolean }> {
+  let all: any[] = [];
+  let recordCount = 0;
+  for (let page = 1; page <= maxPages; page++) {
+    const data = (await haloGet(env, "/Tickets", { ...params, pageinate: "true", page_no: String(page), page_size: String(pageSize) })) as any;
+    const tickets: any[] = data.tickets || [];
+    recordCount = data.record_count ?? recordCount;
+    all = all.concat(tickets);
+    if (tickets.length < pageSize || all.length >= recordCount) break;
+  }
+  return { tickets: all, record_count: recordCount, truncated: all.length < recordCount };
+}
+
 async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trackedIds: string[]) {
-  const [unassignedData, stuckData, trackedResults] = await Promise.all([
-    // page_size 15 (not the original 1) - a bare count can't tell the caller
-    // WHICH tickets are unassigned, only how many, so a queue that always
-    // has a few non-actionable tickets sitting at agent_id: 1 (Halo clears
-    // assignment as a side effect of statuses like "AI Waiting Approval" or
-    // "Dispatch Needed" - see resolver-prompt.md) always reports count > 0
-    // and never lets the caller skip the classifier, even when literally
-    // none of those specific tickets have changed since the last check.
-    // Matches classifier-prompt.md's own page_size for this same bucket, so
-    // this fingerprint covers the same window the classifier would actually
-    // see.
-    haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: "1", pageinate: "true", page_no: "1", page_size: "15" }),
+  const [unassignedResult, stuckData, trackedResults] = await Promise.all([
+    // Full paged sweep (capped) - see fetchAllTickets above for why page 1
+    // alone isn't safe to rely on for this bucket.
+    fetchAllTickets(env, { open_only: "true", team_id: teamId, agent_id: "1" }, 20, 5),
     haloGet(env, "/Tickets", { open_only: "true", team_id: teamId, agent_id: agentId, pageinate: "true", page_no: "1", page_size: "10" }),
     Promise.all(trackedIds.slice(0, 50).map(async (id) => {
       try {
@@ -358,14 +376,17 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
       }
     })),
   ]);
-  const unassignedTickets: any[] = (unassignedData as any).tickets || [];
   const stuckTickets: any[] = (stuckData as any).tickets || [];
   return {
-    unassigned_count: (unassignedData as any).record_count ?? 0,
+    unassigned_count: unassignedResult.record_count,
     // Slim projection, not full ticket bodies - just enough for the caller
     // to fingerprint "did this specific set of tickets change" the same way
     // it already does for the tracked list below.
-    unassigned: unassignedTickets.map((t: any) => ({ id: t.id, last_update: t.last_update ?? null, status_id: t.status_id ?? null })),
+    unassigned: unassignedResult.tickets.map((t: any) => ({ id: t.id, last_update: t.last_update ?? null, status_id: t.status_id ?? null })),
+    // true if the bucket has more tickets than the 5-page/20-per-page cap
+    // covered - a signal worth logging, not itself acted on: it means the
+    // fingerprint below is only as complete as this cap allows.
+    unassigned_truncated: unassignedResult.truncated,
     stuck_claimed_count: (stuckData as any).record_count ?? stuckTickets.length,
     stuck_claimed_ids: stuckTickets.map((t: any) => t.id),
     tracked: trackedResults,
