@@ -23,13 +23,59 @@ async function haloPost(env: Env, path: string, body: unknown): Promise<unknown>
   if (!res.ok) throw new Error(`POST ${path} failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Real incident: HelpDeskAgent's resolver writes a note/status/agent change,
+// then immediately re-reads the ticket to confirm it landed (Halo has a
+// documented bug where a write can report success on an untriaged ticket
+// but silently never take effect). Live investigation of one specific
+// "confirmed failed" case found the write actually DID land - just a few
+// minutes after the resolver's own immediate check gave up. That's not a
+// permanent swallow, it's Halo's own eventual consistency: the write is
+// accepted before it's reliably readable back. The resolver has no sleep/
+// wait tool of its own, and re-checking instantly in its own next turn just
+// reproduces the same race - a real, wall-clock delay is genuinely needed,
+// which is something this Worker can do far more cheaply and reliably than
+// spending another agentic turn on it. verifyWrite re-checks with two short
+// delays before reporting failure, so a caller only sees "not confirmed"
+// once Halo has actually had a real chance to catch up.
+async function verifyWrite(env: Env, args: Record<string, unknown>, checkFields: boolean, checkNote: boolean): Promise<{ confirmed: boolean; attempts: number; fields_confirmed: boolean; note_confirmed: boolean }> {
+  const maxAttempts = 3;
+  const delayMs = 1500;
+  let fieldsOk = !checkFields;
+  let noteOk = !checkNote;
+  let attempts = 0;
+  while (attempts < maxAttempts && (!fieldsOk || !noteOk)) {
+    if (attempts > 0) await sleep(delayMs);
+    attempts++;
+    if (!fieldsOk) {
+      const t = (await haloGet(env, `/Tickets/${args.ticket_id}`)) as any;
+      fieldsOk =
+        (!args.status_id || t.status_id === args.status_id) &&
+        (!args.agent_id || t.agent_id === args.agent_id) &&
+        (!args.team_id || t.team_id === args.team_id) &&
+        (!args.client_id || t.client_id === args.client_id) &&
+        (!args.user_id || t.user_id === args.user_id);
+    }
+    if (!noteOk) {
+      const recent = (await haloGet(env, "/Actions", { ticket_id: String(args.ticket_id), count: "5" })) as any;
+      const list: any[] = recent.actions || [];
+      noteOk = list.some((a: any) => a.note === args.note);
+    }
+  }
+  return { confirmed: fieldsOk && noteOk, attempts, fields_confirmed: fieldsOk, note_confirmed: noteOk };
+}
+
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to HaloPSA and verify credentials are working", inputSchema: { type: "object", properties: {}, required: [] } },
   { name: "list_tickets", description: "List tickets from HaloPSA with optional filters. Without agent_id/team_id, this is an account-wide list capped at `count` (default 20) - large counts return full ticket bodies per row and can exceed the caller's own response-size limit well before reaching the true end of the open-ticket backlog, so a ticket with no recent activity can silently fall outside the window even though it's genuinely open. Pass agent_id (e.g. the real Halo 'Unassigned' agent, or a specific agent) and/or team_id to filter server-side instead of relying on count/recency - a real incident found an unassigned-tickets query with no team_id fetched every team's tickets account-wide (82 full ticket bodies in one case) just to manually discard everything outside the one team actually wanted, at real per-cycle cost. If even one agent's ticket count is still too large for one response, use pageinate/page_no/page_size (HaloPSA's own paging - page_size max 100 per HaloPSA's docs, but this MCP server's own response-size limit will likely force something smaller in practice) instead of `count` to walk through them in bounded pages - the response's own record_count field is the true total match count regardless of how many rows this particular page returned, so it tells you when you've reached the end.", inputSchema: { type: "object", properties: { count: { type: "number" }, open_only: { type: "boolean" }, client_id: { type: "number" }, agent_id: { type: "number", description: "Filter to tickets currently assigned to this single agent ID (HaloPSA's own /Tickets agent_id filter) - use this instead of a large count to reliably find a specific agent's tickets regardless of how recently they were touched." }, team_id: { type: "number", description: "Filter to tickets currently on this single team (HaloPSA's own /Tickets team_id filter) - combine with agent_id (e.g. team_id + agent_id:1 for a specific team's unassigned tickets) to avoid ever fetching another team's tickets at all." }, status_id: { type: "number", description: "Filter to tickets currently in this single status (HaloPSA's own /Tickets status_id filter) - combine with team_id to find every ticket in a specific status regardless of who it's assigned to, e.g. an explicit human hand-back status, without pulling the whole team's ticket list to filter client-side." }, pageinate: { type: "boolean", description: "Enable HaloPSA's own pagination instead of the plain count cutoff - use together with page_no/page_size." }, page_no: { type: "number", description: "Page number to return (1-based) when pageinate is true." }, page_size: { type: "number", description: "Rows per page when pageinate is true. HaloPSA caps this at 100, but this MCP server's response-size limit will often force a smaller value in practice - start small (e.g. 15-20) and only raise it if the response doesn't get truncated." }, search: { type: "string" } } } },
   { name: "get_ticket", description: "Get full details of a single HaloPSA ticket by ID", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
   { name: "create_ticket", description: "Create a new ticket in HaloPSA", inputSchema: { type: "object", properties: { summary: { type: "string" }, details: { type: "string" }, client_id: { type: "number" }, user_id: { type: "number" }, team_id: { type: "number" }, agent_id: { type: "number" }, tickettype_id: { type: "number" }, priority_id: { type: "number" } }, required: ["summary"] } },
-  { name: "update_ticket", description: "Update a ticket - add a note, change status, reassign, re-link to a different client/contact, or triage (set category/priority). HaloPSA has no separate 'triage' API action — triaging a ticket just means setting category_1 (and priority_id/team_id/agent_id) and moving it off its initial status in one call. IMPORTANT: note_is_private: false alone does NOT email the client - it only marks the note visible-in-portal. Every note this tool adds uses outcome_id 7 ('Private Note' in this tenant's Outcome list) unless send_email is also passed as true, and outcome 7 has hidesendemail set in HaloPSA, meaning it can never trigger an email regardless of hiddenfromuser. To actually send a client-facing reply by email, pass note_is_private: false AND send_email: true together. This tool CAN send a real, public, emailed reply - if the caller is a workflow that must hold every reply for human approval first (not yet decided this ticket is approved to send), use update_ticket_draft_only instead, which cannot send one no matter what arguments it's given.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, note_is_private: { type: "boolean" }, send_email: { type: "boolean", description: "Set true together with note_is_private: false to actually email this note to the ticket's contact - uses outcome_id 16 ('Email User' in this tenant's Outcome list) instead of the default 'Private Note' outcome, which never emails regardless of note_is_private. Leave false/unset for anything that should stay internal-only or portal-visible-but-not-emailed; true is ignored (forced to a visible, emailed note) only in the sense that it also forces hiddenfromuser to false, since emailing a note the client can't see back in the portal isn't a coherent request." }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number", description: "Re-link this ticket to a different client/company - e.g. correcting a ticket that came in against a generic/shared account (a voicemail line, a catch-all mailbox) once the real caller/client is identified. Set alongside user_id, which must belong to this client." }, user_id: { type: "number", description: "Re-link this ticket to a different contact/end-user (find the ID with list_contacts/get_contact - use search_phonenumbers to match a caller's phone number to an existing contact). Must belong to the client given in client_id (or the ticket's current client if client_id is omitted)." }, category_1: { type: "string", description: "Category, e.g. 'Infrastructure>Server' — use list_ticket_types/an existing ticket to see this tenant's category tree" }, priority_id: { type: "number", description: "Use list_priorities to find the ID" } }, required: ["ticket_id"] } },
-  { name: "update_ticket_draft_only", description: "Identical to update_ticket (same fields: status_id/agent_id/team_id/category_1/priority_id/client_id/user_id/note all work the same way) EXCEPT any note this tool writes is ALWAYS private and ALWAYS unemailed - note_is_private is forced true and send_email is forced false no matter what you pass, and passing send_email: true or note_is_private: false explicitly returns an error rather than silently sending. Use this instead of update_ticket for a ticket that is not yet approved to receive a real reply - e.g. a -RequireApproval workflow's private draft note (write your intended reply text into `note`, e.g. prefixed '[DRAFT PENDING APPROVAL]', and it will land privately regardless). Real incident: a workflow that relied purely on prompt instructions to hold replies for approval did not reliably hold them - some replies got sent for real anyway. This tool makes that structurally impossible instead of relying on instructions being followed.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number" }, user_id: { type: "number" }, category_1: { type: "string" }, priority_id: { type: "number" } }, required: ["ticket_id"] } },
+  { name: "update_ticket", description: "Update a ticket - add a note, change status, reassign, re-link to a different client/contact, or triage (set category/priority). HaloPSA has no separate 'triage' API action — triaging a ticket just means setting category_1 (and priority_id/team_id/agent_id) and moving it off its initial status in one call. IMPORTANT: note_is_private: false alone does NOT email the client - it only marks the note visible-in-portal. Every note this tool adds uses outcome_id 7 ('Private Note' in this tenant's Outcome list) unless send_email is also passed as true, and outcome 7 has hidesendemail set in HaloPSA, meaning it can never trigger an email regardless of hiddenfromuser. To actually send a client-facing reply by email, pass note_is_private: false AND send_email: true together. This tool CAN send a real, public, emailed reply - if the caller is a workflow that must hold every reply for human approval first (not yet decided this ticket is approved to send), use update_ticket_draft_only instead, which cannot send one no matter what arguments it's given. Pass verify: true to have this call re-check (with a couple of short built-in retries) that the note/field changes actually landed before returning - a `verified` field is added to the response with the result. Default (omitted/false) leaves the response exactly as it's always been, with no added delay - opt in only when you actually need the confirmation, e.g. on a ticket that might not be triaged yet in Halo (writes there can silently take a few extra seconds to become readable).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, verify: { type: "boolean", description: "If true, re-check (with short built-in retries) that the requested field changes and/or note actually landed before returning, and include a `verified` field in the response. Default false: identical to this tool's behavior before this parameter existed, no added delay." }, note_is_private: { type: "boolean" }, send_email: { type: "boolean", description: "Set true together with note_is_private: false to actually email this note to the ticket's contact - uses outcome_id 16 ('Email User' in this tenant's Outcome list) instead of the default 'Private Note' outcome, which never emails regardless of note_is_private. Leave false/unset for anything that should stay internal-only or portal-visible-but-not-emailed; true is ignored (forced to a visible, emailed note) only in the sense that it also forces hiddenfromuser to false, since emailing a note the client can't see back in the portal isn't a coherent request." }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number", description: "Re-link this ticket to a different client/company - e.g. correcting a ticket that came in against a generic/shared account (a voicemail line, a catch-all mailbox) once the real caller/client is identified. Set alongside user_id, which must belong to this client." }, user_id: { type: "number", description: "Re-link this ticket to a different contact/end-user (find the ID with list_contacts/get_contact - use search_phonenumbers to match a caller's phone number to an existing contact). Must belong to the client given in client_id (or the ticket's current client if client_id is omitted)." }, category_1: { type: "string", description: "Category, e.g. 'Infrastructure>Server' — use list_ticket_types/an existing ticket to see this tenant's category tree" }, priority_id: { type: "number", description: "Use list_priorities to find the ID" } }, required: ["ticket_id"] } },
+  { name: "update_ticket_draft_only", description: "Identical to update_ticket (same fields: status_id/agent_id/team_id/category_1/priority_id/client_id/user_id/note all work the same way) EXCEPT any note this tool writes is ALWAYS private and ALWAYS unemailed - note_is_private is forced true and send_email is forced false no matter what you pass, and passing send_email: true or note_is_private: false explicitly returns an error rather than silently sending. Use this instead of update_ticket for a ticket that is not yet approved to receive a real reply - e.g. a -RequireApproval workflow's private draft note (write your intended reply text into `note`, e.g. prefixed '[DRAFT PENDING APPROVAL]', and it will land privately regardless). Real incident: a workflow that relied purely on prompt instructions to hold replies for approval did not reliably hold them - some replies got sent for real anyway. This tool makes that structurally impossible instead of relying on instructions being followed. Always verifies its own write before returning (a couple of short built-in retries against Halo's own eventual-consistency delay - a write can report success and not be immediately readable back) and includes a `verified` field in the response ({confirmed, attempts, fields_confirmed, note_confirmed}) - no separate follow-up read call needed to check.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number" }, user_id: { type: "number" }, category_1: { type: "string" }, priority_id: { type: "number" } }, required: ["ticket_id"] } },
   { name: "list_clients", description: "List clients/customers in HaloPSA", inputSchema: { type: "object", properties: { count: { type: "number" }, search: { type: "string" }, include_inactive: { type: "boolean" } } } },
   { name: "get_client", description: "Get full details for a single HaloPSA client by ID", inputSchema: { type: "object", properties: { client_id: { type: "number" } }, required: ["client_id"] } },
   { name: "list_contacts", description: "List end-user contacts in HaloPSA, optionally filtered by client", inputSchema: { type: "object", properties: { client_id: { type: "number" }, search: { type: "string" }, search_phonenumbers: { type: "boolean", description: "Match `search` against contacts' phone/mobile numbers instead of name/email - use this to identify a caller from a callback number (e.g. a voicemail transcript) against existing contacts, rather than name-matching alone." }, count: { type: "number" } } } },
@@ -46,7 +92,7 @@ const TOOLS = [
   { name: "list_outcomes", description: "List valid Action outcome IDs in HaloPSA — required by update_ticket's note field (HaloPSA rejects a ticket note/action with no outcome_id set)", inputSchema: { type: "object", properties: { tickettype_id: { type: "number" } } } },
   { name: "list_slas", description: "List all SLA policies in HaloPSA with response and fix time targets", inputSchema: { type: "object", properties: { count: { type: "number" } } } },
   { name: "list_time_entries", description: "List ticket actions from HaloPSA (time entries/labor, but also notes, emails, and replies — this is the full action log, not billing-only)", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, client_id: { type: "number" }, agent_id: { type: "number" }, count: { type: "number" }, start_date: { type: "string" }, end_date: { type: "string" } } } },
-  { name: "get_ticket_time_entries", description: "Get a ticket's full action log: labor/time entries, internal notes, and agent-to-client conversation (emails/replies) — this is also the way to see what a prior agent already told the client", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
+  { name: "get_ticket_time_entries", description: "Get a ticket's full action log: labor/time entries, internal notes, and agent-to-client conversation (emails/replies) — this is also the way to see what a prior agent already told the client. The response also includes a computed `human_touch` field ({found: boolean, actions: [...]}) — every action where a real human agent (who_type: 1, not this pipeline's own identity) did something, already filtered out of the full list for you. Use it to answer 'has a human ever touched this ticket' directly rather than re-scanning the full action list yourself — it's the same underlying data, just pre-filtered so a human action buried in a long list can't be missed.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
   { name: "list_invoices", description: "List invoices from HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" }, start_date: { type: "string" }, end_date: { type: "string" }, search: { type: "string" } } } },
   { name: "get_invoice", description: "Get full details of a single invoice by ID including line items", inputSchema: { type: "object", properties: { invoice_id: { type: "number" } }, required: ["invoice_id"] } },
   { name: "list_recurring_invoices", description: "List recurring invoices (MRR contracts) in HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" }, active_only: { type: "boolean" } } } },
@@ -127,6 +173,15 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         // decisions, not something this tool can do.
         results.action = await haloPost(env, "/Actions", [actionPayload]);
       }
+      // Opt-in only (verify: true) - existing callers of this tool that
+      // don't pass it see byte-for-byte the same response shape/timing as
+      // before this existed. See verifyWrite's own comment above for why
+      // this exists at all: a write can report success and still not be
+      // immediately readable back, and confirming that costs real
+      // wall-clock delay a caller may not always want to pay for.
+      if (args.verify === true) {
+        results.verified = await verifyWrite(env, args, hasFieldChange, !!args.note);
+      }
       return JSON.stringify(results, null, 2);
     }
     case "update_ticket_draft_only": {
@@ -166,6 +221,13 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, hiddenfromuser: true, outcome_id: 7 };
         results.action = await haloPost(env, "/Actions", [actionPayload]);
       }
+      // Always verified (unlike update_ticket's opt-in) - this tool exists
+      // solely for HelpDeskAgent's approval-hold flow, which specifically
+      // needs to know whether its draft note/status actually landed before
+      // deciding whether the ticket is safely holding for human review or
+      // needs a [CACHE: BLOCKED] instead. No other caller exists for this
+      // tool to have its behavior change under.
+      results.verified = await verifyWrite(env, args, hasFieldChange, !!args.note);
       return JSON.stringify(results, null, 2);
     }
     case "list_clients": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.search) p.search = String(args.search); if (args.include_inactive) p.includeinactive = "true"; return JSON.stringify(await haloGet(env, "/Client", p), null, 2); }
@@ -196,7 +258,37 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "list_outcomes": { const p: Record<string, string> = {}; if (args.tickettype_id) p.tickettype_id = String(args.tickettype_id); return JSON.stringify(await haloGet(env, "/Outcome", p), null, 2); }
     case "list_slas": return JSON.stringify(await haloGet(env, "/SLA", { count: String(args.count ?? 50) }), null, 2);
     case "list_time_entries": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.ticket_id) p.ticket_id = String(args.ticket_id); if (args.client_id) p.client_id = String(args.client_id); if (args.agent_id) p.agent_id = String(args.agent_id); if (args.start_date) p.start_date = String(args.start_date); if (args.end_date) p.end_date = String(args.end_date); return JSON.stringify(await haloGet(env, "/Actions", p), null, 2); }
-    case "get_ticket_time_entries": return JSON.stringify(await haloGet(env, "/Actions", { ticket_id: String(args.ticket_id), count: "100" }), null, 2);
+    case "get_ticket_time_entries": {
+      const data = (await haloGet(env, "/Actions", { ticket_id: String(args.ticket_id), count: "100" })) as any;
+      // Real incident: HelpDeskAgent's resolver has a bright-line rule -
+      // "if any real human agent has EVER acted on this ticket, stop" -
+      // that depends on it correctly scanning every action's who/who_type
+      // field in a list that can run well past a dozen entries. Confirmed
+      // live: the exact same ticket, same action list, was scanned
+      // correctly on one pass and missed a clearly-present human action
+      // (a status change, `who_type: 1`, a real agent name) on another
+      // pass five minutes earlier - the RULE was never in question, the
+      // scan itself was unreliable. What actually makes an action "human"
+      // here is fully mechanical, not a judgment call: `who_type === 1`
+      // (Halo's own agent/human flag, as opposed to 0 for system/rule/AI
+      // automation or 2 for the client contact) and not this pipeline's
+      // own identity (every note/action this pipeline itself writes is
+      // tagged `actionby_application_id: "Claude"`, confirmed live,
+      // regardless of which Halo agent account it's bound to). Computing
+      // that once here and handing it over as a plain fact removes the
+      // "did the model actually notice it" step as a source of error -
+      // it does NOT decide what to do about it, resolver-prompt.md's own
+      // ownership check still makes that call. The full `actions` array
+      // is still returned completely unchanged below this new field, so
+      // nothing that already reads this response's shape is affected.
+      const actions: any[] = data.actions || [];
+      const humanActions = actions.filter((a: any) => a.who_type === 1 && a.actionby_application_id !== "Claude");
+      data.human_touch = {
+        found: humanActions.length > 0,
+        actions: humanActions.map((a: any) => ({ id: a.id, who: a.who, who_agentid: a.who_agentid, datetime: a.datetime, outcome: a.outcome })),
+      };
+      return JSON.stringify(data, null, 2);
+    }
     case "list_invoices": { const p: Record<string, string> = { count: String(args.count ?? 20) }; if (args.client_id) p.client_id = String(args.client_id); if (args.start_date) p.start_date = String(args.start_date); if (args.end_date) p.end_date = String(args.end_date); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Invoice", p), null, 2); }
     case "get_invoice": return JSON.stringify(await haloGet(env, `/Invoice/${args.invoice_id}`), null, 2);
     case "list_recurring_invoices": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.active_only !== false) p.active_only = "true"; return JSON.stringify(await haloGet(env, "/RecurringInvoice", p), null, 2); }
