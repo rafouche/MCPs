@@ -50,7 +50,14 @@ export interface Env {
   CIPP_TENANT_ID: string;
 }
 
+// Cached across invocations within the same isolate — without this, /status
+// alone (33 tenants x 2 calls) made ~66 fresh token round-trips on top of the
+// ~66 data calls in one Worker invocation, blowing past Cloudflare's
+// per-request subrequest limit and silently failing every tenant at once.
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
 async function getToken(env: Env): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.token;
   const scope = `api://${env.CIPP_CLIENT_ID}/.default`;
   const res = await fetch(`https://login.microsoftonline.com/${env.CIPP_TENANT_ID}/oauth2/v2.0/token`, {
     method: "POST",
@@ -63,7 +70,9 @@ async function getToken(env: Env): Promise<string> {
     }).toString(),
   });
   if (!res.ok) throw new Error(`CIPP auth failed (${res.status}): ${await res.text()}`);
-  return ((await res.json()) as { access_token: string }).access_token;
+  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  cachedToken = { token: data.access_token, expiresAt: Date.now() + ((data.expires_in ?? 3600) - 60) * 1000 };
+  return data.access_token;
 }
 
 async function cippGet(env: Env, endpoint: string, params?: Record<string, string>): Promise<unknown> {
@@ -247,11 +256,26 @@ interface TenantSecuritySummary {
   error?: boolean;
 }
 
+// Bounds how many tenants are in flight at once (each does 2 outbound calls),
+// so a large tenant count doesn't blow past Cloudflare's per-request
+// subrequest limit the way firing all of them via a single Promise.all did.
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 async function buildSecurityStatus(env: Env) {
   const tenants = (await cippGet(env, "ListTenants")) as any[];
 
-  const perTenant: TenantSecuritySummary[] = await Promise.all(
-    tenants.map(async (tenant): Promise<TenantSecuritySummary> => {
+  const perTenant: TenantSecuritySummary[] = await mapWithConcurrency(tenants, 5, async (tenant): Promise<TenantSecuritySummary> => {
       const tenantFilter = tenant.defaultDomainName || tenant.customerId || tenant.tenantId;
       const label = tenant.displayName || tenant.defaultDomainName || tenantFilter;
       try {
@@ -278,8 +302,7 @@ async function buildSecurityStatus(env: Env) {
       } catch {
         return { tenant: label, securePercent: null, mfaPercent: null, totalUsers: 0, error: true };
       }
-    })
-  );
+  });
 
   const withScore = perTenant.filter((p) => p.securePercent !== null);
   const avgSecureScore = withScore.length
