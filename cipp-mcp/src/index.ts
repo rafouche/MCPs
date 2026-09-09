@@ -299,7 +299,8 @@ async function buildSecurityStatus(env: Env) {
         const mfaPercent = totalUsers > 0 ? Math.round((coveredUsers / totalUsers) * 100) : null;
 
         return { tenant: label, securePercent, mfaPercent, totalUsers };
-      } catch {
+      } catch (err) {
+        console.error(`buildSecurityStatus failed for ${label}: ${(err as Error).message}`);
         return { tenant: label, securePercent: null, mfaPercent: null, totalUsers: 0, error: true };
       }
   });
