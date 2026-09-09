@@ -228,10 +228,15 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 // (Secure Score + MFA coverage) across every CIPP-managed tenant,
 // for the wallboard's Security zone alongside Huntress incidents.
 //
-// TODO: CIPP's ListSecureScore / ListMFAUsers response shapes vary by
-// CIPP version — the field-name fallbacks below are best-effort. Hit
-// /status once deployed, check the real shape, and tighten the field
-// names if avgSecureScore/avgMfaPercent come back null unexpectedly.
+// `ListSecureScore` no longer exists on CIPP-NG (404) — Secure Score now
+// only comes through CIPP's Graph passthrough (`ListGraphRequest` ->
+// `security/secureScores`), which wraps results in a `Results` array and
+// uses plain `currentScore`/`maxScore` (confirmed live 2026-09-09).
+// `ListMFAUsers`' real field is `MFARegistration` (not `MFARegistered`),
+// there's no `CoveredByMFA` field, and `PerUser` values are lowercase
+// (confirmed live: {"disabled","enforced"}) — also checking `CoveredByCA`/
+// `CoveredBySD` since modern M365 tenants often enforce MFA via
+// Conditional Access or Security Defaults rather than legacy per-user MFA.
 // ============================================================
 
 interface TenantSecuritySummary {
@@ -251,21 +256,22 @@ async function buildSecurityStatus(env: Env) {
       const label = tenant.displayName || tenant.defaultDomainName || tenantFilter;
       try {
         const [scoreData, mfaData] = await Promise.all([
-          cippGet(env, "ListSecureScore", { tenantFilter }),
+          cippGet(env, "ListGraphRequest", { tenantFilter, Endpoint: "security/secureScores", "$top": "1" }),
           cippGet(env, "ListMFAUsers", { tenantFilter }),
         ]);
 
-        const scoreArr = Array.isArray(scoreData) ? scoreData : [scoreData];
-        const scoreRecord: any = scoreArr[0] || {};
+        const scoreResults: any[] = Array.isArray((scoreData as any)?.Results) ? (scoreData as any).Results : Array.isArray(scoreData) ? scoreData : [scoreData];
+        const scoreRecord: any = scoreResults[0] || {};
         const currentScore = Number(scoreRecord.currentScore ?? scoreRecord.CurrentScore ?? 0);
         const maxScore = Number(scoreRecord.maxScore ?? scoreRecord.MaxScore ?? 0);
         const securePercent = maxScore > 0 ? Math.round((currentScore / maxScore) * 100) : null;
 
         const mfaArr: any[] = Array.isArray(mfaData) ? mfaData : [];
         const totalUsers = mfaArr.length;
-        const coveredUsers = mfaArr.filter(
-          (u) => u.PerUser === "Enforced" || u.PerUser === "Enabled" || u.MFARegistered === true || u.CoveredByMFA === true
-        ).length;
+        const coveredUsers = mfaArr.filter((u) => {
+          const perUser = String(u.PerUser ?? "").toLowerCase();
+          return perUser === "enforced" || perUser === "enabled" || u.MFARegistration === true || u.CoveredByCA === "Enforced" || u.CoveredBySD === true;
+        }).length;
         const mfaPercent = totalUsers > 0 ? Math.round((coveredUsers / totalUsers) * 100) : null;
 
         return { tenant: label, securePercent, mfaPercent, totalUsers };
