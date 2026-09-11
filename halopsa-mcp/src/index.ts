@@ -28,6 +28,26 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Real incident: HelpDeskAgent ticket #22067 - a carefully formatted,
+// multi-paragraph draft note looked perfect in Halo's own ticket view, but
+// once approved and emailed to the client, all formatting was gone (every
+// paragraph break collapsed into one run-on block). Root cause: HaloPSA's
+// Actions API has a separate `note` (plain-text) field and `note_html`
+// (HTML) field - this Worker only ever set `note`. A plain-text note with
+// bare `\n` line breaks renders forgivingly in Halo's own UI, but the
+// outbound email is built from `note_html` when present, and HTML ignores
+// bare whitespace entirely, so `\n` is not a line break there without an
+// explicit `<br>`. Every note write now also sends an HTML-escaped,
+// `<br>`-converted `note_html` alongside the plain `note`, so the emailed
+// version preserves the same paragraph breaks the draft had.
+function noteToHtml(note: string): string {
+  const escaped = note
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped.replace(/\r\n|\r|\n/g, "<br>");
+}
+
 // Real incident: HelpDeskAgent's resolver writes a note/status/agent change,
 // then immediately re-reads the ticket to confirm it landed (Halo has a
 // documented bug where a write can report success on an untriaged ticket
@@ -154,7 +174,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         const sendEmail = args.send_email === true;
         const hidden = sendEmail ? false : (args.note_is_private ?? false);
         const outcomeId = sendEmail ? 16 : 7;
-        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, hiddenfromuser: hidden, outcome_id: outcomeId };
+        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, note_html: noteToHtml(args.note as string), hiddenfromuser: hidden, outcome_id: outcomeId };
         // REAL INCIDENT, CONFIRMED DEAD END: every note/action created via
         // this OAuth client_credentials app is attributed to whichever agent
         // that app is bound to in Halo's own admin config ("Login Type:
@@ -218,7 +238,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       if (args.user_id) { fieldPayload.user_id = args.user_id; hasFieldChange = true; }
       if (hasFieldChange) results.ticket = await haloPost(env, "/Tickets", [fieldPayload]);
       if (args.note) {
-        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, hiddenfromuser: true, outcome_id: 7 };
+        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, note_html: noteToHtml(args.note as string), hiddenfromuser: true, outcome_id: 7 };
         results.action = await haloPost(env, "/Actions", [actionPayload]);
       }
       // Always verified (unlike update_ticket's opt-in) - this tool exists
