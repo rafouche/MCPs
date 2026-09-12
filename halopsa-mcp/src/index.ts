@@ -137,6 +137,44 @@ const TOOLS = [
   { name: "list_software_licences", description: "List software licence subscriptions tracked in HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" }, search: { type: "string" } } } },
   { name: "list_contracts", description: "List contracts (time bank, block hours, prepay) in HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" } } } },
   { name: "get_contract", description: "Get full details of a single contract including remaining hours/value", inputSchema: { type: "object", properties: { contract_id: { type: "number" } }, required: ["contract_id"] } },
+  // Generic passthrough - mirrors cipp-mcp's cipp_api_get/cipp_api_post, added
+  // for the same reason: contract/recurring-invoice billing configuration
+  // (ClientContract, RecurringInvoice, ContractSchedule, ContractSchedulePlan,
+  // ContractTemplateHeader) lives on HaloPSA objects with 100-200+ fields each
+  // (confirmed live against this tenant's own swagger spec at
+  // /api/swagger/v2/swagger.json), covering pricing schemes, per-period
+  // billing, prepay/top-up balances, approval workflow, custom fields, and
+  // more - far too much surface to hand-build one typed tool per field
+  // combination without guessing at shapes never tested against this tenant.
+  // This gives full read/write coverage of any HaloPSA REST endpoint by path,
+  // same tradeoff CIPP already made for the same reason.
+  //
+  // Confirmed live (against this tenant's swagger, not yet against real
+  // writes): HaloPSA's own per-user/per-licence-type recurring billing
+  // mechanism is on the invoice LINE (InvoiceDetail), not the contract
+  // header - a line has calculate_price_from_users/calculate_price_from_assets
+  // flags and a quantity_licences[] array of InvoiceDetailQuantity objects,
+  // each carrying licence_id (which licence/SKU), assigned_licences +
+  // unique_only (count DISTINCT users currently assigned that licence -
+  // this is the "different license types, still distinct individual users"
+  // mechanism), qty_free/minimum_qty (a free-seat allowance or floor), and a
+  // criteria[] array (InvoiceDetailQuantityCriteria: tablename/fieldname/
+  // value) for filtering which records count. This is what HaloPSA calls
+  // "Top-Up"/dynamic-quantity billing in its own UI - it recalculates the
+  // line's quantity from live data (an M365 licence assignment count synced
+  // into Halo, e.g. via CIPP/Pax8/CSP integration data) each billing cycle
+  // instead of a static quantity. POST /RecurringInvoice creates the
+  // recurring invoice header (array of InvoiceHeader); POST
+  // /RecurringInvoice/updatelines or /RecurringInvoice/Lines sets its line
+  // items (array of InvoiceDetail, each optionally carrying a
+  // quantity_licences[] block per licence type). None of this has been
+  // tested against a live write yet - build and verify the exact line-item
+  // JSON against a test contract/client before trusting it against a real
+  // one, and check whether "assigned_licences" needs a live-synced licence
+  // catalog in Halo first (e.g. from a CIPP/Pax8 sync) or works standalone.
+  { name: "halo_api_get", description: "Call any HaloPSA REST API GET endpoint by path, for objects/fields with no dedicated tool above - e.g. /ClientContract, /ContractSchedule, /ContractSchedulePlan, /ContractTemplateHeader, /RecurringItem. Full endpoint/field reference: this tenant's own live swagger spec at https://altecusa.halopsa.com/api/swagger (UI) or https://altecusa.halopsa.com/api/swagger/v2/swagger.json (raw spec) - always check the real schema there before guessing field names.", inputSchema: { type: "object", properties: { path: { type: "string", description: "API path starting with /, e.g. /ClientContract or /RecurringInvoice/Lines" }, params: { type: "object", description: "Query string parameters as key/value pairs, e.g. { client_id: '123', count: '50' }", additionalProperties: { type: "string" } } }, required: ["path"] } },
+  { name: "halo_api_post", description: "Call any HaloPSA REST API POST endpoint by path, for objects/fields with no dedicated tool above - e.g. creating/updating a ClientContract, RecurringInvoice, ContractSchedule, or RecurringInvoice/updatelines line items. HaloPSA's own convention (confirmed across every endpoint in this tenant's live swagger spec) is that POST bodies are JSON ARRAYS of the object even for a single record, and the SAME endpoint handles both create (no id / id omitted) and update (id included) - pass `body` as an array. This writes real, live billing/invoicing data - verify the exact payload shape against this tenant's swagger (https://altecusa.halopsa.com/api/swagger/v2/swagger.json) and test against a non-production/test client before using it on a real one.", inputSchema: { type: "object", properties: { path: { type: "string", description: "API path starting with /, e.g. /ClientContract or /RecurringInvoice/updatelines" }, body: { description: "JSON request body - almost always an array of objects (see description); shape varies per endpoint, confirm against the live swagger spec first" } }, required: ["path", "body"] } },
+  { name: "halo_api_delete", description: "Call any HaloPSA REST API DELETE endpoint by path - e.g. removing a test ClientContract or ContractSchedule created while configuring a new billing setup. Deletes real, live records with no undo - confirm the id belongs to what you intend to remove (e.g. via halo_api_get first) before calling this.", inputSchema: { type: "object", properties: { path: { type: "string", description: "API path starting with /, e.g. /ClientContract/123" }, params: { type: "object", description: "Query string parameters some delete endpoints require, e.g. { ticket_id: '456' } for /Actions/{id}", additionalProperties: { type: "string" } } }, required: ["path"] } },
 ];
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
   switch (name) {
@@ -369,6 +407,9 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "list_software_licences": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/SoftwareLicence", p), null, 2); }
     case "list_contracts": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.client_id) p.client_id = String(args.client_id); return JSON.stringify(await haloGet(env, "/ClientContract", p), null, 2); }
     case "get_contract": return JSON.stringify(await haloGet(env, `/ClientContract/${args.contract_id}`), null, 2);
+    case "halo_api_get": return JSON.stringify(await haloGet(env, args.path as string, args.params as Record<string, string> | undefined), null, 2);
+    case "halo_api_post": return JSON.stringify(await haloPost(env, args.path as string, args.body), null, 2);
+    case "halo_api_delete": { await haloDelete(env, args.path as string, args.params as Record<string, string> | undefined); return JSON.stringify({ deleted: true, path: args.path }, null, 2); }
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }
