@@ -522,7 +522,7 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
     Promise.all(trackedIds.slice(0, 50).map(async (id) => {
       try {
         const t = (await haloGet(env, `/Tickets/${id}`)) as any;
-        return { id: Number(id), found: true, last_update: t.last_update ?? null, agent_id: t.agent_id ?? null, status_id: t.status_id ?? null };
+        return { id: Number(id), found: true, last_action_date: t.lastactiondate ?? null, agent_id: t.agent_id ?? null, status_id: t.status_id ?? null };
       } catch {
         return { id: Number(id), found: false };
       }
@@ -534,7 +534,26 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
     // Slim projection, not full ticket bodies - just enough for the caller
     // to fingerprint "did this specific set of tickets change" the same way
     // it already does for the tracked list below.
-    unassigned: unassignedResult.tickets.map((t: any) => ({ id: t.id, last_update: t.last_update ?? null, status_id: t.status_id ?? null })),
+    //
+    // Real incident: this used to fingerprint on `last_update`, which is
+    // Halo's "any field on this ticket record changed" timestamp - and Halo
+    // recomputes time-based fields (slaholdtime, in particular) on any
+    // on-hold ticket on its own, with zero human or agent activity. Every
+    // status this pipeline's own held tickets sit in while awaiting review
+    // (AI Waiting Approval, AI Approved, Waiting on client, ...) shows
+    // `onhold: true`, so `last_update` on a genuinely untouched ticket kept
+    // drifting anyway - confirmed live on a ticket whose `last_update` moved
+    // 15 minutes after its last real action with nothing new in the action
+    // log at all. That made this gate see "changed" on nearly every cycle
+    // for any tracked ticket sitting on hold, defeating the entire point of
+    // fingerprinting: one ticket alone (#22033) got reprocessed by the full
+    // classifier+resolver roughly 28 times in a single day chasing a change
+    // that never actually happened, at real per-cycle Sonnet cost each time.
+    // `lastactiondate` only moves when a real Action (note/reply/status
+    // change) is added - confirmed against the same ticket's data, where it
+    // stayed constant across that entire drifting `last_update` window - so
+    // it's what this fingerprint should have been comparing all along.
+    unassigned: unassignedResult.tickets.map((t: any) => ({ id: t.id, last_action_date: t.lastactiondate ?? null, status_id: t.status_id ?? null })),
     // true if the bucket has more tickets than the 5-page/20-per-page cap
     // covered - a signal worth logging, not itself acted on: it means the
     // fingerprint below is only as complete as this cap allows.
