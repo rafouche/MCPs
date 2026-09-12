@@ -23,9 +23,11 @@ async function haloPost(env: Env, path: string, body: unknown): Promise<unknown>
   if (!res.ok) throw new Error(`POST ${path} failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
-async function haloDelete(env: Env, path: string): Promise<void> {
+async function haloDelete(env: Env, path: string, params?: Record<string, string>): Promise<void> {
   const token = await getToken(env);
-  const res = await fetch(`${env.HALO_BASE_URL}/api${path}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+  const url = new URL(`${env.HALO_BASE_URL}/api${path}`);
+  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`DELETE ${path} failed (${res.status}): ${await res.text()}`);
 }
 
@@ -266,7 +268,11 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // real fields, rather than trusting the caller's claim about what it
       // is, is the same "verify before trusting" discipline update_ticket's
       // own verify path already uses elsewhere in this file.
-      const action = (await haloGet(env, `/Actions/${args.action_id}`)) as any;
+      // GET /Actions/{id} requires ticket_id as a query param (confirmed
+      // against HaloPSA's own API docs) - without it the call 400s before
+      // any of the checks below even run, which is safe (fails closed, no
+      // delete happens) but means this tool could never actually work.
+      const action = (await haloGet(env, `/Actions/${args.action_id}`, { ticket_id: String(args.ticket_id) })) as any;
       if (!action || typeof action !== "object") {
         throw new Error(`delete_ticket_note: no action found with id ${args.action_id}.`);
       }
@@ -280,7 +286,10 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       if (!note.startsWith("[DRAFT PENDING APPROVAL]")) {
         throw new Error(`delete_ticket_note: action ${args.action_id}'s note does not start with the literal "[DRAFT PENDING APPROVAL]" marker - refusing to delete anything that isn't clearly this pipeline's own pending draft.`);
       }
-      await haloDelete(env, `/Actions/${args.action_id}`);
+      // DELETE /Actions/{id} also requires ticket_id as a query param
+      // (confirmed live: "ticket_id must be included when deleting an
+      // Action.") - same required-param pattern as the GET fetch above.
+      await haloDelete(env, `/Actions/${args.action_id}`, { ticket_id: String(args.ticket_id) });
       return JSON.stringify({ deleted: true, action_id: args.action_id, ticket_id: args.ticket_id }, null, 2);
     }
     case "list_clients": { const p: Record<string, string> = { count: String(args.count ?? 50) }; if (args.search) p.search = String(args.search); if (args.include_inactive) p.includeinactive = "true"; return JSON.stringify(await haloGet(env, "/Client", p), null, 2); }
