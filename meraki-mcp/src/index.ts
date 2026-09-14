@@ -42,6 +42,10 @@ async function merakiDelete(env: Env, path: string): Promise<unknown> {
   return { success: true };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to Meraki Dashboard API and verify API key", inputSchema: { type: "object", properties: {}, required: [] } },
 
@@ -64,6 +68,7 @@ const TOOLS = [
   { name: "get_device", description: "Get details of a single device by serial number", inputSchema: { type: "object", properties: { serial: { type: "string", description: "Device serial number e.g. Q234-ABCD-5678" } }, required: ["serial"] } },
   { name: "update_device", description: "Update device name, address, notes, or tags", inputSchema: { type: "object", properties: { serial: { type: "string", description: "Device serial number" }, name: { type: "string" }, address: { type: "string" }, notes: { type: "string" }, tags: { type: "array", items: { type: "string" } } }, required: ["serial"] } },
   { name: "get_device_uplink_info", description: "Get uplink (WAN) status and IP info for a device", inputSchema: { type: "object", properties: { serial: { type: "string", description: "Device serial number" } }, required: ["serial"] } },
+  { name: "run_throughput_test", description: "Run a live WAN throughput (speed) test on an MX appliance and wait for the result - for troubleshooting a client's 'internet is slow' complaint at the firewall level. Confirmed against Meraki's official Live Tools API: POST /devices/{serial}/liveTools/throughputTest queues an async job (the test itself runs ~10s device-side), then this tool polls the job's own status URL every 5 seconds until status is 'complete' or 'failed', or maxWaitSeconds elapses. Meraki rate-limits this endpoint to one request per 5 seconds per device - the poll interval already respects that, don't call this again for the same device sooner than that if you retry. Returns the full job object once complete (status/result/error) - result.speeds.downstream is the download figure in Mbps, per Meraki's schema. Only works on MX/Z-series appliances with Live Tools support, not switches or APs - use list_org_devices/get_device to confirm the model first if unsure.", inputSchema: { type: "object", properties: { serial: { type: "string", description: "Device serial number (must be an MX/Z-series appliance)" }, maxWaitSeconds: { type: "number", description: "How long to poll before giving up and returning the job's last-seen status instead of a completed result (default 45, capped at 90 - the test itself only takes ~10s, this is mostly buffer for queueing/scheduling delay)." } }, required: ["serial"] } },
   { name: "reboot_device", description: "Reboot a Meraki device", inputSchema: { type: "object", properties: { serial: { type: "string", description: "Device serial number" } }, required: ["serial"] } },
   { name: "list_org_device_statuses", description: "Get online/offline status for all devices in an organization", inputSchema: { type: "object", properties: { org_id: { type: "string", description: "Organization ID" }, productTypes: { type: "string", description: "Filter by product type" } }, required: ["org_id"] } },
 
@@ -127,6 +132,24 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_device": return JSON.stringify(await merakiGet(env, `/devices/${args.serial}`), null, 2);
     case "update_device": { const body: Record<string, unknown> = {}; if (args.name) body.name = args.name; if (args.address) body.address = args.address; if (args.notes) body.notes = args.notes; if (args.tags) body.tags = args.tags; return JSON.stringify(await merakiPut(env, `/devices/${args.serial}`, body), null, 2); }
     case "get_device_uplink_info": return JSON.stringify(await merakiGet(env, `/devices/${args.serial}/appliance/uplinks/settings`), null, 2);
+    case "run_throughput_test": {
+      const job = await merakiPost(env, `/devices/${args.serial}/liveTools/throughputTest`, {}) as any;
+      const maxWaitMs = Math.min(Number(args.maxWaitSeconds ?? 45), 90) * 1000;
+      const deadline = Date.now() + maxWaitMs;
+      // job.url is the documented way to poll ("GET this url to check the
+      // status of your throughput test request") - it's already a full,
+      // absolute URL per Meraki's own API docs, so this polls it directly
+      // rather than re-deriving a path through merakiGet's own base-URL
+      // prefixing.
+      let latest = job;
+      while (latest.status !== "complete" && latest.status !== "failed" && Date.now() < deadline) {
+        await sleep(5000);
+        const res = await fetch(job.url, { headers: { "X-Cisco-Meraki-API-Key": env.MERAKI_API_KEY, "Content-Type": "application/json" } });
+        if (!res.ok) throw new Error(`GET throughput test status failed (${res.status}): ${await res.text()}`);
+        latest = await res.json();
+      }
+      return JSON.stringify(latest, null, 2);
+    }
     case "reboot_device": return JSON.stringify(await merakiPost(env, `/devices/${args.serial}/reboot`), null, 2);
     case "list_org_device_statuses": { const p: Record<string, string> = {}; if (args.productTypes) p.productTypes = String(args.productTypes); return JSON.stringify(await merakiGet(env, `/organizations/${args.org_id}/devices/statuses`, p), null, 2); }
 
