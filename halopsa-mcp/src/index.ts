@@ -283,7 +283,28 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       if (args.emailto) { fieldPayload.emailtolist = args.emailto; hasFieldChange = true; }
       if (hasFieldChange) results.ticket = await haloPost(env, "/Tickets", [fieldPayload]);
       if (args.note) {
-        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, note_html: noteToHtml(args.note as string), hiddenfromuser: true, outcome_id: 7 };
+        // REAL INCIDENT, ticket #22231: FLOW A's approval send came out with
+        // every paragraph break stripped to nothing - not just missing <br>,
+        // but zero separation at all between sentences and the signature
+        // block. Root cause, confirmed against a second action on the same
+        // ticket: HaloPSA's GET /Actions reconstructs the plain `note` field
+        // from `note_html` (tags stripped, no whitespace substituted)
+        // whenever `note_html` is present on that action, rather than
+        // returning the literal text originally written - a Halo AI Triage
+        // note on the same ticket with no note_html set preserved its \r\n
+        // perfectly on the same GET call. This tool writes the private
+        // "[DRAFT PENDING APPROVAL]" note that FLOW A later reads back and
+        // resends verbatim (see HelpDeskAgent's resolver-prompt.md/FLOW A
+        // step 2), so setting note_html here silently corrupts that
+        // round-trip - the draft comes back with no line breaks, and FLOW A
+        // faithfully copies the already-mangled text into the real send.
+        // This note is always private (hiddenfromuser forced true, never
+        // emailed) and Halo's own ticket UI already renders bare `\n`
+        // forgivingly, so note_html served no purpose here in the first
+        // place - only omitted from this call, not from update_ticket's
+        // (the actual client email still needs it, and reads fresh,
+        // uncorrupted text at that point).
+        const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, hiddenfromuser: true, outcome_id: 7 };
         results.action = await haloPost(env, "/Actions", [actionPayload]);
       }
       // Always verified (unlike update_ticket's opt-in) - this tool exists
