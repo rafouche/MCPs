@@ -5,14 +5,5 @@
   "compatibility_date": "2026-05-21",
   "observability": { "enabled": true },
   "upload_source_maps": true,
-  "compatibility_flags": ["nodejs_compat"],
-  "durable_objects": {
-    "bindings": []
-  },
-  "migrations": [
-    {
-      "tag": "v2",
-      "deleted_classes": ["HaloPSAMCP"]
-    }
-  ]
+  "compatibility_flags": ["nodejs_compat"]
 }
