@@ -1,4 +1,5 @@
 ﻿export interface Env {
+  MCP_AUTH_TOKEN?: string; // optional inbound bearer token - see the check at the top of fetch()
   TCX_SERVERS: string;
 }
 
@@ -161,10 +162,38 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept" };
 const JSON_HEADERS = { ...CORS, "Content-Type": "application/json" };
 
+// Constant-time string compare for the inbound bearer check below (no
+// early exit on the first differing byte); a length mismatch is fine to
+// short-circuit on.
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    // Inbound auth (opt-in): once the MCP_AUTH_TOKEN secret is set on this
+    // Worker, every route except OPTIONS and /health must carry
+    // "Authorization: Bearer <that token>" - the same header the MCP client
+    // registrations already send. Unset = unchanged behavior, so this code
+    // deploys safely ahead of the secret. Real finding: every Worker in this
+    // repo answered tools/list - and therefore every write tool - to a bare,
+    // credential-less request on its public workers.dev URL, while the client
+    // side had been sending a Bearer token all along that nothing ever
+    // checked.
+    if (env.MCP_AUTH_TOKEN && url.pathname !== "/health") {
+      const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
+      }
+    }
     if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok", servers: Object.keys(JSON.parse(env.TCX_SERVERS)) }), { headers: JSON_HEADERS });
     if (url.pathname === "/mcp" && request.method === "POST") {
       let body: unknown;
