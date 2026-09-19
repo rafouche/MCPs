@@ -120,10 +120,134 @@ async function verifyWrite(env: Env, args: Record<string, unknown>, checkFields:
   return { confirmed: fieldsOk && noteOk, attempts, fields_confirmed: fieldsOk, note_confirmed: noteOk };
 }
 
+// --- Trimmed ticket/action projections (HelpDeskAgent cost program, increment 1) ---
+// A raw GET /Tickets/{id} came back at ~94,000 characters (~23K tokens) for a
+// single ordinary ticket, and every action in GET /Actions carries ~60 fields
+// of which the resolver reads about ten. In an agentic loop that payload is
+// re-read on every subsequent turn, so it was the largest single per-ticket
+// cost driver measured in production. These projections keep exactly the
+// fields the prompts actually reference, plus the device block NinjaOne's
+// ticket form embeds in the body (hostname, device id, IPs), which is what
+// the resolver would otherwise spend its first tool calls re-deriving.
+function truncateText(s: unknown, max: number): { text: string; truncated: boolean } {
+  const str = typeof s === "string" ? s : s == null ? "" : String(s);
+  if (str.length <= max) return { text: str, truncated: false };
+  return { text: str.slice(0, max) + `\n[... truncated ${str.length - max} chars ...]`, truncated: true };
+}
+
+function parseDeviceHints(details: string): Record<string, string> | null {
+  // NinjaOne's "New support request from ..." form and similar embeds a
+  // device block; grab the useful lines when present. Missing lines are
+  // simply omitted, and an unrelated ticket body yields null.
+  const grab = (label: string) => {
+    const m = details.match(new RegExp(`^\\s*${label}:\\s*(.+?)\\s*$`, "mi"));
+    return m ? m[1].trim() : null;
+  };
+  const out: Record<string, string> = {};
+  const pairs: Array<[string, string]> = [
+    ["hostname", "Device"], ["ninja_device_id", "Device ID"], ["device_role", "Device Role"],
+    ["public_ip", "Public IP"], ["private_ips", "Private IPs"], ["organization", "Organization"],
+    ["location", "Location"], ["os", "OS"], ["username", "USERNAME"], ["ninja_url", "Ninja URL"],
+  ];
+  for (const [key, label] of pairs) {
+    const v = grab(label);
+    if (v && v !== "<UNKNOWN>") out[key] = v;
+  }
+  if (out.ninja_device_id) out.ninja_device_id = out.ninja_device_id.replace(/,/g, "");
+  return Object.keys(out).length ? out : null;
+}
+
+function trimTicket(t: any, maxDetailsChars: number): Record<string, unknown> {
+  const details = truncateText(t.details, maxDetailsChars);
+  return {
+    id: t.id,
+    summary: t.summary ?? "",
+    details: details.text,
+    details_truncated: details.truncated,
+    status_id: t.status_id ?? null,
+    tickettype_id: t.tickettype_id ?? null,
+    priority_id: t.priority_id ?? null,
+    impact: t.impact ?? null,
+    urgency: t.urgency ?? null,
+    client_id: t.client_id ?? null,
+    client_name: t.client_name ?? null,
+    site_id: t.site_id ?? null,
+    site_name: t.site_name ?? null,
+    user_id: t.user_id ?? null,
+    user_name: t.user_name ?? null,
+    user_email: t.user_email ?? null,
+    emailtolist: t.emailtolist ?? null,
+    team_id: t.team_id ?? null,
+    team: t.team ?? null,
+    agent_id: t.agent_id ?? null,
+    agent_name: t.agent_name ?? null,
+    category_1: t.category_1 ?? null,
+    category_2: t.category_2 ?? null,
+    dateoccurred: t.dateoccurred ?? null,
+    lastactiondate: t.lastactiondate ?? null,
+    last_update: t.last_update ?? null,
+    onhold: t.onhold ?? null,
+    ticketage: t.ticketage ?? null,
+    device_hints: parseDeviceHints(typeof t.details === "string" ? t.details : ""),
+  };
+}
+
+function trimAction(a: any, maxNoteChars: number): Record<string, unknown> {
+  const note = truncateText(a.note, maxNoteChars);
+  const out: Record<string, unknown> = {
+    id: a.id,
+    datetime: a.datetime ?? null,
+    who: a.who ?? null,
+    who_type: a.who_type ?? null,
+    who_agentid: a.who_agentid ?? null,
+    actionby_application_id: a.actionby_application_id ?? null,
+    outcome: a.outcome ?? null,
+    outcome_id: a.outcome_id ?? null,
+    hiddenfromuser: a.hiddenfromuser ?? null,
+    note: note.text,
+  };
+  if (note.truncated) out.note_truncated = true;
+  if (a.emaildirection) { out.emaildirection = a.emaildirection; out.emailfrom = a.emailfrom ?? null; out.emailto = a.emailto ?? null; }
+  if (a.old_status !== undefined && a.new_status !== undefined && a.old_status !== a.new_status) { out.old_status = a.old_status; out.new_status = a.new_status; out.new_status_name = a.new_status_name ?? null; }
+  if (a.attachment_count) out.attachment_count = a.attachment_count;
+  return out;
+}
+
+// Same rule get_ticket_time_entries already applies: a real human agent is
+// who_type 1 and not this pipeline's own integration identity.
+function computeHumanTouch(actions: any[]) {
+  const human = actions.filter((a: any) => a.who_type === 1 && a.actionby_application_id !== "Claude");
+  return {
+    found: human.length > 0,
+    actions: human.map((a: any) => ({ id: a.id, who: a.who, who_agentid: a.who_agentid, datetime: a.datetime, outcome: a.outcome })),
+  };
+}
+
+async function buildCandidateBrief(env: Env, id: string, historyCount: number, maxDetailsChars: number, maxNoteChars: number) {
+  try {
+    const [ticket, actionsData] = await Promise.all([
+      haloGet(env, `/Tickets/${id}`) as Promise<any>,
+      haloGet(env, "/Actions", { ticket_id: String(id), count: "100" }) as Promise<any>,
+    ]);
+    const actions: any[] = actionsData.actions || [];
+    return {
+      found: true,
+      ticket: trimTicket(ticket, maxDetailsChars),
+      human_touch: computeHumanTouch(actions),
+      action_count: actionsData.record_count ?? actions.length,
+      recent_actions: actions.slice(0, historyCount).map((a) => trimAction(a, maxNoteChars)),
+    };
+  } catch (err) {
+    return { found: false, ticket: { id: Number(id) }, error: (err as Error).message };
+  }
+}
+
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to HaloPSA and verify credentials are working", inputSchema: { type: "object", properties: {}, required: [] } },
   { name: "list_tickets", description: "List tickets from HaloPSA with optional filters. Without agent_id/team_id, this is an account-wide list capped at `count` (default 20) - large counts return full ticket bodies per row and can exceed the caller's own response-size limit well before reaching the true end of the open-ticket backlog, so a ticket with no recent activity can silently fall outside the window even though it's genuinely open. Pass agent_id (e.g. the real Halo 'Unassigned' agent, or a specific agent) and/or team_id to filter server-side instead of relying on count/recency - a real incident found an unassigned-tickets query with no team_id fetched every team's tickets account-wide (82 full ticket bodies in one case) just to manually discard everything outside the one team actually wanted, at real per-cycle cost. If even one agent's ticket count is still too large for one response, use pageinate/page_no/page_size (HaloPSA's own paging - page_size max 100 per HaloPSA's docs, but this MCP server's own response-size limit will likely force something smaller in practice) instead of `count` to walk through them in bounded pages - the response's own record_count field is the true total match count regardless of how many rows this particular page returned, so it tells you when you've reached the end.", inputSchema: { type: "object", properties: { count: { type: "number" }, open_only: { type: "boolean" }, client_id: { type: "number" }, agent_id: { type: "number", description: "Filter to tickets currently assigned to this single agent ID (HaloPSA's own /Tickets agent_id filter) - use this instead of a large count to reliably find a specific agent's tickets regardless of how recently they were touched." }, team_id: { type: "number", description: "Filter to tickets currently on this single team (HaloPSA's own /Tickets team_id filter) - combine with agent_id (e.g. team_id + agent_id:1 for a specific team's unassigned tickets) to avoid ever fetching another team's tickets at all." }, status_id: { type: "number", description: "Filter to tickets currently in this single status (HaloPSA's own /Tickets status_id filter) - combine with team_id to find every ticket in a specific status regardless of who it's assigned to, e.g. an explicit human hand-back status, without pulling the whole team's ticket list to filter client-side." }, pageinate: { type: "boolean", description: "Enable HaloPSA's own pagination instead of the plain count cutoff - use together with page_no/page_size." }, page_no: { type: "number", description: "Page number to return (1-based) when pageinate is true." }, page_size: { type: "number", description: "Rows per page when pageinate is true. HaloPSA caps this at 100, but this MCP server's response-size limit will often force a smaller value in practice - start small (e.g. 15-20) and only raise it if the response doesn't get truncated." }, search: { type: "string" } } } },
   { name: "get_ticket", description: "Get full details of a single HaloPSA ticket by ID", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
+  { name: "get_ticket_brief", description: "Trimmed view of a single ticket - the same fields as get_ticket that actually matter for working it (summary, body/details, status/type/priority/impact IDs, client/site/contact IDs and names, emailtolist, team/agent, category, key dates) at a fraction of the size, plus `device_hints` parsed from the body when a NinjaOne-style device block is present (hostname, ninja_device_id, private/public IPs, OS, username). Prefer this over get_ticket unless you specifically need a field it omits.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, max_details_chars: { type: "number", description: "Cap on the body/details text (default 6000); longer bodies are truncated with a marker and details_truncated: true." } }, required: ["ticket_id"] } },
+  { name: "get_ticket_history", description: "Trimmed action log for a ticket - the same actions as get_ticket_time_entries with only the fields that matter (id, datetime, who/who_type/who_agentid, actionby_application_id, outcome, hiddenfromuser, note text, email direction/addresses when it was an email, status change when it changed, attachment count) plus the same computed `human_touch` field. Notes are capped per action (default 3000 chars). Prefer this over get_ticket_time_entries.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, count: { type: "number", description: "Max actions to return, newest first (default 100)." }, max_note_chars: { type: "number", description: "Per-note text cap (default 3000)." } }, required: ["ticket_id"] } },
   { name: "create_ticket", description: "Create a new ticket in HaloPSA", inputSchema: { type: "object", properties: { summary: { type: "string" }, details: { type: "string" }, client_id: { type: "number" }, user_id: { type: "number" }, team_id: { type: "number" }, agent_id: { type: "number" }, tickettype_id: { type: "number" }, priority_id: { type: "number" } }, required: ["summary"] } },
   { name: "update_ticket", description: "Update a ticket - add a note, change status, reassign, re-link to a different client/contact, or triage (set category/priority). HaloPSA has no separate 'triage' API action — triaging a ticket just means setting category_1 (and priority_id/team_id/agent_id) and moving it off its initial status in one call. IMPORTANT: note_is_private: false alone does NOT email the client - it only marks the note visible-in-portal. Every note this tool adds uses outcome_id 7 ('Private Note' in this tenant's Outcome list) unless send_email is also passed as true, and outcome 7 has hidesendemail set in HaloPSA, meaning it can never trigger an email regardless of hiddenfromuser. To actually send a client-facing reply by email, pass note_is_private: false AND send_email: true together. This tool CAN send a real, public, emailed reply - if the caller is a workflow that must hold every reply for human approval first (not yet decided this ticket is approved to send), use update_ticket_draft_only instead, which cannot send one no matter what arguments it's given. Pass verify: true to have this call re-check (with a couple of short built-in retries) that the note/field changes actually landed before returning - a `verified` field is added to the response with the result. Default (omitted/false) leaves the response exactly as it's always been, with no added delay - opt in only when you actually need the confirmation, e.g. on a ticket that might not be triaged yet in Halo (writes there can silently take a few extra seconds to become readable).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, verify: { type: "boolean", description: "If true, re-check (with short built-in retries) that the requested field changes and/or note actually landed before returning, and include a `verified` field in the response. Default false: identical to this tool's behavior before this parameter existed, no added delay." }, note_is_private: { type: "boolean" }, send_email: { type: "boolean", description: "Set true together with note_is_private: false to actually email this note to the ticket's contact - uses outcome_id 16 ('Email User' in this tenant's Outcome list) instead of the default 'Private Note' outcome, which never emails regardless of note_is_private. Leave false/unset for anything that should stay internal-only or portal-visible-but-not-emailed; true is ignored (forced to a visible, emailed note) only in the sense that it also forces hiddenfromuser to false, since emailing a note the client can't see back in the portal isn't a coherent request." }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number", description: "Re-link this ticket to a different client/company - e.g. correcting a ticket that came in against a generic/shared account (a voicemail line, a catch-all mailbox) once the real caller/client is identified. Set alongside user_id, which must belong to this client - or alongside site_id when there's no real contact to attach (an automated/system alert), since client_id and site_id have to be a consistent pair: real incident, ticket #22107 (Gold Mechanical) - client_id alone was corrected but site_id was left on the old client's site, so the ticket still displayed as 'Unknown' everywhere in Halo despite client_id being right." }, user_id: { type: "number", description: "Re-link this ticket to a different contact/end-user (find the ID with list_contacts/get_contact - use search_phonenumbers to match a caller's phone number to an existing contact). Must belong to the client given in client_id (or the ticket's current client if client_id is omitted)." }, site_id: { type: "number", description: "Re-link this ticket to a different site (physical location) under its client - use list_sites filtered by client_id to find valid site IDs. Set this alongside client_id whenever relinking a ticket that has no real contact to attach (an automated/system alert) - client_id and site_id must be a consistent pair or the ticket keeps displaying as its old client/site regardless of what client_id says." }, category_1: { type: "string", description: "Category, e.g. 'Infrastructure>Server' — use list_ticket_types/an existing ticket to see this tenant's category tree" }, priority_id: { type: "number", description: "Use list_priorities to find the ID" }, emailto: { type: "string", description: "Correct the ticket's own stored send-to address (HaloPSA's emailtolist field) - independent of, and not automatically kept in sync with, the linked contact's real email on file. Real incident, ticket #22067: a ticket relinked to the correct contact (user_id) still had a stale/wrong emailtolist from before the relink (a guessed company-domain address, not the contact's actual Gmail address on file), so a real client-facing reply went to the wrong address even though the contact record itself was right. Before sending a real reply, compare the ticket's emailtolist against get_contact's emailaddress for the currently-linked user_id - if they differ, set this to the contact's real address first. Pass the exact address(es) HaloPSA expects here (a single address, or semicolon-separated as seen in emailtolist on read)." } }, required: ["ticket_id"] } },
   { name: "update_ticket_draft_only", description: "Identical to update_ticket (same fields: status_id/agent_id/team_id/category_1/priority_id/client_id/site_id/user_id/note all work the same way) EXCEPT any note this tool writes is ALWAYS private and ALWAYS unemailed - note_is_private is forced true and send_email is forced false no matter what you pass, and passing send_email: true or note_is_private: false explicitly returns an error rather than silently sending. Use this instead of update_ticket for a ticket that is not yet approved to receive a real reply - e.g. a -RequireApproval workflow's private draft note (write your intended reply text into `note`, e.g. prefixed '[DRAFT PENDING APPROVAL]', and it will land privately regardless). Real incident: a workflow that relied purely on prompt instructions to hold replies for approval did not reliably hold them - some replies got sent for real anyway. This tool makes that structurally impossible instead of relying on instructions being followed. Always verifies its own write before returning (a couple of short built-in retries against Halo's own eventual-consistency delay - a write can report success and not be immediately readable back) and includes a `verified` field in the response ({confirmed, attempts, fields_confirmed, note_confirmed}) - no separate follow-up read call needed to check.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number" }, site_id: { type: "number" }, user_id: { type: "number" }, category_1: { type: "string" }, priority_id: { type: "number" }, emailto: { type: "string", description: "Correct the ticket's own stored send-to address (HaloPSA's emailtolist field) ahead of an eventual real send - see update_ticket's own emailto description for the real incident this fixes. Doesn't cause any email to go out on its own (this tool never sends real email, structurally)." } }, required: ["ticket_id"] } },
@@ -167,6 +291,17 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "healthcheck": { const token = await getToken(env); return `Connected OK to ${env.HALO_BASE_URL} tenant:${env.HALO_TENANT} token:${token.substring(0, 20)}`; }
     case "list_tickets": { const p: Record<string, string> = { count: String(args.count ?? 20) }; if (args.open_only !== false) p.open_only = "true"; if (args.client_id) p.client_id = String(args.client_id); if (args.agent_id) p.agent_id = String(args.agent_id); if (args.team_id) p.team_id = String(args.team_id); if (args.status_id) p.status_id = String(args.status_id); if (args.pageinate) p.pageinate = "true"; if (args.page_no) p.page_no = String(args.page_no); if (args.page_size) p.page_size = String(args.page_size); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Tickets", p), null, 2); }
     case "get_ticket": return JSON.stringify(await haloGet(env, `/Tickets/${args.ticket_id}`), null, 2);
+    case "get_ticket_brief": {
+      const t = (await haloGet(env, `/Tickets/${args.ticket_id}`)) as any;
+      return JSON.stringify(trimTicket(t, Number(args.max_details_chars ?? 6000)), null, 2);
+    }
+    case "get_ticket_history": {
+      const count = Math.min(Math.max(Number(args.count ?? 100), 1), 200);
+      const data = (await haloGet(env, "/Actions", { ticket_id: String(args.ticket_id), count: String(count) })) as any;
+      const actions: any[] = data.actions || [];
+      const maxNote = Number(args.max_note_chars ?? 3000);
+      return JSON.stringify({ ticket_id: args.ticket_id, record_count: data.record_count ?? actions.length, human_touch: computeHumanTouch(actions), actions: actions.map((a) => trimAction(a, maxNote)) }, null, 2);
+    }
     case "create_ticket": { const payload: Record<string, unknown> = { summary: args.summary, details: args.details ?? "" }; if (args.client_id) payload.client_id = args.client_id; if (args.user_id) payload.user_id = args.user_id; if (args.team_id) payload.team_id = args.team_id; if (args.agent_id) payload.agent_id = args.agent_id; if (args.tickettype_id) payload.tickettype_id = args.tickettype_id; if (args.priority_id) payload.priority_id = args.priority_id; return JSON.stringify(await haloPost(env, "/Tickets", [payload]), null, 2); }
     case "update_ticket": {
       const results: Record<string, unknown> = {};
@@ -752,6 +887,29 @@ export default {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
       }
     }
+    // HelpDeskAgent's deterministic candidate feed (cost program, increment 1):
+    // plain HTTP, no LLM. Given ticket IDs (from /helpdesk-gate, which already
+    // knows which tickets are new or changed), return each one's trimmed brief,
+    // its most recent few trimmed actions, and human_touch - everything the
+    // classifier needs to tier a ticket and the resolver needs to start
+    // without spending its first several turns re-fetching the same data.
+    if (url.pathname === "/helpdesk-candidates") {
+      const ids = (url.searchParams.get("ids") || "").split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).slice(0, 40);
+      if (ids.length === 0) return new Response(JSON.stringify({ error: "ids query param (comma-separated ticket IDs) is required" }), { status: 400, headers: JSON_HEADERS });
+      const historyCount = Math.min(Math.max(Number(url.searchParams.get("history") || 5), 0), 25);
+      const maxDetailsChars = Number(url.searchParams.get("max_details_chars") || 6000);
+      const maxNoteChars = Number(url.searchParams.get("max_note_chars") || 2000);
+      try {
+        const candidates: unknown[] = [];
+        for (let i = 0; i < ids.length; i += 8) {
+          const batch = ids.slice(i, i + 8);
+          candidates.push(...(await Promise.all(batch.map((id) => buildCandidateBrief(env, id, historyCount, maxDetailsChars, maxNoteChars)))));
+        }
+        return new Response(JSON.stringify({ generated: new Date().toISOString(), count: candidates.length, candidates }), { headers: JSON_HEADERS });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
+      }
+    }
     if (url.pathname === "/mcp" && request.method === "POST") {
       let body: unknown;
       try { body = await request.json(); } catch { return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }), { status: 400, headers: JSON_HEADERS }); }
@@ -772,6 +930,6 @@ export default {
       if (out === null) return new Response(null, { status: 204, headers: CORS });
       return new Response(JSON.stringify(out), { headers: JSON_HEADERS });
     }
-    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /helpdesk-gate, GET /health", { status: 200, headers: CORS });
+    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /helpdesk-gate, GET /helpdesk-candidates, GET /health", { status: 200, headers: CORS });
   },
 };
