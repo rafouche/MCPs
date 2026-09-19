@@ -103,3 +103,14 @@ computed over what remains; the response echoes `as_of` and
 passes it so a ticket is judged as it stood at that moment - without it,
 `human_touch.found` is today's answer and a replay of an untouched-at-the-
 time ticket stops HUMAN_OWNED. Production never passes it.
+
+## halopsa-mcp: `GET /helpdesk-triage` (HelpDeskAgent's deterministic classifier)
+Plain HTTP, no LLM. Query: `team_id`, `agent_id` (required), `tracked_ids`,
+`ready_status_id`, `waiting_approval_status_id`, `approved_status_id`,
+`history` (default 6), `max_details_chars`, `max_note_chars`. Returns the
+classifier prompt's six candidate buckets - unassigned (paged, capped at
+100), stuck_claimed, ready_for_ai, waiting_approval, approved, tracked - each
+ticket trimmed (`trimTicket`, now including `dateclosed` /
+`hasbeenclosed` / `closure_agent_id`) with its most recent actions and a
+`recent_human_touch` over that window. The exclusion rules live in the
+PowerShell caller, not here; this route only gathers. Read-only.

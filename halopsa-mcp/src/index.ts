@@ -189,6 +189,13 @@ function trimTicket(t: any, maxDetailsChars: number): Record<string, unknown> {
     last_update: t.last_update ?? null,
     onhold: t.onhold ?? null,
     ticketage: t.ticketage ?? null,
+    // Closed-state facts (increment 2): Halo keeps a closed ticket's status
+    // name tenant-specific ("Resolved", "Closed Order", ...), but dateclosed /
+    // hasbeenclosed are mechanical. A never-closed ticket has dateclosed null
+    // or Halo's 1899-12-30 sentinel.
+    dateclosed: typeof t.dateclosed === "string" && !t.dateclosed.startsWith("1899") ? t.dateclosed : null,
+    hasbeenclosed: t.hasbeenclosed ?? null,
+    closure_agent_id: t.closure_agent_id ?? null,
     device_hints: parseDeviceHints(typeof t.details === "string" ? t.details : ""),
   };
 }
@@ -871,6 +878,91 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
   };
 }
 
+// HelpDeskAgent's deterministic classifier (cost program, increment 2): the
+// classifier prompt's candidate-finding calls 1-6, done here as plain Halo
+// REST calls with no LLM. Every bucket comes back as trimmed tickets, each
+// with its most recent few trimmed actions (enough to answer "did a human
+// touch this since our last note" / "is the latest entry a colleague's
+// reply" mechanically). The exclusion rules themselves live in the
+// PowerShell caller, next to the caches they depend on; this route only
+// gathers.
+async function enrichWithRecentActions(env: Env, tickets: any[], historyCount: number, maxNoteChars: number, maxDetailsChars: number) {
+  const out: unknown[] = [];
+  for (let i = 0; i < tickets.length; i += 8) {
+    const batch = tickets.slice(i, i + 8);
+    out.push(...(await Promise.all(batch.map(async (t: any) => {
+      let actions: any[] = [];
+      let actionCount: number | null = null;
+      let actionsError: string | null = null;
+      if (historyCount > 0) {
+        try {
+          const data = (await haloGet(env, "/Actions", { ticket_id: String(t.id), count: String(historyCount) })) as any;
+          actions = data.actions || [];
+          actionCount = data.record_count ?? actions.length;
+        } catch (err) {
+          actionsError = (err as Error).message;
+        }
+      }
+      return {
+        ticket: trimTicket(t, maxDetailsChars),
+        action_count: actionCount,
+        actions_error: actionsError,
+        recent_actions: actions.map((a) => trimAction(a, maxNoteChars)),
+        recent_human_touch: computeHumanTouch(actions),
+      };
+    }))));
+  }
+  return out;
+}
+
+async function buildHelpDeskTriage(env: Env, q: URLSearchParams) {
+  const teamId = q.get("team_id")!;
+  const agentId = q.get("agent_id")!;
+  const trackedIds = (q.get("tracked_ids") || "").split(",").map((x) => x.trim()).filter((x) => /^\d+$/.test(x)).slice(0, 50);
+  const readyStatusId = q.get("ready_status_id");
+  const waitingApprovalStatusId = q.get("waiting_approval_status_id");
+  const approvedStatusId = q.get("approved_status_id");
+  const historyCount = Math.min(Math.max(Number(q.get("history") || 6), 0), 25);
+  const maxDetailsChars = Number(q.get("max_details_chars") || 1500);
+  const maxNoteChars = Number(q.get("max_note_chars") || 800);
+
+  const statusBucket = async (statusId: string | null) => {
+    if (!statusId || !/^\d+$/.test(statusId)) return null;
+    return fetchAllTickets(env, { open_only: "true", team_id: teamId, status_id: statusId }, 15, 10);
+  };
+  const [unassigned, stuck, ready, waitingApproval, approved, tracked] = await Promise.all([
+    fetchAllTickets(env, { open_only: "true", team_id: teamId, agent_id: "1" }, 20, 5),
+    fetchAllTickets(env, { open_only: "true", team_id: teamId, agent_id: agentId }, 15, 10),
+    statusBucket(readyStatusId),
+    statusBucket(waitingApprovalStatusId),
+    statusBucket(approvedStatusId),
+    Promise.all(trackedIds.map(async (id) => {
+      try { return { id: Number(id), found: true, raw: await haloGet(env, `/Tickets/${id}`) as any }; }
+      catch (err) { return { id: Number(id), found: false, error: (err as Error).message, raw: null }; }
+    })),
+  ]);
+  const bucket = async (r: { tickets: any[]; record_count: number; truncated: boolean } | null) => r ? ({
+    record_count: r.record_count, truncated: r.truncated,
+    tickets: await enrichWithRecentActions(env, r.tickets, historyCount, maxNoteChars, maxDetailsChars),
+  }) : null;
+  const trackedFound = tracked.filter((t) => t.found).map((t) => t.raw);
+  const trackedEnriched = await enrichWithRecentActions(env, trackedFound, historyCount, maxNoteChars, maxDetailsChars);
+  return {
+    generated: new Date().toISOString(),
+    team_id: Number(teamId), agent_id: Number(agentId),
+    unassigned: await bucket(unassigned),
+    stuck_claimed: await bucket(stuck),
+    ready_for_ai: await bucket(ready),
+    waiting_approval: await bucket(waitingApproval),
+    approved: await bucket(approved),
+    tracked: {
+      requested: trackedIds.map(Number),
+      missing: tracked.filter((t) => !t.found).map((t) => ({ id: t.id, error: (t as any).error })),
+      tickets: trackedEnriched,
+    },
+  };
+}
+
 function humanizeDelta(ms: number): string {
   const abs = Math.abs(ms);
   const h = Math.floor(abs / 3600000);
@@ -940,6 +1032,14 @@ export default {
     // its most recent few trimmed actions, and human_touch - everything the
     // classifier needs to tier a ticket and the resolver needs to start
     // without spending its first several turns re-fetching the same data.
+    if (url.pathname === "/helpdesk-triage") {
+      if (!url.searchParams.get("team_id") || !url.searchParams.get("agent_id")) return new Response(JSON.stringify({ error: "team_id and agent_id query params are required" }), { status: 400, headers: JSON_HEADERS });
+      try {
+        return new Response(JSON.stringify(await buildHelpDeskTriage(env, url.searchParams)), { headers: JSON_HEADERS });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
+      }
+    }
     if (url.pathname === "/helpdesk-candidates") {
       const ids = (url.searchParams.get("ids") || "").split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).slice(0, 40);
       if (ids.length === 0) return new Response(JSON.stringify({ error: "ids query param (comma-separated ticket IDs) is required" }), { status: 400, headers: JSON_HEADERS });
@@ -977,6 +1077,6 @@ export default {
       if (out === null) return new Response(null, { status: 204, headers: CORS });
       return new Response(JSON.stringify(out), { headers: JSON_HEADERS });
     }
-    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /helpdesk-gate, GET /helpdesk-candidates, GET /health", { status: 200, headers: CORS });
+    return new Response("HaloPSA MCP Server - POST /mcp, GET /status, GET /helpdesk-gate, GET /helpdesk-triage, GET /helpdesk-candidates, GET /health", { status: 200, headers: CORS });
   },
 };
