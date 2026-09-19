@@ -99,7 +99,7 @@ const TOOLS = [
   // Devices
   { name: "list_devices", description: "List all managed devices across all organizations", inputSchema: { type: "object", properties: { pageSize: { type: "number", description: "Results per page (default 50)" }, after: { type: "number", description: "Pagination cursor" }, org_id: { type: "number", description: "Filter by organization ID" } } } },
   { name: "list_devices_detailed", description: "List devices with full hardware and software details", inputSchema: { type: "object", properties: { pageSize: { type: "number", description: "Results per page (default 25)" }, after: { type: "number" }, org_id: { type: "number" } } } },
-  { name: "get_device", description: "Get full details of a single device by ID", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
+  { name: "get_device", description: "Get full details of a single device by ID, including its warranty (warranty_summary: start/end as ISO dates, expired flag, days_remaining - from NinjaOne's manufacturer warranty lookup, requested with expand=warranty; raw epoch-seconds block is under references.warranty). Check here first for 'is this under warranty'; get_device_custom_fields is for org-defined asset fields, not warranty", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "update_device", description: "Update a device's display name, description, or assigned user", inputSchema: { type: "object", properties: { device_id: { type: "number" }, displayName: { type: "string" }, description: { type: "string" }, userData: { type: "object", description: "Custom field values" } }, required: ["device_id"] } },
   { name: "get_device_custom_fields", description: "Get a device's custom field values (both NinjaOne's own built-in fields like warranty/purchase tracking and any org-defined WYSIWYG fields) - this is where asset-tracking data like warranty expiration or purchase date usually lives, NOT in get_device's plain hardware/system block. Pairs with update_device's userData parameter, which writes these same fields.", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_os_info", description: "Get OS details and last logged-on user for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
@@ -185,7 +185,30 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     // Devices (Read)
     case "list_devices": { const p: Record<string, string> = { pageSize: String(args.pageSize ?? 50) }; if (args.after) p.after = String(args.after); if (args.org_id) p.org = String(args.org_id); return JSON.stringify(await ninjaGet(env, "/devices", p), null, 2); }
     case "list_devices_detailed": { const p: Record<string, string> = { pageSize: String(args.pageSize ?? 25) }; if (args.after) p.after = String(args.after); if (args.org_id) p.org = String(args.org_id); return JSON.stringify(await ninjaGet(env, "/devices-detailed", p), null, 2); }
-    case "get_device": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}`), null, 2);
+    case "get_device": {
+      // expand=warranty: NinjaOne omits the warranty block unless asked - the UI
+      // shows it, the plain GET does not (found via ticket #22114's replay). It
+      // comes back as references.warranty {startDate, endDate,
+      // manufacturerFulfillmentDate} in epoch SECONDS; warranty_summary spells
+      // the same thing out in ISO dates plus an expired flag so nothing
+      // downstream has to convert epochs by hand.
+      const device = (await ninjaGet(env, `/device/${args.device_id}`, { expand: "warranty" })) as Record<string, any>;
+      const w = device?.references?.warranty;
+      if (w && (w.startDate || w.endDate)) {
+        const iso = (sec: unknown) => (typeof sec === "number" ? new Date(sec * 1000).toISOString().slice(0, 10) : null);
+        const endMs = typeof w.endDate === "number" ? w.endDate * 1000 : null;
+        device.warranty_summary = {
+          start: iso(w.startDate),
+          end: iso(w.endDate),
+          expired: endMs !== null ? endMs < Date.now() : null,
+          days_remaining: endMs !== null ? Math.floor((endMs - Date.now()) / 86400000) : null,
+          source: "NinjaOne manufacturer warranty lookup (expand=warranty)",
+        };
+      } else {
+        device.warranty_summary = { start: null, end: null, expired: null, days_remaining: null, source: "NinjaOne has no warranty record for this device" };
+      }
+      return JSON.stringify(device, null, 2);
+    }
     case "update_device": { const body: Record<string, unknown> = {}; if (args.displayName) body.displayName = args.displayName; if (args.description) body.description = args.description; if (args.userData) body.userData = args.userData; return JSON.stringify(await ninjaPatch(env, `/device/${args.device_id}`, body), null, 2); }
     case "get_device_custom_fields": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/custom-fields`), null, 2);
     case "get_device_os_info": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/os`), null, 2);
