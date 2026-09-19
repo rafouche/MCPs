@@ -22,12 +22,36 @@ const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
 
+// Constant-time string compare for the inbound bearer check in fetch().
+function timingSafeEqual(a, b) {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
+    // Inbound auth (opt-in): once the MCP_AUTH_TOKEN secret is set on this
+    // Worker, every route except OPTIONS and /health must carry
+    // "Authorization: Bearer <that token>" - the same header the MCP client
+    // registrations already send. Unset = unchanged behavior, so this code
+    // deploys safely ahead of the secret. Same check as every TypeScript
+    // Worker in this repo; see CLAUDE.md "Inbound auth".
+    if (env.MCP_AUTH_TOKEN && url.pathname !== "/health") {
+      const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
+      }
     }
 
     if (url.pathname === "/health") {
