@@ -94,3 +94,12 @@ Until 2026-09-19 no Worker in this repo checked who was calling it: `tools/list`
 ## Secrets
 
 Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt` and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
+
+## Replay support in halopsa-mcp: `as_of` on the action-log tools
+`get_ticket_time_entries` and `get_ticket_history` take an optional `as_of`
+(ISO, Halo time). Actions dated after it are dropped and `human_touch` is
+computed over what remains; the response echoes `as_of` and
+`actions_hidden_after_as_of`. HelpDeskAgent's replay harness (v2.11.5)
+passes it so a ticket is judged as it stood at that moment - without it,
+`human_touch.found` is today's answer and a replay of an untouched-at-the-
+time ticket stops HUMAN_OWNED. Production never passes it.
