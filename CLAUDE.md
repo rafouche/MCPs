@@ -116,18 +116,28 @@ ticket trimmed (`trimTicket`, now including `dateclosed` /
 PowerShell caller, not here; this route only gathers. Read-only.
 
 ## Emergency path: halopsa-mcp `escalate_emergency`
-The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.0).
+The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).
 `escalate_emergency` emails the ticket's contact a FIXED template (caller
 supplies a summary phrase, max 200 chars, no links), pages on-call, writes
-an `[EMERGENCY ACK SENT]` audit note, optionally sets status/agent/team,
-and refuses a second run on the same ticket. The page goes through Halo's
-own mail by default (`ON_CALL_MODE` "halo"): an internal alert ticket
-under our own client (`ON_CALL_CLIENT_ID`/`ON_CALL_SITE_ID`) for the
-on-call contact (`ON_CALL_USER_ID`) in a team the Help Desk pipeline never
-reads (`ON_CALL_TEAM_ID`), with an emailed action CC'd to
-`ON_CALL_CC_EMAILS` (the SMS gateway). All wrangler vars, never arguments.
-`page_test: true` sends a marked TEST page and touches no client ticket.
-`ON_CALL_MODE` "m365" instead calls m365-mcp's `send_on_call_alert`
-(Graph sendMail, needs that Worker's credentials, which have never been
-set - CIPP-SAM has no Mail.Send and CIPP has no send endpoint, checked
-2026-09-20). Both tools take `dry_run: true`.
+the page text as the audit trail, optionally sets status/agent/team, and
+refuses a second run on the same ticket. Paging default `ON_CALL_MODE`
+"ticket": ONE hidden emailed action on the same ticket (outcome 16,
+`emailto` = `ON_CALL_EMAIL`, `emailcc` = `ON_CALL_CC_EMAILS`,
+hiddenfromuser true) - Halo does send mail for a hidden action (confirmed
+on ticket #22417: email_status 2, dateemailed set). Subject carries the
+ticket id; the client never sees it; no second ticket. "halo" (an internal
+alert ticket - rejected by Roger: two tickets for the tech) and "m365"
+(m365-mcp send_on_call_alert; that Worker has no Graph credentials, and
+CIPP-SAM has no Mail.Send) remain selectable. `page_test: true` with a
+scratch ticket_id of ours sends a marked TEST page from that ticket.
+
+## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
+Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
+to any [INTENDED ...] line) verbatim as a public emailed reply, collapses
+the draft to [APPROVED DRAFT], deletes this pipeline's [PIPELINE NOTE]s,
+sets status/agent/team, verifies. Optional `emailto` corrects emailtolist
+first; `require_status_id` refuses unless the ticket is in that status;
+refuses on 0 or 2+ drafts or an empty draft. It can only send text a human
+already approved - never text supplied in the call. `dry_run: true`.
+Real incident: #22390's reply sent but its draft never collapsed when
+these were separate model-driven steps.

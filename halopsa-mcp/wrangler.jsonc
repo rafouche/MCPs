@@ -13,7 +13,8 @@
   // the pipeline never picks the alert ticket up). CC is the email-to-SMS
   // gateway. Change here and `npm run deploy`.
   "vars": {
-    "ON_CALL_MODE": "halo",
+    "ON_CALL_MODE": "ticket",
+    "ON_CALL_EMAIL": "roger@altecusa.com",
     "ON_CALL_CLIENT_ID": "12",
     "ON_CALL_SITE_ID": "198",
     "ON_CALL_USER_ID": "2220",
