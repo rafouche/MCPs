@@ -5,5 +5,19 @@
   "compatibility_date": "2026-05-21",
   "observability": { "enabled": true },
   "upload_source_maps": true,
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  // escalate_emergency's on-call page (HelpDeskAgent v2.13.0). Plain vars: the
+  // same on-call contact HelpDeskAgent's config.json already names. Halo IDs:
+  // client 12 = Altec Solutions Group, site 198 = Main, user 2220 = Roger
+  // (roger@altecusa.com), team 3 = Alerts / System Admin (not Help Desk, so
+  // the pipeline never picks the alert ticket up). CC is the email-to-SMS
+  // gateway. Change here and `npm run deploy`.
+  "vars": {
+    "ON_CALL_MODE": "halo",
+    "ON_CALL_CLIENT_ID": "12",
+    "ON_CALL_SITE_ID": "198",
+    "ON_CALL_USER_ID": "2220",
+    "ON_CALL_TEAM_ID": "3",
+    "ON_CALL_CC_EMAILS": "4178300075@vtext.com"
+  }
 }

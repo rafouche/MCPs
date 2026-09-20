@@ -115,15 +115,19 @@ ticket trimmed (`trimTicket`, now including `dateclosed` /
 `recent_human_touch` over that window. The exclusion rules live in the
 PowerShell caller, not here; this route only gathers. Read-only.
 
-## Emergency path: halopsa-mcp `escalate_emergency` + m365-mcp `send_on_call_alert`
+## Emergency path: halopsa-mcp `escalate_emergency`
 The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.0).
 `escalate_emergency` emails the ticket's contact a FIXED template (caller
-supplies a summary phrase, max 200 chars, no links), calls m365-mcp's
-`send_on_call_alert` over HTTP (`ON_CALL_ALERT_URL`, plus
-`ON_CALL_ALERT_TOKEN` if that Worker has MCP_AUTH_TOKEN set), writes an
-`[EMERGENCY ACK SENT]` audit note, optionally sets status/agent/team, and
-refuses a second run on the same ticket. `send_on_call_alert`'s sender and
-recipients are wrangler vars on m365-mcp (`ON_CALL_SENDER`,
-`ON_CALL_RECIPIENTS`, `ON_CALL_TENANT`), never arguments - the LLM can only
-page the configured contacts. Graph `POST /users/{sender}/sendMail`
-(application permission Mail.Send). Both tools take `dry_run: true`.
+supplies a summary phrase, max 200 chars, no links), pages on-call, writes
+an `[EMERGENCY ACK SENT]` audit note, optionally sets status/agent/team,
+and refuses a second run on the same ticket. The page goes through Halo's
+own mail by default (`ON_CALL_MODE` "halo"): an internal alert ticket
+under our own client (`ON_CALL_CLIENT_ID`/`ON_CALL_SITE_ID`) for the
+on-call contact (`ON_CALL_USER_ID`) in a team the Help Desk pipeline never
+reads (`ON_CALL_TEAM_ID`), with an emailed action CC'd to
+`ON_CALL_CC_EMAILS` (the SMS gateway). All wrangler vars, never arguments.
+`page_test: true` sends a marked TEST page and touches no client ticket.
+`ON_CALL_MODE` "m365" instead calls m365-mcp's `send_on_call_alert`
+(Graph sendMail, needs that Worker's credentials, which have never been
+set - CIPP-SAM has no Mail.Send and CIPP has no send endpoint, checked
+2026-09-20). Both tools take `dry_run: true`.
