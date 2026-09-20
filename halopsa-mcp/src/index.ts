@@ -1,5 +1,6 @@
 export interface Env {
-  MCP_AUTH_TOKEN?: string; // optional inbound bearer token - see the check at the top of fetch()
+  MCP_AUTH_TOKEN?: string;
+  HUMAN_TOUCH_IGNORE_APP_IDS?: string; // optional inbound bearer token - see the check at the top of fetch()
   HALO_BASE_URL: string;
   HALO_CLIENT_ID: string;
   HALO_CLIENT_SECRET: string;
@@ -238,8 +239,25 @@ function applyAsOf(actions: any[], asOf: unknown): { actions: any[]; hidden: num
   return { actions: kept, hidden: actions.length - kept.length, applied: cutoff };
 }
 
-function computeHumanTouch(actions: any[]) {
-  const human = actions.filter((a: any) => a.who_type === 1 && a.actionby_application_id !== "Claude");
+// Integrations that post to Halo through a bound agent account look like a
+// human (who_type: 1) but aren't one: this pipeline itself ("Claude") and
+// Huntress's alert intake ("Huntress"), seen live on tickets #22389/#22390
+// where human_touch.found was true on a ticket no person had touched. Add
+// more via the HUMAN_TOUCH_IGNORE_APP_IDS var (comma-separated
+// actionby_application_id values).
+function integrationAppIds(env?: Env): Set<string> {
+  const ids = new Set(["Claude", "Huntress"]);
+  const extra = (env as any)?.HUMAN_TOUCH_IGNORE_APP_IDS;
+  if (typeof extra === "string") extra.split(",").map((x: string) => x.trim()).filter(Boolean).forEach((x: string) => ids.add(x));
+  return ids;
+}
+function isHumanAction(a: any, ignore: Set<string>): boolean {
+  return a.who_type === 1 && !ignore.has(String(a.actionby_application_id ?? ""));
+}
+
+function computeHumanTouch(actions: any[], env?: Env) {
+  const ignore = integrationAppIds(env);
+  const human = actions.filter((a: any) => isHumanAction(a, ignore));
   return {
     found: human.length > 0,
     actions: human.map((a: any) => ({ id: a.id, who: a.who, who_agentid: a.who_agentid, datetime: a.datetime, outcome: a.outcome })),
@@ -262,7 +280,7 @@ async function buildCandidateBrief(env: Env, id: string, historyCount: number, m
     return {
       found: true,
       ticket: trimTicket(ticket, maxDetailsChars),
-      human_touch: wantActions ? computeHumanTouch(actions) : null,
+      human_touch: wantActions ? computeHumanTouch(actions, env) : null,
       action_count: wantActions ? (actionsData.record_count ?? actions.length) : null,
       recent_actions: actions.slice(0, historyCount).map((a) => trimAction(a, maxNoteChars)),
     };
@@ -298,7 +316,7 @@ const TOOLS = [
   { name: "list_outcomes", description: "List valid Action outcome IDs in HaloPSA — required by update_ticket's note field (HaloPSA rejects a ticket note/action with no outcome_id set)", inputSchema: { type: "object", properties: { tickettype_id: { type: "number" } } } },
   { name: "list_slas", description: "List all SLA policies in HaloPSA with response and fix time targets", inputSchema: { type: "object", properties: { count: { type: "number" } } } },
   { name: "list_time_entries", description: "List ticket actions from HaloPSA (time entries/labor, but also notes, emails, and replies — this is the full action log, not billing-only)", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, client_id: { type: "number" }, agent_id: { type: "number" }, count: { type: "number" }, start_date: { type: "string" }, end_date: { type: "string" } } } },
-  { name: "get_ticket_time_entries", description: "Get a ticket's full action log: labor/time entries, internal notes, and agent-to-client conversation (emails/replies) — this is also the way to see what a prior agent already told the client. The response also includes a computed `human_touch` field ({found: boolean, actions: [...]}) — every action where a real human agent (who_type: 1, not this pipeline's own identity) did something, already filtered out of the full list for you. Use it to answer 'has a human ever touched this ticket' directly rather than re-scanning the full action list yourself — it's the same underlying data, just pre-filtered so a human action buried in a long list can't be missed. Optional as_of (ISO timestamp, Halo time) drops every action dated after it and computes human_touch over the rest - for judging a ticket as it stood at that moment (replays).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, as_of: { type: "string", description: "Optional ISO timestamp (Halo time, e.g. 2026-09-17T12:30:00). Actions dated after it are dropped and human_touch is computed over what remains." } }, required: ["ticket_id"] } },
+  { name: "get_ticket_time_entries", description: "Get a ticket's full action log: labor/time entries, internal notes, and agent-to-client conversation (emails/replies) — this is also the way to see what a prior agent already told the client. The response also includes a computed `human_touch` field ({found: boolean, actions: [...]}) — every action where a real human agent (who_type: 1, and not an integration posting through a bound agent account - this pipeline's own 'Claude' and Huntress's alert intake are excluded, more via HUMAN_TOUCH_IGNORE_APP_IDS) did something, already filtered out of the full list for you. Use it to answer 'has a human ever touched this ticket' directly rather than re-scanning the full action list yourself — it's the same underlying data, just pre-filtered so a human action buried in a long list can't be missed. Optional as_of (ISO timestamp, Halo time) drops every action dated after it and computes human_touch over the rest - for judging a ticket as it stood at that moment (replays).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, as_of: { type: "string", description: "Optional ISO timestamp (Halo time, e.g. 2026-09-17T12:30:00). Actions dated after it are dropped and human_touch is computed over what remains." } }, required: ["ticket_id"] } },
   { name: "list_invoices", description: "List invoices from HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" }, start_date: { type: "string" }, end_date: { type: "string" }, search: { type: "string" } } } },
   { name: "get_invoice", description: "Get full details of a single invoice by ID including line items", inputSchema: { type: "object", properties: { invoice_id: { type: "number" } }, required: ["invoice_id"] } },
   { name: "list_recurring_invoices", description: "List recurring invoices (MRR contracts) in HaloPSA", inputSchema: { type: "object", properties: { client_id: { type: "number" }, count: { type: "number" }, active_only: { type: "boolean" } } } },
@@ -330,7 +348,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const cut = applyAsOf(data.actions || [], args.as_of);
       const actions: any[] = cut.actions;
       const maxNote = Number(args.max_note_chars ?? 3000);
-      return JSON.stringify({ ticket_id: args.ticket_id, record_count: data.record_count ?? actions.length, as_of: cut.applied, actions_hidden_after_as_of: cut.hidden, human_touch: computeHumanTouch(actions), actions: actions.map((a) => trimAction(a, maxNote)) }, null, 2);
+      return JSON.stringify({ ticket_id: args.ticket_id, record_count: data.record_count ?? actions.length, as_of: cut.applied, actions_hidden_after_as_of: cut.hidden, human_touch: computeHumanTouch(actions, env), actions: actions.map((a) => trimAction(a, maxNote)) }, null, 2);
     }
     case "create_ticket": { const payload: Record<string, unknown> = { summary: args.summary, details: args.details ?? "" }; if (args.client_id) payload.client_id = args.client_id; if (args.user_id) payload.user_id = args.user_id; if (args.team_id) payload.team_id = args.team_id; if (args.agent_id) payload.agent_id = args.agent_id; if (args.tickettype_id) payload.tickettype_id = args.tickettype_id; if (args.priority_id) payload.priority_id = args.priority_id; return JSON.stringify(await haloPost(env, "/Tickets", [payload]), null, 2); }
     case "update_ticket": {
@@ -622,7 +640,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const cut = applyAsOf(data.actions || [], args.as_of);
       const actions: any[] = cut.actions;
       if (cut.applied) { data.actions = actions; data.as_of = cut.applied; data.actions_hidden_after_as_of = cut.hidden; }
-      const humanActions = actions.filter((a: any) => a.who_type === 1 && a.actionby_application_id !== "Claude");
+      const humanActions = actions.filter((a: any) => isHumanAction(a, integrationAppIds(env)));
       data.human_touch = {
         found: humanActions.length > 0,
         actions: humanActions.map((a: any) => ({ id: a.id, who: a.who, who_agentid: a.who_agentid, datetime: a.datetime, outcome: a.outcome })),
@@ -914,7 +932,7 @@ async function enrichWithRecentActions(env: Env, tickets: any[], historyCount: n
         action_count: actionCount,
         actions_error: actionsError,
         recent_actions: actions.map((a) => trimAction(a, maxNoteChars)),
-        recent_human_touch: computeHumanTouch(actions),
+        recent_human_touch: computeHumanTouch(actions, env),
       };
     }))));
   }
