@@ -4,7 +4,15 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-05-21",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // On-call alerting for HelpDeskAgent's escalate_emergency (v2.13.0). Plain
+  // vars, not secrets: these are the same on-call contacts HelpDeskAgent's
+  // config.json already carries. Change them here and `npm run deploy`.
+  "vars": {
+    "ON_CALL_SENDER": "help@altecusa.com",
+    "ON_CALL_RECIPIENTS": "roger@altecusa.com,4178300075@vtext.com",
+    "ON_CALL_TENANT": "altec"
+  }
   // Secrets (wrangler secret put — do NOT put values here):
   //   M365_CLIENT_ID      — App registration client ID from Azure portal
   //   M365_CLIENT_SECRET  — App registration client secret (shown once)

@@ -3,6 +3,12 @@ export interface Env {
   M365_CLIENT_ID: string;
   M365_CLIENT_SECRET: string;
   M365_TENANTS: string;    // JSON: { "altec": "tenant-guid", "goldmechanical": "tenant-guid" }
+  // On-call alerting (HelpDeskAgent v2.13.0). Recipients live HERE (wrangler
+  // vars), never in the tool call, so the caller (an LLM) can only ever page
+  // the configured on-call contacts - it cannot address this mail anywhere else.
+  ON_CALL_SENDER?: string;      // mailbox UPN to send from, e.g. help@altecusa.com
+  ON_CALL_RECIPIENTS?: string;  // comma-separated: on-call email, email-to-SMS gateway address, ...
+  ON_CALL_TENANT?: string;      // key in M365_TENANTS (default: the first one)
 }
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -186,6 +192,9 @@ const TOOLS = [
   // Domains
   { name: "list_domains", description: "List verified domains in a tenant", inputSchema: { type: "object", properties: { ...TENANT_PARAM } } },
 
+  // On-call alerting (HelpDeskAgent v2.13.0)
+  { name: "send_on_call_alert", description: "Page the configured on-call contacts about an emergency on a ticket - email plus the email-to-SMS gateway address, whatever ON_CALL_RECIPIENTS holds. The recipients and the sending mailbox are fixed Worker settings, not arguments: this tool can only ever reach the on-call contacts, never a client or an arbitrary address, which is why it stays available to a workflow whose other sends are held for human approval. Subject and body are templated from ticket_id, client_name and issue_summary (kept short - the SMS gateway truncates). Fails with a clear error if the Worker has no ON_CALL_SENDER/ON_CALL_RECIPIENTS configured, or if the app registration lacks Mail.Send.", inputSchema: { type: "object", properties: { ticket_id: { type: "number", description: "HaloPSA ticket id" }, client_name: { type: "string", description: "Client/company name as it appears in Halo" }, issue_summary: { type: "string", description: "One line, what's down and for whom (max 300 chars)" }, details: { type: "string", description: "Optional: what has been found so far (max 1500 chars) - email body only, not the SMS" }, dry_run: { type: "boolean", description: "Build the message and report recipients without sending" } }, required: ["ticket_id", "client_name", "issue_summary"] } },
+
   // Raw escape hatch
   { name: "graph_raw_request", description: "Make an arbitrary authenticated Microsoft Graph API request — use for any endpoint not covered by other tools", inputSchema: { type: "object", properties: { ...TENANT_PARAM, method: { type: "string", enum: ["GET", "POST", "PATCH", "DELETE"], description: "HTTP method (default GET)" }, path: { type: "string", description: "Graph path e.g. /users or /groups/{id}/members" }, body: { description: "Request body for POST/PATCH" }, params: { type: "object", description: "Query string parameters" } }, required: ["path"] } },
 ];
@@ -196,6 +205,29 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
   if (name === "list_tenants") {
     const t = getTenants(env);
     return JSON.stringify(Object.entries(t).map(([k, v]) => ({ name: k, tenantId: v })), null, 2);
+  }
+
+  if (name === "send_on_call_alert") {
+    const sender = (env.ON_CALL_SENDER || "").trim();
+    const recipients = (env.ON_CALL_RECIPIENTS || "").split(",").map((r) => r.trim()).filter(Boolean);
+    if (!sender || recipients.length === 0) throw new Error("send_on_call_alert: the Worker has no ON_CALL_SENDER / ON_CALL_RECIPIENTS configured - set both (wrangler vars or the Cloudflare dashboard) before this can page anyone.");
+    const ticketId = Number(args.ticket_id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) throw new Error("send_on_call_alert: ticket_id must be a positive integer.");
+    const clean = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+    const client = clean(args.client_name, 80) || "Unknown client";
+    const summary = clean(args.issue_summary, 300);
+    if (!summary) throw new Error("send_on_call_alert: issue_summary is required.");
+    const details = String(args.details ?? "").trim().slice(0, 1500);
+    const subject = `[Allie] EMERGENCY - ${client}: ${summary.slice(0, 90)} (ticket #${ticketId})`;
+    const lines = [`EMERGENCY - ${client}`, `Ticket #${ticketId}`, ``, summary];
+    if (details) lines.push(``, `Found so far: ${details}`);
+    lines.push(``, `Sent automatically by Allie (Help Desk AI agent). The client has been sent a brief acknowledgment saying on-call is being notified.`);
+    const body = lines.join("\n");
+    const { tenantId: t } = resolveTenant(env, (env.ON_CALL_TENANT || undefined) as string | undefined);
+    const message = { subject, body: { contentType: "Text", content: body }, toRecipients: recipients.map((address) => ({ emailAddress: { address } })) };
+    if (args.dry_run === true) return JSON.stringify({ sent: false, dry_run: true, from: sender, to: recipients, subject, body }, null, 2);
+    await gPost(env, t, `/users/${encodeURIComponent(sender)}/sendMail`, { message, saveToSentItems: true });
+    return JSON.stringify({ sent: true, from: sender, to: recipients, subject }, null, 2);
   }
 
   const { tenantId, name: tName } = resolveTenant(env, args.tenant as string | undefined);

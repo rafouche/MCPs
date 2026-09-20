@@ -114,3 +114,16 @@ ticket trimmed (`trimTicket`, now including `dateclosed` /
 `hasbeenclosed` / `closure_agent_id`) with its most recent actions and a
 `recent_human_touch` over that window. The exclusion rules live in the
 PowerShell caller, not here; this route only gathers. Read-only.
+
+## Emergency path: halopsa-mcp `escalate_emergency` + m365-mcp `send_on_call_alert`
+The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.0).
+`escalate_emergency` emails the ticket's contact a FIXED template (caller
+supplies a summary phrase, max 200 chars, no links), calls m365-mcp's
+`send_on_call_alert` over HTTP (`ON_CALL_ALERT_URL`, plus
+`ON_CALL_ALERT_TOKEN` if that Worker has MCP_AUTH_TOKEN set), writes an
+`[EMERGENCY ACK SENT]` audit note, optionally sets status/agent/team, and
+refuses a second run on the same ticket. `send_on_call_alert`'s sender and
+recipients are wrangler vars on m365-mcp (`ON_CALL_SENDER`,
+`ON_CALL_RECIPIENTS`, `ON_CALL_TENANT`), never arguments - the LLM can only
+page the configured contacts. Graph `POST /users/{sender}/sendMail`
+(application permission Mail.Send). Both tools take `dry_run: true`.
