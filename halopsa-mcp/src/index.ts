@@ -248,16 +248,22 @@ function computeHumanTouch(actions: any[]) {
 
 async function buildCandidateBrief(env: Env, id: string, historyCount: number, maxDetailsChars: number, maxNoteChars: number) {
   try {
+    // history=0 means "ticket fields only" - skip the /Actions call entirely
+    // (HelpDeskAgent's approved-tier backstop reads just status_id for every
+    // classified ticket each cycle; paying for 100 actions apiece for that
+    // would be silly). human_touch is then null, not false: unknown, not
+    // "nobody".
+    const wantActions = historyCount > 0;
     const [ticket, actionsData] = await Promise.all([
       haloGet(env, `/Tickets/${id}`) as Promise<any>,
-      haloGet(env, "/Actions", { ticket_id: String(id), count: "100" }) as Promise<any>,
+      wantActions ? (haloGet(env, "/Actions", { ticket_id: String(id), count: "100" }) as Promise<any>) : Promise.resolve(null),
     ]);
-    const actions: any[] = actionsData.actions || [];
+    const actions: any[] = actionsData ? (actionsData.actions || []) : [];
     return {
       found: true,
       ticket: trimTicket(ticket, maxDetailsChars),
-      human_touch: computeHumanTouch(actions),
-      action_count: actionsData.record_count ?? actions.length,
+      human_touch: wantActions ? computeHumanTouch(actions) : null,
+      action_count: wantActions ? (actionsData.record_count ?? actions.length) : null,
       recent_actions: actions.slice(0, historyCount).map((a) => trimAction(a, maxNoteChars)),
     };
   } catch (err) {
