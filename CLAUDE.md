@@ -138,10 +138,12 @@ Shifts calendar, not fixed: `resolveOnCall` GETs `/Appointment` with
 templates and skipped), keeps the ones whose `shift_type_id` equals
 `ON_CALL_SHIFT_TYPE_ID` (default 1 = Halo's stock "On-call" shift type; a
 subject containing "on call" also counts) and whose start<=now<end (Halo
-times are UTC without a suffix), then reads each agent's email from
-`/Agent/{id}` and their text address from `ON_CALL_SMS_MAP` (JSON, agent id
-or email -> gateway address). First agent = `emailto`, the rest + every SMS
-address = `emailcc`. Nobody scheduled, agent without an email, or any error
+times are UTC without a suffix), then reads each agent's email and Mobile
+Number (Halo's `sms` field) from `/Agent/{id}`; the text address is the
+number's digits at `ON_CALL_SMS_DOMAIN` (default altec.text.email, Roger's
+email-to-SMS service), no number = email only (Roger asked for exactly
+this on 2026-09-21; the earlier ON_CALL_SMS_MAP var is gone). First agent =
+`emailto`, the rest + every SMS address = `emailcc`. Nobody scheduled, agent without an email, or any error
 -> `ON_CALL_EMAIL` / `ON_CALL_CC_EMAILS` (the fixed fallback), and both the
 response (`on_call_alert.on_call.source`) and the `[EMERGENCY ACK SENT]`
 audit note say which was used. `ON_CALL_LOOKUP: "off"` disables the lookup.
