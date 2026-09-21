@@ -6,28 +6,14 @@
   "observability": { "enabled": true },
   "upload_source_maps": true,
   "compatibility_flags": ["nodejs_compat"],
-  // escalate_emergency's on-call page (HelpDeskAgent v2.13.0). Plain vars: the
-  // same on-call contact HelpDeskAgent's config.json already names. Halo IDs:
-  // client 12 = Altec Solutions Group, site 198 = Main, user 2220 = Roger
-  // (roger@altecusa.com), team 3 = Alerts / System Admin (not Help Desk, so
-  // the pipeline never picks the alert ticket up). CC is the email-to-SMS
-  // gateway. Change here and `npm run deploy`.
-  // Who actually gets paged comes from Halo's Shifts calendar first
-  // (ON_CALL_LOOKUP "halo"): the agent whose "On-call" shift (shift type 1)
-  // covers the moment, emailed at their Halo agent address and texted at
-  // <Mobile Number on their agent record>@ON_CALL_SMS_DOMAIN (none = email
-  // only). ON_CALL_EMAIL and ON_CALL_CC_EMAILS are the fallback when nobody
-  // is scheduled.
+  // escalate_emergency's on-call page: who gets paged comes from Halo's own
+  // Shifts calendar - the agent whose "On-call" shift (shift type
+  // ON_CALL_SHIFT_TYPE_ID) covers the moment, emailed at their Halo agent
+  // address and texted at <Mobile Number on their agent record>@ON_CALL_SMS_DOMAIN
+  // (no number = email only). Nobody on call = nobody paged; there is no
+  // fallback address by design. Change here and `npm run deploy`.
   "vars": {
-    "ON_CALL_MODE": "ticket",
-    "ON_CALL_LOOKUP": "halo",
     "ON_CALL_SHIFT_TYPE_ID": "1",
-    "ON_CALL_SMS_DOMAIN": "altec.text.email",
-    "ON_CALL_EMAIL": "roger@altecusa.com",
-    "ON_CALL_CLIENT_ID": "12",
-    "ON_CALL_SITE_ID": "198",
-    "ON_CALL_USER_ID": "2220",
-    "ON_CALL_TEAM_ID": "3",
-    "ON_CALL_CC_EMAILS": "4178300075@vtext.com"
+    "ON_CALL_SMS_DOMAIN": "altec.text.email"
   }
 }

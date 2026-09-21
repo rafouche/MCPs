@@ -120,19 +120,19 @@ The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).
 `escalate_emergency` emails the ticket's contact a FIXED template (caller
 supplies a summary phrase, max 200 chars, no links), pages on-call, writes
 the page text as the audit trail, optionally sets status/agent/team, and
-refuses a second run on the same ticket. Paging default `ON_CALL_MODE`
-"ticket": ONE hidden emailed action on the same ticket (outcome 16,
-`emailto` = `ON_CALL_EMAIL`, `emailcc` = `ON_CALL_CC_EMAILS`,
+refuses a second run on the same ticket. The page is ONE hidden emailed
+action on the same ticket (outcome 16, `emailto`/`emailcc` overrides,
 hiddenfromuser true) - Halo does send mail for a hidden action (confirmed
 on ticket #22417: email_status 2, dateemailed set). Subject carries the
-ticket id; the client never sees it; no second ticket. "halo" (an internal
-alert ticket - rejected by Roger: two tickets for the tech) and "m365"
-(m365-mcp send_on_call_alert; that Worker has no Graph credentials, and
-CIPP-SAM has no Mail.Send) remain selectable. `page_test: true` with a
-scratch ticket_id of ours sends a marked TEST page from that ticket.
+ticket id; the client never sees it; no second ticket. The older "halo"
+(internal alert ticket - rejected by Roger: two tickets for the tech) and
+"m365" (m365-mcp send_on_call_alert; no Graph credentials) modes were
+removed on 2026-09-21 along with every fixed-recipient var. `page_test:
+true` with a scratch ticket_id of ours sends a marked TEST page from that
+ticket to whoever is on call right then (nobody on call = nothing sent).
 
-Who gets paged (ticket mode) is looked up at send time from Halo's own
-Shifts calendar, not fixed: `resolveOnCall` GETs `/Appointment` with
+Who gets paged is looked up at send time from Halo's own Shifts calendar,
+and ONLY from there: `resolveOnCall` GETs `/Appointment` with
 `showshifts=true&shiftsonly=true&showall=true` (shifts are appointments of
 `type` 4 and are invisible without showshifts; recurring masters are
 templates and skipped), keeps the ones whose `shift_type_id` equals
@@ -140,20 +140,29 @@ templates and skipped), keeps the ones whose `shift_type_id` equals
 subject containing "on call" also counts) and whose start<=now<end (Halo
 times are UTC without a suffix), then reads each agent's email and Mobile
 Number (Halo's `sms` field) from `/Agent/{id}`; the text address is the
-number's digits at `ON_CALL_SMS_DOMAIN` (default altec.text.email, Roger's
-email-to-SMS service), no number = email only (Roger asked for exactly
-this on 2026-09-21; the earlier ON_CALL_SMS_MAP var is gone). First agent =
-`emailto`, the rest + every SMS address = `emailcc`. Nobody scheduled, agent without an email, or any error
--> `ON_CALL_EMAIL` / `ON_CALL_CC_EMAILS` (the fixed fallback), and both the
-response (`on_call_alert.on_call.source`) and the `[EMERGENCY ACK SENT]`
-audit note say which was used. `ON_CALL_LOOKUP: "off"` disables the lookup.
-`get_on_call` (read-only, optional `at`) shows the same resolution;
-`escalate_emergency` accepts `at` only with `dry_run`/`page_test`. A
-Leo-style "Fixed shift" (shift_type_id 0) never matches. Verified against
-Roger's test shift (appointment 19875, 2026-09-22T01:30-02:00Z): `at` inside
-it resolves to agent 28, outside it falls back. `halo_api_get` is the
-read-only raw GET tool this was discovered with; it is not in the
-pipeline's allowlist.
+number's digits (a leading US 1 dropped) at `ON_CALL_SMS_DOMAIN` (default
+altec.text.email, Roger's email-to-SMS service), no number = email only.
+First agent = `emailto`, the rest + every SMS address = `emailcc`.
+
+Nobody scheduled, an on-call agent with no email, or a lookup error =
+NOBODY is paged. There is deliberately no fallback address (Roger,
+2026-09-21: "If there isn't anybody on call in Halo, it obviously won't be
+able to send to anybody, no fallback. Just a silent record in the ticket").
+The client acknowledgment still goes out; `on_call_alert.sent` is false
+with the reason; the private `[EMERGENCY ACK SENT]` note on the ticket says
+"on-call NOT paged - nobody has an On-call shift covering this moment";
+and the resolver prompt already turns sent=false into a NEEDS URGENT note
+for a human. `get_on_call` (read-only, optional `at`) shows the same
+resolution and says email+text vs email only; `escalate_emergency` accepts
+`at` only with `dry_run`/`page_test`. A Leo-style "Fixed shift"
+(shift_type_id 0) never matches. Verified against Roger's test shift
+(appointment 19875, 2026-09-22T01:30-02:00Z): `at` inside it resolves to
+agent 28 (email only - his record has no mobile number), outside it
+resolves to nobody and a real page_test sends nothing. `halo_api_get` is
+the read-only raw GET tool this was discovered with; it is not in the
+pipeline's allowlist. Worker vars are now just `ON_CALL_SHIFT_TYPE_ID` and
+`ON_CALL_SMS_DOMAIN`; the old `ON_CALL_ALERT_URL` secret is unused and can
+be deleted from the Worker whenever convenient.
 
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
