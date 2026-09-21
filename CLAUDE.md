@@ -164,6 +164,22 @@ pipeline's allowlist. Worker vars are now just `ON_CALL_SHIFT_TYPE_ID` and
 `ON_CALL_SMS_DOMAIN`; the old `ON_CALL_ALERT_URL` secret is unused and can
 be deleted from the Worker whenever convenient.
 
+## ninjarmm-mcp: scripts vs "Install Application" automations (2026-09-21)
+`GET /v2/automation/scripts` lists library scripts and built-in actions
+only - NinjaOne's "Install Application" automations (Administration >
+Library > Automation > Add > Installation) never appear, whatever query
+params you try. Their uid is visible as `sourceConfigUid` on the ACTION /
+ACTIONSET activities a run produces (e.g. Roger's "Latest Wrike Desktop
+Install" = fb330231-a095-4b19-9e5e-06ad9e72d5f7 on device 671). The run
+endpoint accepts `{type:"ACTION", uid}` for them, and `run_script_on_device`
+/ `run_script_and_wait` now take `script_uid` for that - but NinjaOne
+answers 403 `user_context_required` to this Worker's client-credentials
+key for type ACTION, while plain scripts by id run fine. So an installer
+the agent must run needs a library SCRIPT wrapper (the Wrike one is in
+HelpDeskAgent's docs); the uid path stays for a future user-context token.
+`ninja_api_get` is the read-only raw GET tool this was found with (not in
+the pipeline allowlist).
+
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
 to any [INTENDED ...] line) verbatim as a public emailed reply, collapses

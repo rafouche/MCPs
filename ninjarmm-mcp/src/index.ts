@@ -29,6 +29,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// POST /device/{id}/script/run body: a library script by id, or an
+// "Install Application" / built-in automation by uid (type ACTION). NinjaOne's
+// /automation/scripts listing does not include installer automations, so
+// their uid comes from the caller (the remediation whitelist entry) - it is
+// the sourceConfigUid on the ACTION activities such a run produces.
+function scriptRunBody(args: Record<string, any>): Record<string, unknown> {
+  const body: Record<string, unknown> = { runAs: args.runAs ?? "SYSTEM", parameters: args.parameters ?? {} };
+  if (args.script_uid) { body.type = "ACTION"; body.uid = String(args.script_uid); }
+  else if (args.script_id !== undefined && args.script_id !== null) { body.id = Number(args.script_id); }
+  else throw new Error("script_id or script_uid is required.");
+  return body;
+}
+// Verified 2026-09-21: a client-credentials API key CAN run library scripts
+// by id but NinjaOne refuses type ACTION (installer automations by uid) with
+// 403 user_context_required - those need a user-context (authorization-code)
+// token this Worker does not hold. Say so plainly instead of a bare 403.
+async function runScriptPost(env: Env, args: Record<string, any>): Promise<unknown> {
+  try {
+    return await ninjaPost(env, `/device/${args.device_id}/script/run`, scriptRunBody(args));
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (args.script_uid && /user_context_required/.test(msg)) {
+      throw new Error(`NinjaOne refused to run automation ${args.script_uid} by uid: an 'Install Application' automation needs a user-context token, and this Worker authenticates with an API key that has none (user_context_required). Wrap the same install in a library SCRIPT (PowerShell) and run that by script_id instead - scripts run fine with this key. Original: ${msg}`);
+    }
+    throw err;
+  }
+}
 async function ninjaGet(env: Env, path: string, params?: Record<string, string>): Promise<unknown> {
   const token = await getToken(env);
   const url = new URL(`${env.NINJA_BASE_URL}/v2${path}`);
@@ -112,8 +139,8 @@ const TOOLS = [
 
   // Device Actions (Write)
   { name: "reboot_device", description: "Reboot a managed device", inputSchema: { type: "object", properties: { device_id: { type: "number" }, mode: { type: "string", description: "NORMAL or FORCED (default NORMAL)" } }, required: ["device_id"] } },
-  { name: "run_script_on_device", description: "Run an automation script on a device by script ID. IMPORTANT: this only QUEUES the script - POST /device/{id}/script/run is fire-and-forget, the device picks it up on its next check-in and this call's response never contains the script's actual output, no matter how long you wait after calling it. For a script whose result you need to read back in the same investigation (e.g. a diagnostic that writes JSON to the device's activity log), use run_script_and_wait instead - it queues the same way but polls for you and returns the real result (or an honest 'not done yet' signal) in one call.", inputSchema: { type: "object", properties: { device_id: { type: "number" }, script_id: { type: "number", description: "Script ID from list_automation_scripts" }, runAs: { type: "string", description: "SYSTEM or LOGGED_IN_USER (default SYSTEM)" }, parameters: { type: "object", description: "Script parameter key-value pairs" } }, required: ["device_id", "script_id"] } },
-  { name: "run_script_and_wait", description: "Run a script on a device and poll for its completed result, for a diagnostic script whose output you actually need to read (e.g. a speed test that writes its result to the device's activity log) - not for a fix-and-move-on script where nothing needs reading back (use run_script_on_device for those; polling adds real wall-clock delay for no benefit there). Queues via the same POST /device/{id}/script/run as run_script_on_device, then polls GET /device/{id}/activities (activityType SCRIPT) every 5 seconds, looking for a new activity timestamped after the script was queued, until maxWaitSeconds elapses. Returns {completed: true, activity: {...}} with the full matched activity object (read whatever fields it actually contains - NinjaOne's own SCRIPT activity schema, e.g. status/activityResult/data, isn't fully pinned down here, so no field is silently dropped or over-parsed) if found in time, or {completed: false, message: ...} if not - a device that's offline or on a slow check-in interval can legitimately take longer than any reasonable wait budget, and that's a real, expected outcome to report honestly, not an error to retry blindly. Cloudflare's own request wall-clock limit is an unverified assumption here (not confirmed against this deployment's actual plan) - if calls consistently time out or error before maxWaitSeconds is reached, that's this limit being hit in practice, not a bug in the polling logic; lower maxWaitSeconds or fall back to run_script_on_device + a later separate list_device_activities check instead.", inputSchema: { type: "object", properties: { device_id: { type: "number" }, script_id: { type: "number", description: "Script ID from list_automation_scripts" }, runAs: { type: "string", description: "SYSTEM or LOGGED_IN_USER (default SYSTEM)" }, parameters: { type: "object", description: "Script parameter key-value pairs" }, maxWaitSeconds: { type: "number", description: "How long to poll before giving up and returning completed:false (default 60, capped at 120 - kept conservative pending real confirmation of how long a single call here can safely run)." } }, required: ["device_id", "script_id"] } },
+  { name: "run_script_on_device", description: "Run an automation script on a device by script ID. IMPORTANT: this only QUEUES the script - POST /device/{id}/script/run is fire-and-forget, the device picks it up on its next check-in and this call's response never contains the script's actual output, no matter how long you wait after calling it. For a script whose result you need to read back in the same investigation (e.g. a diagnostic that writes JSON to the device's activity log), use run_script_and_wait instead - it queues the same way but polls for you and returns the real result (or an honest 'not done yet' signal) in one call.", inputSchema: { type: "object", properties: { device_id: { type: "number" }, script_id: { type: "number", description: "Script ID from list_automation_scripts" }, script_uid: { type: "string", description: "Instead of script_id: the automation's uid (GUID), for 'Install Application' automations, which NinjaOne's API does not list under list_automation_scripts. The remediation whitelist entry carries it as script_uid." }, runAs: { type: "string", description: "SYSTEM or LOGGED_IN_USER (default SYSTEM)" }, parameters: { type: "object", description: "Script parameter key-value pairs" } }, required: ["device_id"] } },
+  { name: "run_script_and_wait", description: "Run a script on a device and poll for its completed result, for a diagnostic script whose output you actually need to read (e.g. a speed test that writes its result to the device's activity log) - not for a fix-and-move-on script where nothing needs reading back (use run_script_on_device for those; polling adds real wall-clock delay for no benefit there). Queues via the same POST /device/{id}/script/run as run_script_on_device, then polls GET /device/{id}/activities (activityType SCRIPT) every 5 seconds, looking for a new activity timestamped after the script was queued, until maxWaitSeconds elapses. Returns {completed: true, activity: {...}} with the full matched activity object (read whatever fields it actually contains - NinjaOne's own SCRIPT activity schema, e.g. status/activityResult/data, isn't fully pinned down here, so no field is silently dropped or over-parsed) if found in time, or {completed: false, message: ...} if not - a device that's offline or on a slow check-in interval can legitimately take longer than any reasonable wait budget, and that's a real, expected outcome to report honestly, not an error to retry blindly. Cloudflare's own request wall-clock limit is an unverified assumption here (not confirmed against this deployment's actual plan) - if calls consistently time out or error before maxWaitSeconds is reached, that's this limit being hit in practice, not a bug in the polling logic; lower maxWaitSeconds or fall back to run_script_on_device + a later separate list_device_activities check instead.", inputSchema: { type: "object", properties: { device_id: { type: "number" }, script_id: { type: "number", description: "Script ID from list_automation_scripts" }, script_uid: { type: "string", description: "Instead of script_id: the automation's uid (GUID) for an 'Install Application' automation (not listed by list_automation_scripts; the whitelist entry carries it as script_uid). The wait then matches the ACTION activity whose sourceConfigUid equals this uid." }, runAs: { type: "string", description: "SYSTEM or LOGGED_IN_USER (default SYSTEM)" }, parameters: { type: "object", description: "Script parameter key-value pairs" }, maxWaitSeconds: { type: "number", description: "How long to poll before giving up and returning completed:false (default 60, capped at 120 - kept conservative pending real confirmation of how long a single call here can safely run)." } }, required: ["device_id"] } },
   { name: "set_device_maintenance", description: "Put a device in maintenance mode for a specified duration", inputSchema: { type: "object", properties: { device_id: { type: "number" }, start: { type: "string", description: "Start datetime ISO e.g. 2026-05-22T18:00:00Z (omit for now)" }, end: { type: "string", description: "End datetime ISO e.g. 2026-05-22T20:00:00Z" }, disabledFeatures: { type: "array", items: { type: "string" }, description: "Features to disable: ALERTS, PATCHING, AVSCANS, TASKS (omit for all)" } }, required: ["device_id", "end"] } },
   { name: "end_device_maintenance", description: "Cancel/end maintenance mode on a device immediately", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_maintenance", description: "Get current maintenance window status for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
@@ -146,6 +173,7 @@ const TOOLS = [
 
   // Automation Scripts
   { name: "list_automation_scripts", description: "List all available automation scripts", inputSchema: { type: "object", properties: {} } },
+  { name: "ninja_api_get", description: "Read-only escape hatch: GET any NinjaOne API v2 path (e.g. '/automation/scripts', '/device/671/activities') with optional query params, for data no dedicated tool covers. GET only - it cannot change anything. Not part of the Help Desk agent's allowlist; for humans and discovery.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path under /v2, starting with '/'" }, params: { type: "object", additionalProperties: { type: "string" }, description: "Query string parameters" } }, required: ["path"] } },
 
   // Users
   { name: "list_users", description: "List NinjaOne technician/user accounts", inputSchema: { type: "object", properties: {} } },
@@ -221,10 +249,11 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     // Device Actions (Write)
     case "reboot_device": return JSON.stringify(await ninjaPost(env, `/device/${args.device_id}/reboot/${args.mode ?? "NORMAL"}`), null, 2);
-    case "run_script_on_device": return JSON.stringify(await ninjaPost(env, `/device/${args.device_id}/script/run`, { id: args.script_id, runAs: args.runAs ?? "SYSTEM", parameters: args.parameters ?? {} }), null, 2);
+    case "run_script_on_device": return JSON.stringify(await runScriptPost(env, args), null, 2);
     case "run_script_and_wait": {
       const queuedAtSec = Math.floor(Date.now() / 1000);
-      await ninjaPost(env, `/device/${args.device_id}/script/run`, { id: args.script_id, runAs: args.runAs ?? "SYSTEM", parameters: args.parameters ?? {} });
+      const uid = args.script_uid ? String(args.script_uid) : null;
+      await runScriptPost(env, args);
       const maxWaitMs = Math.min(Number(args.maxWaitSeconds ?? 60), 120) * 1000;
       const pollIntervalMs = 5000;
       const deadline = Date.now() + maxWaitMs;
@@ -232,8 +261,12 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // no point burning the very first interval waiting before checking at all.
       await sleep(2000);
       while (true) {
-        const activitiesResp = await ninjaGet(env, `/device/${args.device_id}/activities`, { activityType: "SCRIPT", pageSize: "10" }) as any;
-        const list: any[] = activitiesResp.activities || (Array.isArray(activitiesResp) ? activitiesResp : []);
+        // An installer automation (run by uid) shows up as ACTION activities
+        // (sourceConfigUid = the uid; STARTED then COMPLETED with activityResult),
+        // not SCRIPT ones - so poll unfiltered and match on the uid + COMPLETED.
+        const activitiesResp = await ninjaGet(env, `/device/${args.device_id}/activities`, uid ? { pageSize: "25" } : { activityType: "SCRIPT", pageSize: "10" }) as any;
+        const list0: any[] = activitiesResp.activities || (Array.isArray(activitiesResp) ? activitiesResp : []);
+        const list: any[] = uid ? list0.filter((a) => String(a.sourceConfigUid ?? "") === uid && String(a.statusCode ?? "") === "COMPLETED") : list0;
         // activityTime is Unix seconds (matches every other timestamp field this
         // Worker already reads, e.g. device.created/lastContact) - a small 5s
         // buffer before queuedAtSec guards against clock skew between this
@@ -244,7 +277,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         if (Date.now() >= deadline) {
           return JSON.stringify({
             completed: false,
-            message: `Script queued but no matching SCRIPT activity appeared within ${Math.round(maxWaitMs / 1000)}s - the device may be offline, on a slow check-in interval, or the activity log simply hasn't caught up yet. Not an error: call list_device_activities again later (a future ticket cycle, or after other investigation this same turn) rather than treating this as a failed test.`,
+            message: `Script queued but no matching ${uid ? "COMPLETED ACTION (uid " + uid + ")" : "SCRIPT"} activity appeared within ${Math.round(maxWaitMs / 1000)}s - the device may be offline, on a slow check-in interval, or the activity log simply hasn't caught up yet. Not an error: call list_device_activities again later (a future ticket cycle, or after other investigation this same turn) rather than treating this as a failed test.`,
           }, null, 2);
         }
         await sleep(pollIntervalMs);
@@ -280,6 +313,13 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     // Policies / Scripts / Users / Groups
     case "list_policies": return JSON.stringify(await ninjaGet(env, "/policies"), null, 2);
     case "list_automation_scripts": return JSON.stringify(await ninjaGet(env, "/automation/scripts"), null, 2);
+    case "ninja_api_get": {
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..")) throw new Error("ninja_api_get: path must start with '/' and contain no '..'.");
+      const params = (args.params && typeof args.params === "object") ? Object.fromEntries(Object.entries(args.params as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined;
+      const text = JSON.stringify(await ninjaGet(env, path, params), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
     case "list_users": return JSON.stringify(await ninjaGet(env, "/users"), null, 2);
     case "list_device_groups": return JSON.stringify(await ninjaGet(env, "/device-groups"), null, 2);
 
