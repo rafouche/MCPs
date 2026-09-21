@@ -131,6 +131,28 @@ alert ticket - rejected by Roger: two tickets for the tech) and "m365"
 CIPP-SAM has no Mail.Send) remain selectable. `page_test: true` with a
 scratch ticket_id of ours sends a marked TEST page from that ticket.
 
+Who gets paged (ticket mode) is looked up at send time from Halo's own
+Shifts calendar, not fixed: `resolveOnCall` GETs `/Appointment` with
+`showshifts=true&shiftsonly=true&showall=true` (shifts are appointments of
+`type` 4 and are invisible without showshifts; recurring masters are
+templates and skipped), keeps the ones whose `shift_type_id` equals
+`ON_CALL_SHIFT_TYPE_ID` (default 1 = Halo's stock "On-call" shift type; a
+subject containing "on call" also counts) and whose start<=now<end (Halo
+times are UTC without a suffix), then reads each agent's email from
+`/Agent/{id}` and their text address from `ON_CALL_SMS_MAP` (JSON, agent id
+or email -> gateway address). First agent = `emailto`, the rest + every SMS
+address = `emailcc`. Nobody scheduled, agent without an email, or any error
+-> `ON_CALL_EMAIL` / `ON_CALL_CC_EMAILS` (the fixed fallback), and both the
+response (`on_call_alert.on_call.source`) and the `[EMERGENCY ACK SENT]`
+audit note say which was used. `ON_CALL_LOOKUP: "off"` disables the lookup.
+`get_on_call` (read-only, optional `at`) shows the same resolution;
+`escalate_emergency` accepts `at` only with `dry_run`/`page_test`. A
+Leo-style "Fixed shift" (shift_type_id 0) never matches. Verified against
+Roger's test shift (appointment 19875, 2026-09-22T01:30-02:00Z): `at` inside
+it resolves to agent 28, outside it falls back. `halo_api_get` is the
+read-only raw GET tool this was discovered with; it is not in the
+pipeline's allowlist.
+
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
 to any [INTENDED ...] line) verbatim as a public emailed reply, collapses
