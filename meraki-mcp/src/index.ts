@@ -87,6 +87,8 @@ const TOOLS = [
   // SSIDs (Wireless)
   { name: "list_ssids", description: "List SSIDs configured on a wireless network", inputSchema: { type: "object", properties: { network_id: { type: "string", description: "Network ID (must be wireless network)" } }, required: ["network_id"] } },
   { name: "get_ssid", description: "Get details of a specific SSID", inputSchema: { type: "object", properties: { network_id: { type: "string", description: "Network ID" }, ssid_number: { type: "number", description: "SSID number (0-14)" } }, required: ["network_id", "ssid_number"] } },
+  { name: "get_ssid_schedule", description: "An SSID's availability schedule (Wireless > SSID > Scheduling): whether scheduling is enabled and the per-day ranges the SSID is broadcast. This, not list_ssids/get_ssid, answers 'the Wi-Fi turns off at a set time'. Read-only.", inputSchema: { type: "object", properties: { network_id: { type: "string" }, ssid_number: { type: "number", description: "SSID number (0-14)" } }, required: ["network_id", "ssid_number"] } },
+  { name: "list_switch_port_schedules", description: "The network's switch port schedules (Switch > Port schedules) - a PoE/port on-off schedule that can power access points down at a set time. Read-only.", inputSchema: { type: "object", properties: { network_id: { type: "string" } }, required: ["network_id"] } },
   { name: "update_ssid", description: "Update SSID name, password, auth mode, or enabled state", inputSchema: { type: "object", properties: { network_id: { type: "string", description: "Network ID" }, ssid_number: { type: "number", description: "SSID number (0-14)" }, name: { type: "string" }, enabled: { type: "boolean" }, psk: { type: "string", description: "WPA password" }, authMode: { type: "string", description: "open, psk, 8021x-radius" } }, required: ["network_id", "ssid_number"] } },
 
   // Switch Ports
@@ -213,6 +215,8 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     // SSIDs
     case "list_ssids": return JSON.stringify(await merakiGet(env, `/networks/${args.network_id}/wireless/ssids`), null, 2);
     case "get_ssid": return JSON.stringify(await merakiGet(env, `/networks/${args.network_id}/wireless/ssids/${args.ssid_number}`), null, 2);
+    case "get_ssid_schedule": return JSON.stringify(await merakiGet(env, `/networks/${args.network_id}/wireless/ssids/${args.ssid_number}/schedules`), null, 2);
+    case "list_switch_port_schedules": return JSON.stringify(await merakiGet(env, `/networks/${args.network_id}/switch/portSchedules`), null, 2);
     case "update_ssid": { const body: Record<string, unknown> = {}; if (args.name !== undefined) body.name = args.name; if (args.enabled !== undefined) body.enabled = args.enabled; if (args.psk !== undefined) body.psk = args.psk; if (args.authMode !== undefined) body.authMode = args.authMode; return JSON.stringify(await merakiPut(env, `/networks/${args.network_id}/wireless/ssids/${args.ssid_number}`, body), null, 2); }
 
     // Switch Ports
