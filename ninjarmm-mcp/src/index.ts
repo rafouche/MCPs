@@ -128,22 +128,38 @@ async function runScriptPost(env: Env, args: Record<string, any>): Promise<unkno
     throw err;
   }
 }
+// NinjaOne sits behind Cloudflare and answers 522/524 (origin unreachable /
+// origin timeout) now and then - twice in a row on ticket #22523's approved
+// script run (2026-09-22), which then had to be held for a human. Retry
+// briefly: any GET on a 5xx; a POST only on 502/503/522, where Cloudflare
+// never got the request to the app (a 524 means the app may already have
+// acted on it, so a POST is not repeated then).
+const RETRY_GET = new Set([500, 502, 503, 504, 522, 524]);
+const RETRY_POST = new Set([502, 503, 522]);
+async function fetchWithRetry(input: string, init: RequestInit, retryOn: Set<number>, attempts = 3): Promise<Response> {
+  let res = await fetch(input, init);
+  for (let i = 1; i < attempts && retryOn.has(res.status); i++) {
+    await sleep(3000 * i);
+    res = await fetch(input, init);
+  }
+  return res;
+}
 async function ninjaGet(env: Env, path: string, params?: Record<string, string>): Promise<unknown> {
   const token = await getToken(env);
   const url = new URL(`${env.NINJA_BASE_URL}/v2${path}`);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithRetry(url.toString(), { headers: { Authorization: `Bearer ${token}` } }, RETRY_GET);
   if (!res.ok) throw new Error(`GET /v2${path} failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
 
 async function ninjaPost(env: Env, path: string, body?: unknown): Promise<unknown> {
   const token = await getToken(env);
-  const res = await fetch(`${env.NINJA_BASE_URL}/v2${path}`, {
+  const res = await fetchWithRetry(`${env.NINJA_BASE_URL}/v2${path}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  });
+  }, RETRY_POST);
   if (!res.ok) throw new Error(`POST /v2${path} failed (${res.status}): ${await res.text()}`);
   return res.status === 204 ? { success: true } : res.json();
 }
