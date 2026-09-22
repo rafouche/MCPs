@@ -268,7 +268,11 @@ function applyAsOf(actions: any[], asOf: unknown): { actions: any[]; hidden: num
 // more via the HUMAN_TOUCH_IGNORE_APP_IDS var (comma-separated
 // actionby_application_id values).
 function integrationAppIds(env?: Env): Set<string> {
-  const ids = new Set(["Claude", "Huntress"]);
+  // "Acronis Client Portal": Halo's Acronis integration app posts its backup
+  // alerts through the Allie agent account (who_agentid 17, who_type 1) -
+  // seen on every Acronis ticket since at least 2026-08-22. Not a human, not
+  // this pipeline; without this it would count as human_touch (2026-09-22).
+  const ids = new Set(["Claude", "Huntress", "Acronis Client Portal"]);
   const extra = (env as any)?.HUMAN_TOUCH_IGNORE_APP_IDS;
   if (typeof extra === "string") extra.split(",").map((x: string) => x.trim()).filter(Boolean).forEach((x: string) => ids.add(x));
   return ids;
