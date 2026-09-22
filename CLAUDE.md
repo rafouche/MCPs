@@ -195,6 +195,23 @@ scripts` never lists Install Application automations; their uid is the
 uses `{type:"ACTION", uid}` (works only with the user token). `ninja_api_get`
 is the read-only raw GET tool (not in the pipeline allowlist).
 
+First real run through the API (script 234 "Latest Wrike Desktop Install"
+on device 671, 2026-09-22 01:55Z, SUCCESS, 4.6.1.3034 -> 4.6.1.3034) took
+three more fixes, all in `scriptRunBody`/`run_script_and_wait`: the run
+body's `parameters` is a STRING (an object 400s with "Cannot deserialize
+value of type java.lang.String"); `runAs` must be the lowercase `system`
+identifier (uppercase SYSTEM is treated as a credential name and the run
+fails with "Unable to retrieved credential information" / a
+SECURITY_CREDENTIAL_ACCESS_DENIED activity); and runs are logged as
+ACTIONSET START_REQUESTED -> ACTION STARTED -> ACTION COMPLETED
+(activityResult SUCCESS|FAILURE, full script output in `message`) - there
+is no SCRIPT activityType and filtering on one 500s
+(InvalidFilterException), so the wait polls unfiltered and matches the
+COMPLETED ACTION after the queue time. Roger did the one-time sign-in the
+same night (obtained_at 2026-09-22T01:50Z); it needed the redirect URI
+added to the NinjaOne client app first (unauthorized_client / Invalid
+redirect_uri until then).
+
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
 to any [INTENDED ...] line) verbatim as a public emailed reply, collapses
