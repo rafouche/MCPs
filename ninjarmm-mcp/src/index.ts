@@ -3,26 +3,86 @@
   NINJA_BASE_URL: string;
   NINJA_CLIENT_ID: string;
   NINJA_CLIENT_SECRET: string;
+  // User-context OAuth (2026-09-22). NinjaOne refuses POST /device/{id}/script/run
+  // (and ticket writes) to a client-credentials token: 403 user_context_required.
+  // Only a token obtained by a person signing in (authorization code + refresh
+  // token grants, offline_access scope) can run scripts. GET /oauth/start on
+  // this Worker sends that person to NinjaOne's sign-in once; the callback
+  // stores the refresh token in the NINJA_TOKENS KV namespace, and getToken()
+  // prefers it from then on, refreshing as needed. With no stored token the
+  // Worker falls back to client credentials, so reads keep working either way.
+  NINJA_TOKENS?: KVNamespace;
+  NINJA_OAUTH_REDIRECT?: string; // default: https://<this worker>/oauth/callback
 }
 
-let cachedToken: { token: string; expires: number } | null = null;
+const OAUTH_SCOPES = "monitoring management control offline_access";
+const CC_SCOPES = "monitoring management control";
+const KV_KEY = "oauth";
 
-async function getToken(env: Env): Promise<string> {
-  if (cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
+type StoredOAuth = { access_token?: string; expires_at?: number; refresh_token: string; obtained_at: number; refreshed_at?: number; last_error?: string; note?: string };
+
+let cachedToken: { token: string; expires: number; source: "user" | "client_credentials" } | null = null;
+
+async function tokenRequest(env: Env, body: Record<string, string>): Promise<{ access_token: string; expires_in: number; refresh_token?: string }> {
   const res = await fetch(`${env.NINJA_BASE_URL}/ws/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: env.NINJA_CLIENT_ID,
-      client_secret: env.NINJA_CLIENT_SECRET,
-      scope: "monitoring management control",
-    }).toString(),
+    body: new URLSearchParams({ client_id: env.NINJA_CLIENT_ID, client_secret: env.NINJA_CLIENT_SECRET, ...body }).toString(),
   });
   if (!res.ok) throw new Error(`NinjaOne auth failed (${res.status}): ${await res.text()}`);
-  const data = await res.json() as { access_token: string; expires_in: number };
-  cachedToken = { token: data.access_token, expires: Date.now() + (data.expires_in * 1000) };
+  return await res.json() as { access_token: string; expires_in: number; refresh_token?: string };
+}
+
+async function readStored(env: Env): Promise<StoredOAuth | null> {
+  if (!env.NINJA_TOKENS) return null;
+  const raw = await env.NINJA_TOKENS.get(KV_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as StoredOAuth; } catch { return null; }
+}
+
+// Prefer the user-context token when one is stored; refresh it when it has
+// under 2 minutes left; keep the newest refresh token NinjaOne hands back.
+// Any refresh failure is recorded (last_error) and the call falls back to
+// client credentials so read-only work never stops - script runs will then
+// fail with user_context_required until someone signs in again at /oauth/start.
+async function getToken(env: Env): Promise<string> {
+  if (cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
+  const stored = await readStored(env);
+  if (stored && stored.refresh_token) {
+    if (stored.access_token && stored.expires_at && stored.expires_at > Date.now() + 120000) {
+      cachedToken = { token: stored.access_token, expires: stored.expires_at, source: "user" };
+      return stored.access_token;
+    }
+    try {
+      const data = await tokenRequest(env, { grant_type: "refresh_token", refresh_token: stored.refresh_token });
+      const next: StoredOAuth = { ...stored, access_token: data.access_token, expires_at: Date.now() + data.expires_in * 1000, refresh_token: data.refresh_token || stored.refresh_token, refreshed_at: Date.now(), last_error: undefined };
+      await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify(next));
+      cachedToken = { token: data.access_token, expires: next.expires_at!, source: "user" };
+      return data.access_token;
+    } catch (err) {
+      try { await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify({ ...stored, last_error: `${new Date().toISOString()} ${(err as Error).message}` })); } catch { /* ignore */ }
+    }
+  }
+  const data = await tokenRequest(env, { grant_type: "client_credentials", scope: CC_SCOPES });
+  cachedToken = { token: data.access_token, expires: Date.now() + (data.expires_in * 1000), source: "client_credentials" };
   return data.access_token;
+}
+
+function redirectUri(env: Env, request: Request): string {
+  return (env.NINJA_OAUTH_REDIRECT || `${new URL(request.url).origin}/oauth/callback`).trim();
+}
+
+async function oauthStatus(env: Env): Promise<Record<string, unknown>> {
+  const stored = await readStored(env);
+  return {
+    kv_bound: !!env.NINJA_TOKENS,
+    user_context: !!(stored && stored.refresh_token),
+    obtained_at: stored?.obtained_at ? new Date(stored.obtained_at).toISOString() : null,
+    refreshed_at: stored?.refreshed_at ? new Date(stored.refreshed_at).toISOString() : null,
+    access_token_expires_at: stored?.expires_at ? new Date(stored.expires_at).toISOString() : null,
+    last_error: stored?.last_error ?? null,
+    note: stored && stored.refresh_token ? "Script runs use the signed-in user's context." : "No user-context token stored: script runs will be refused by NinjaOne (user_context_required). Sign in once at /oauth/start.",
+  };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -50,8 +110,8 @@ async function runScriptPost(env: Env, args: Record<string, any>): Promise<unkno
     return await ninjaPost(env, `/device/${args.device_id}/script/run`, scriptRunBody(args));
   } catch (err) {
     const msg = (err as Error).message;
-    if (args.script_uid && /user_context_required/.test(msg)) {
-      throw new Error(`NinjaOne refused to run automation ${args.script_uid} by uid: an 'Install Application' automation needs a user-context token, and this Worker authenticates with an API key that has none (user_context_required). Wrap the same install in a library SCRIPT (PowerShell) and run that by script_id instead - scripts run fine with this key. Original: ${msg}`);
+    if (/user_context_required/.test(msg)) {
+      throw new Error(`NinjaOne refused the script run: POST /device/{id}/script/run needs a USER-context token (a person signed in through the authorization-code flow), and this Worker is currently using a client-credentials token that has none (user_context_required). This is NinjaOne's rule for every script and automation run, not a permissions setting on the script. Fix: an admin opens this Worker's /oauth/start once and signs in to NinjaOne; from then on runs use that user's context. Nothing ran. Original: ${msg}`);
     }
     throw err;
   }
@@ -415,6 +475,37 @@ export default {
       }
     }
     if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok", instance: env.NINJA_BASE_URL }), { headers: JSON_HEADERS });
+    // --- user-context OAuth (see Env comment) ---
+    if (url.pathname === "/oauth/start") {
+      if (!env.NINJA_TOKENS) return new Response("NINJA_TOKENS KV namespace is not bound on this Worker.", { status: 500 });
+      const state = crypto.randomUUID();
+      const authorize = new URL(`${env.NINJA_BASE_URL}/ws/oauth/authorize`);
+      authorize.searchParams.set("response_type", "code");
+      authorize.searchParams.set("client_id", env.NINJA_CLIENT_ID);
+      authorize.searchParams.set("redirect_uri", redirectUri(env, request));
+      authorize.searchParams.set("scope", OAUTH_SCOPES);
+      authorize.searchParams.set("state", state);
+      return new Response(null, { status: 302, headers: { Location: authorize.toString(), "Set-Cookie": `ninja_oauth_state=${state}; Path=/oauth; HttpOnly; Secure; SameSite=Lax; Max-Age=600` } });
+    }
+    if (url.pathname === "/oauth/callback") {
+      if (!env.NINJA_TOKENS) return new Response("NINJA_TOKENS KV namespace is not bound on this Worker.", { status: 500 });
+      const err = url.searchParams.get("error");
+      if (err) return new Response(`NinjaOne returned an error: ${err} ${url.searchParams.get("error_description") ?? ""}`, { status: 400 });
+      const code = url.searchParams.get("code"); const state = url.searchParams.get("state");
+      const cookieState = (request.headers.get("Cookie") || "").split(/;\s*/).map((c) => c.split("=")).find((kv) => kv[0] === "ninja_oauth_state")?.[1];
+      if (!code || !state || state !== cookieState) return new Response("Missing or mismatched state - start again at /oauth/start.", { status: 400 });
+      try {
+        const data = await tokenRequest(env, { grant_type: "authorization_code", code, redirect_uri: redirectUri(env, request) });
+        if (!data.refresh_token) return new Response("NinjaOne returned no refresh token - the client app needs the Refresh Token grant and the offline_access scope enabled.", { status: 400 });
+        const stored: StoredOAuth = { access_token: data.access_token, expires_at: Date.now() + data.expires_in * 1000, refresh_token: data.refresh_token, obtained_at: Date.now() };
+        await env.NINJA_TOKENS.put(KV_KEY, JSON.stringify(stored));
+        cachedToken = null;
+        return new Response("NinjaOne user-context sign-in complete. This Worker can now run scripts as you. You can close this tab.", { headers: { "Content-Type": "text/plain", "Set-Cookie": "ninja_oauth_state=; Path=/oauth; Max-Age=0" } });
+      } catch (e) {
+        return new Response(`Code exchange failed: ${(e as Error).message}`, { status: 400 });
+      }
+    }
+    if (url.pathname === "/oauth/status") return new Response(JSON.stringify(await oauthStatus(env), null, 2), { headers: JSON_HEADERS });
     if (url.pathname === "/status") {
       try {
         const status = await buildNocStatus(env);

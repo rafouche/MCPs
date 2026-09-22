@@ -481,7 +481,13 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // regardless of what note_is_private says.
       if (args.note) {
         const sendEmail = args.send_email === true;
-        const hidden = sendEmail ? false : (args.note_is_private ?? false);
+        // Pipeline marker notes ([PIPELINE NOTE], [DRAFT PENDING APPROVAL],
+        // [NEEDS ...], [EMERGENCY ACK SENT], [APPROVED DRAFT]) are internal by
+        // definition - force them private even when the caller forgot
+        // note_is_private (real incident, ticket #22484: a [PIPELINE NOTE]
+        // landed with hiddenfromuser false).
+        const markerNote = /^\s*\[(PIPELINE NOTE|DRAFT PENDING APPROVAL|APPROVED DRAFT|EMERGENCY ACK SENT|NEEDS [A-Z ]+|INTENDED [A-Z ]+|CACHE:)/i.test(String(args.note));
+        const hidden = sendEmail ? false : ((args.note_is_private ?? false) || markerNote);
         const outcomeId = sendEmail ? 16 : 7;
         const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, note_html: noteToHtml(args.note as string), hiddenfromuser: hidden, outcome_id: outcomeId };
         // REAL INCIDENT, CONFIRMED DEAD END: every note/action created via
@@ -759,11 +765,14 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       if (Number(action.ticket_id) !== Number(args.ticket_id)) {
         throw new Error(`delete_ticket_note: action ${args.action_id} belongs to ticket ${action.ticket_id}, not ${args.ticket_id} - refusing to delete a note on the wrong ticket.`);
       }
-      if (action.hiddenfromuser !== true) {
-        throw new Error(`delete_ticket_note: action ${args.action_id} is not a private note (hiddenfromuser is not true) - refusing to delete anything that could be a real, client-visible action.`);
-      }
       const note: string = typeof action.note === "string" ? action.note : "";
       const isOwnPipelineNote = hasPipelineNoteMarker(note) && String(action.actionby_application_id ?? "") === "Claude";
+      // Our own [PIPELINE NOTE] is deletable even when it was posted without
+      // hiddenfromuser (ticket #22484, 2026-09-22): it is this pipeline's text,
+      // never a client's or a colleague's. Everything else must be private.
+      if (action.hiddenfromuser !== true && !isOwnPipelineNote) {
+        throw new Error(`delete_ticket_note: action ${args.action_id} is not a private note (hiddenfromuser is not true) - refusing to delete anything that could be a real, client-visible action.`);
+      }
       if (!hasDraftMarker(note) && !isOwnPipelineNote) {
         throw new Error(`delete_ticket_note: action ${args.action_id}'s note contains neither the literal "[DRAFT PENDING APPROVAL]" marker nor a "[PIPELINE NOTE]" marker authored by this pipeline (actionby_application_id "Claude") on its own line - refusing to delete anything that isn't clearly this pipeline's own draft or status note.`);
       }

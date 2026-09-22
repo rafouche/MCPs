@@ -164,21 +164,36 @@ pipeline's allowlist. Worker vars are now just `ON_CALL_SHIFT_TYPE_ID` and
 `ON_CALL_SMS_DOMAIN`; the old `ON_CALL_ALERT_URL` secret is unused and can
 be deleted from the Worker whenever convenient.
 
-## ninjarmm-mcp: scripts vs "Install Application" automations (2026-09-21)
-`GET /v2/automation/scripts` lists library scripts and built-in actions
-only - NinjaOne's "Install Application" automations (Administration >
-Library > Automation > Add > Installation) never appear, whatever query
-params you try. Their uid is visible as `sourceConfigUid` on the ACTION /
-ACTIONSET activities a run produces (e.g. Roger's "Latest Wrike Desktop
-Install" = fb330231-a095-4b19-9e5e-06ad9e72d5f7 on device 671). The run
-endpoint accepts `{type:"ACTION", uid}` for them, and `run_script_on_device`
-/ `run_script_and_wait` now take `script_uid` for that - but NinjaOne
-answers 403 `user_context_required` to this Worker's client-credentials
-key for type ACTION, while plain scripts by id run fine. So an installer
-the agent must run needs a library SCRIPT wrapper (the Wrike one is in
-HelpDeskAgent's docs); the uid path stays for a future user-context token.
-`ninja_api_get` is the read-only raw GET tool this was found with (not in
-the pipeline allowlist).
+## ninjarmm-mcp: running scripts needs a USER-context token (2026-09-22)
+NinjaOne refuses `POST /v2/device/{id}/script/run` to a client-credentials
+token - 403 `user_context_required` - for library scripts by id AND for
+"Install Application" automations by uid alike. Found on ticket #22484:
+the approved Wrike update failed twice with that error, so every "Run
+NinjaOne script" whitelist entry had been unrunnable via API since day
+one (the earlier claim here that scripts by id run fine was wrong; it was
+never exercised). Reads and device-management writes work with either
+token. Fix: the Worker now holds a user-context token obtained once by a
+person: `GET /oauth/start` (302 to NinjaOne's `/ws/oauth/authorize`,
+scopes monitoring management control offline_access, state cookie) ->
+`/oauth/callback` exchanges the code at `/ws/oauth/token`
+(authorization_code) and stores {access_token, expires_at, refresh_token}
+in KV namespace NINJA_TOKENS (id 67d6fba4a3b04ab7a13c1154b9cf8e56);
+`getToken()` prefers it, refreshes with grant_type=refresh_token when
+under 2 min left, keeps the newest refresh token, records last_error and
+falls back to client credentials on failure so reads never stop.
+`GET /oauth/status` shows the state without secrets. Requirements on the
+NinjaOne client app (Administration > Apps > API > Client app IDs):
+platform Web, grants Authorization Code + Refresh Token (+ Client
+Credentials for the fallback), scopes monitoring/management/control/
+offline_access, redirect URI https://ninjarmm-mcp.young-math-a33a.workers.dev/oauth/callback.
+If the existing app is "API Services" it cannot do this - make a new Web
+app and rotate NINJA_CLIENT_ID/SECRET (`wrangler secret put`, which the
+sandbox classifier blocks - Roger runs it). Script runs then appear in
+Ninja as "User <signed-in person> requested start". Also: `/automation/
+scripts` never lists Install Application automations; their uid is the
+`sourceConfigUid` on ACTION activities, and `script_uid` on the run tools
+uses `{type:"ACTION", uid}` (works only with the user token). `ninja_api_get`
+is the read-only raw GET tool (not in the pipeline allowlist).
 
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
