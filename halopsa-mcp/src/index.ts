@@ -15,6 +15,7 @@ export interface Env {
   EMERGENCY_ACK_SIGNATURE?: string; // overrides the default Allie sign-off below
   ON_CALL_SHIFT_TYPE_ID?: string;
   ON_CALL_SMS_DOMAIN?: string;
+  PIPELINE_AGENT_ID?: string; // the Help Desk agent's own Halo agent id (default 17, "Allie") - see guardUnassign
   HALO_BASE_URL: string;
   HALO_CLIENT_ID: string;
   HALO_CLIENT_SECRET: string;
@@ -32,6 +33,24 @@ async function haloGet(env: Env, path: string, params?: Record<string, string>):
   const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`GET ${path} failed (${res.status}): ${await res.text()}`);
   return res.json();
+}
+// Never take a ticket away from a person. Real incident (ticket #22506,
+// 2026-09-22): the classifier saw the ticket unassigned, Erick claimed it two
+// minutes later, and the resolver's draft write then set agent_id 1, moving
+// it "From: Erick Gonzales; To: Unassigned". A request to set agent_id to
+// Unassigned is honored only when the ticket is currently Unassigned or held
+// by the pipeline's own agent; otherwise the agent change is dropped (the
+// rest of the write still lands) and the response says so.
+async function guardUnassign(env: Env, ticketId: unknown, requestedAgentId: unknown, results: Record<string, unknown>): Promise<boolean> {
+  if (Number(requestedAgentId) !== 1) return true;
+  const pipelineAgent = Number(env.PIPELINE_AGENT_ID || 17);
+  try {
+    const t = (await haloGet(env, `/Tickets/${ticketId}`)) as any;
+    const current = Number(t?.agent_id ?? 1);
+    if (current === 1 || current === pipelineAgent) return true;
+    results.agent_change_skipped = `ticket is assigned to ${t?.agent_name || `agent ${current}`} (a person) - left with them instead of moving it to Unassigned; a human who has claimed a ticket owns it.`;
+    return false;
+  } catch { return true; }
 }
 async function haloPost(env: Env, path: string, body: unknown): Promise<unknown> {
   const token = await getToken(env);
@@ -436,7 +455,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const fieldPayload: Record<string, unknown> = { id: args.ticket_id };
       let hasFieldChange = false;
       if (args.status_id) { fieldPayload.status_id = args.status_id; hasFieldChange = true; }
-      if (args.agent_id) { fieldPayload.agent_id = args.agent_id; hasFieldChange = true; }
+      if (args.agent_id && await guardUnassign(env, args.ticket_id, args.agent_id, results)) { fieldPayload.agent_id = args.agent_id; hasFieldChange = true; }
       if (args.team_id) { fieldPayload.team_id = args.team_id; hasFieldChange = true; }
       if (args.category_1) { fieldPayload.category_1 = args.category_1; hasFieldChange = true; }
       if (args.priority_id) { fieldPayload.priority_id = args.priority_id; hasFieldChange = true; }
@@ -549,7 +568,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const fieldPayload: Record<string, unknown> = { id: args.ticket_id };
       let hasFieldChange = false;
       if (args.status_id) { fieldPayload.status_id = args.status_id; hasFieldChange = true; }
-      if (args.agent_id) { fieldPayload.agent_id = args.agent_id; hasFieldChange = true; }
+      if (args.agent_id && await guardUnassign(env, args.ticket_id, args.agent_id, results)) { fieldPayload.agent_id = args.agent_id; hasFieldChange = true; }
       if (args.team_id) { fieldPayload.team_id = args.team_id; hasFieldChange = true; }
       if (args.category_1) { fieldPayload.category_1 = args.category_1; hasFieldChange = true; }
       if (args.priority_id) { fieldPayload.priority_id = args.priority_id; hasFieldChange = true; }
@@ -708,12 +727,13 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const fieldPayload: Record<string, unknown> = { id: ticketId };
       let hasField = false;
       if (args.status_id) { fieldPayload.status_id = args.status_id; hasField = true; }
-      if (args.agent_id !== undefined && args.agent_id !== null) { fieldPayload.agent_id = args.agent_id; hasField = true; }
+      const guardNotes: Record<string, unknown> = {};
+      if (args.agent_id !== undefined && args.agent_id !== null && await guardUnassign(env, ticketId, args.agent_id, guardNotes)) { fieldPayload.agent_id = args.agent_id; hasField = true; }
       if (args.team_id) { fieldPayload.team_id = args.team_id; hasField = true; }
       if (args.dry_run === true) {
         return JSON.stringify({ dry_run: true, draft_action_id: draft.id, would_send_to: emailFix ?? currentEmailTo, emailto_correction: emailFix, reply_text: replyText, would_collapse_draft: true, would_delete_pipeline_notes: pipelineNotes.map((a: any) => a.id), would_update: hasField ? fieldPayload : null }, null, 2);
       }
-      const result: Record<string, unknown> = { ticket_id: ticketId, draft_action_id: draft.id };
+      const result: Record<string, unknown> = { ticket_id: ticketId, draft_action_id: draft.id, ...guardNotes };
       if (emailFix) { await haloPost(env, "/Tickets", [{ id: ticketId, emailtolist: emailFix }]); result.emailto_corrected_to = emailFix; }
       const sent = (await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: replyText, note_html: noteToHtml(replyText), hiddenfromuser: false, outcome_id: 16 }])) as any;
       const sentAction = Array.isArray(sent) ? sent[0] : sent;

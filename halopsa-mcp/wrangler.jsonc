@@ -13,6 +13,7 @@
   // (no number = email only). Nobody on call = nobody paged; there is no
   // fallback address by design. Change here and `npm run deploy`.
   "vars": {
+    "PIPELINE_AGENT_ID": "17",
     "ON_CALL_SHIFT_TYPE_ID": "1",
     "ON_CALL_SMS_DOMAIN": "altec.text.email"
   }
