@@ -222,3 +222,14 @@ refuses on 0 or 2+ drafts or an empty draft. It can only send text a human
 already approved - never text supplied in the call. `dry_run: true`.
 Real incident: #22390's reply sent but its draft never collapsed when
 these were separate model-driven steps.
+
+## halopsa-mcp: an agent "Opened" action is not ownership (2026-09-23)
+
+`human_touch` (get_ticket_history, get_ticket_time_entries, the candidate
+feed) ignores actions whose outcome is "Opened": an agent opening a ticket
+on a client's behalf and leaving it unassigned is not working it. Ticket
+#22589: Roger opened it for SJP Law and it sat untouched because his Opened
+action counted as a human touch. The opener is reported as
+`human_touch.opened_by` / `opened_by_agentid` / `opened_at` instead.
+HelpDeskAgent's deterministic classifier applies the same exclusion
+(v2.14.3).

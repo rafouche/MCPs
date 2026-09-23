@@ -296,16 +296,25 @@ function integrationAppIds(env?: Env): Set<string> {
   if (typeof extra === "string") extra.split(",").map((x: string) => x.trim()).filter(Boolean).forEach((x: string) => ids.add(x));
   return ids;
 }
+// An agent opening a ticket on a client's behalf (outcome "Opened") and
+// leaving it unassigned is not working it - HelpDeskAgent v2.14.3, ticket
+// #22589 (Roger opened it for SJP Law, it sat untouched because his Opened
+// action counted as ownership). Only real work counts; the opener is
+// reported separately as human_touch.opened_by.
+const NOT_OWNERSHIP_OUTCOMES = new Set(["Opened"]);
 function isHumanAction(a: any, ignore: Set<string>): boolean {
-  return a.who_type === 1 && !ignore.has(String(a.actionby_application_id ?? ""));
+  return a.who_type === 1 && !ignore.has(String(a.actionby_application_id ?? "")) && !NOT_OWNERSHIP_OUTCOMES.has(String(a.outcome ?? ""));
 }
 
 function computeHumanTouch(actions: any[], env?: Env) {
   const ignore = integrationAppIds(env);
   const human = actions.filter((a: any) => isHumanAction(a, ignore));
+  const opened = actions.find((a: any) => a.who_type === 1 && !ignore.has(String(a.actionby_application_id ?? "")) && NOT_OWNERSHIP_OUTCOMES.has(String(a.outcome ?? "")));
   return {
     found: human.length > 0,
     actions: human.map((a: any) => ({ id: a.id, who: a.who, who_agentid: a.who_agentid, datetime: a.datetime, outcome: a.outcome })),
+    // Set when an agent opened the ticket on a client's behalf; not ownership.
+    ...(opened ? { opened_by: opened.who, opened_by_agentid: opened.who_agentid, opened_at: opened.datetime } : {}),
   };
 }
 
