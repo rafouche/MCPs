@@ -274,3 +274,12 @@ keys, "Password: x"-style text in articles). See hudu-mcp/README.md. unifi-mcp a
 fails on `/memberships` with this token; deploy them with
 `../meraki-mcp/node_modules/.bin/wrangler deploy`.
 
+## halopsa-mcp: /helpdesk-gate fingerprints Ready for AI and AI Approved (2026-09-24)
+
+`/helpdesk-gate` takes optional `ready_status_id` and `approved_status_id`
+and returns `ready_for_ai` / `approved` lists of `{id, last_action_date}`
+for those statuses (Help Desk team, open). Without the params the response
+is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
+invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
+as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
+

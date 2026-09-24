@@ -1111,7 +1111,17 @@ async function fetchAllTickets(env: Env, params: Record<string, string>, pageSiz
   return { tickets: all, record_count: recordCount, truncated: all.length < recordCount };
 }
 
-async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trackedIds: string[]) {
+async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trackedIds: string[], statusIds: { ready?: string | null; approved?: string | null } = {}) {
+  // HelpDeskAgent v2.15.2: Ready for AI and AI Approved are fingerprinted too.
+  // Real incident, ticket #22609: Michael set a ticket assigned to himself to
+  // Ready for AI; it was neither unassigned nor (after one cycle) tracked, so
+  // this gate reported "nothing changed" on every cycle and it never ran.
+  const statusList = async (id: string | null | undefined) => {
+    if (!id || !/^\d+$/.test(id)) return null;
+    const r = await fetchAllTickets(env, { open_only: "true", team_id: teamId, status_id: id }, 20, 2);
+    return r.tickets.map((t: any) => ({ id: t.id, last_action_date: t.lastactiondate ?? null }));
+  };
+  const [readyList, approvedList] = await Promise.all([statusList(statusIds.ready), statusList(statusIds.approved)]);
   const [unassignedResult, stuckData, trackedResults] = await Promise.all([
     // Full paged sweep (capped) - see fetchAllTickets above for why page 1
     // alone isn't safe to rely on for this bucket.
@@ -1159,6 +1169,8 @@ async function buildHelpDeskGate(env: Env, teamId: string, agentId: string, trac
     stuck_claimed_count: (stuckData as any).record_count ?? stuckTickets.length,
     stuck_claimed_ids: stuckTickets.map((t: any) => t.id),
     tracked: trackedResults,
+    ...(readyList ? { ready_for_ai: readyList } : {}),
+    ...(approvedList ? { approved: approvedList } : {}),
   };
 }
 
@@ -1304,7 +1316,7 @@ export default {
       if (!teamId || !agentId) return new Response(JSON.stringify({ error: "team_id and agent_id query params are required" }), { status: 400, headers: JSON_HEADERS });
       const trackedIds = (url.searchParams.get("tracked_ids") || "").split(",").map((s) => s.trim()).filter(Boolean);
       try {
-        const gate = await buildHelpDeskGate(env, teamId, agentId, trackedIds);
+        const gate = await buildHelpDeskGate(env, teamId, agentId, trackedIds, { ready: url.searchParams.get("ready_status_id"), approved: url.searchParams.get("approved_status_id") });
         return new Response(JSON.stringify(gate), { headers: JSON_HEADERS });
       } catch (err) {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
