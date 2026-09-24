@@ -233,3 +233,14 @@ action counted as a human touch. The opener is reported as
 `human_touch.opened_by` / `opened_by_agentid` / `opened_at` instead.
 HelpDeskAgent's deterministic classifier applies the same exclusion
 (v2.14.3).
+
+## meraki-mcp: `meraki_api_get` raw read tool (2026-09-24)
+
+Roger: "any meraki api should be exposed, at least in read only for
+troubleshooting" (a ticket where the resolver said it could not see the
+firewall rules it needed). `meraki_api_get` GETs any Dashboard API v1 path
+(relative to /api/v1, optional query params, 60K cap) - the same shape as
+halopsa-mcp's `halo_api_get` and ninjarmm-mcp's `ninja_api_get`. GET only;
+path may not contain `..` or `?`. HelpDeskAgent v2.14.4 allows it for every
+resolver tier and the resolver prompt lists the useful firewall/NAT/content
+filtering/uplink/switch-port-status paths.

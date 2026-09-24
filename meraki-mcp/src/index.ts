@@ -49,6 +49,7 @@ function sleep(ms: number): Promise<void> {
 
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to Meraki Dashboard API and verify API key", inputSchema: { type: "object", properties: {}, required: [] } },
+  { name: "meraki_api_get", description: "Read-only escape hatch: GET any Meraki Dashboard API v1 path, for data no dedicated tool covers - the whole read surface for troubleshooting. Path is everything after /api/v1, e.g. '/networks/{networkId}/appliance/firewall/l7FirewallRules', '/networks/{networkId}/appliance/firewall/portForwardingRules', '/networks/{networkId}/appliance/firewall/oneToOneNatRules', '/networks/{networkId}/appliance/firewall/inboundFirewallRules', '/networks/{networkId}/appliance/contentFiltering', '/networks/{networkId}/appliance/trafficShaping', '/networks/{networkId}/appliance/vlans/{vlanId}' (DHCP settings), '/organizations/{orgId}/appliance/uplink/statuses', '/devices/{serial}/switch/ports/statuses', '/devices/{serial}/clients', '/networks/{networkId}/wireless/clients/{clientId}/connectionStats', '/devices/{serial}/lldpCdp', '/networks/{networkId}/appliance/security/events'. GET only - nothing here can change configuration. Optional query params (e.g. timespan, perPage) as an object. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { path: { type: "string", description: "API path starting with '/', relative to /api/v1" }, params: { type: "object", description: "Optional query-string parameters", additionalProperties: true } }, required: ["path"] } },
 
   // Organizations
   { name: "list_organizations", description: "List all Meraki organizations accessible with this API key", inputSchema: { type: "object", properties: {} } },
@@ -159,6 +160,13 @@ const TOOLS = [
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
   switch (name) {
+    case "meraki_api_get": {
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..") || path.includes("?")) throw new Error("meraki_api_get: path must start with '/', contain no '..' and no '?' (pass query params via params).");
+      const params = (args.params && typeof args.params === "object") ? Object.fromEntries(Object.entries(args.params as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined;
+      const text = JSON.stringify(await merakiGet(env, path, params), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
     case "healthcheck": { const data = await merakiGet(env, "/organizations"); return `Connected OK to ${env.MERAKI_BASE_URL} - ${JSON.stringify(data).substring(0, 100)}`; }
 
     // Organizations
