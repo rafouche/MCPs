@@ -134,6 +134,7 @@ const TOOLS = [
   { name: "list_commands", description: "List JumpCloud commands (scripts for managed systems)", inputSchema: { type: "object", properties: { limit: { type: "number" }, skip: { type: "number" } } } },
   { name: "run_command", description: "Trigger a JumpCloud command to run on its associated systems", inputSchema: { type: "object", properties: { commandId: { type: "string" } }, required: ["commandId"] } },
   { name: "jc_raw_request", description: "Make an arbitrary authenticated request to the JumpCloud API", inputSchema: { type: "object", properties: { apiVersion: { type: "string", enum: ["v1", "v2"] }, method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, query: { type: "object" }, body: {} }, required: ["apiVersion", "path"] } },
+  { name: "jc_api_get", description: "Read-only escape hatch: GET any JumpCloud API path (v1 or v2) for data no dedicated tool covers - e.g. v1 '/systemusers/{id}' (account_locked, password_expired, mfa), v2 '/systeminsights/{systemId}/logged_in_users', v2 '/systems/{id}/memberof', v1 '/systems/{id}'. GET only - use this instead of jc_raw_request for diagnostics. Optional query params as an object. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { apiVersion: { type: "string", enum: ["v1", "v2"] }, path: { type: "string", description: "Path starting with '/'" }, query: { type: "object", description: "Optional query-string parameters", additionalProperties: true } }, required: ["apiVersion", "path"] } },
 ];
 
 // ─── Tool runner ──────────────────────────────────────────────────────────────
@@ -181,6 +182,14 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_policy": return JSON.stringify(await jcGet(env, V2, `/policies/${args.policyId}`), null, 2);
     case "list_commands": return JSON.stringify(await jcGet(env, V1, "/commands", { limit: String(args.limit ?? 100), skip: String(args.skip ?? 0) }), null, 2);
     case "run_command": return JSON.stringify(await jcPost(env, V1, `/commands/${args.commandId}/trigger`), null, 2);
+    case "jc_api_get": {
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..") || path.includes("?")) throw new Error("jc_api_get: path must start with '/', contain no '..' and no '?' (pass query params via query).");
+      const base = args.apiVersion === "v1" ? V1 : V2;
+      const p = args.query ? Object.fromEntries(Object.entries(args.query as Record<string,unknown>).map(([k,v]) => [k, String(v)])) : undefined;
+      const text = JSON.stringify(await jcGet(env, base, path, p), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
     case "jc_raw_request": {
       const base = args.apiVersion === "v1" ? V1 : V2;
       const p = args.query ? Object.fromEntries(Object.entries(args.query as Record<string,unknown>).map(([k,v]) => [k, String(v)])) : undefined;

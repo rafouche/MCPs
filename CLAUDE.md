@@ -244,3 +244,27 @@ halopsa-mcp's `halo_api_get` and ninjarmm-mcp's `ninja_api_get`. GET only;
 path may not contain `..` or `?`. HelpDeskAgent v2.14.4 allows it for every
 resolver tier and the resolver prompt lists the useful firewall/NAT/content
 filtering/uplink/switch-port-status paths.
+
+## GET-only raw read tools on every diagnostic Worker (2026-09-24)
+
+Roger: "All MCP's needed for diagnostics should expose all api tools needed
+for diagnostics, at least in Read only mode." Each diagnostic Worker now has
+a GET-only escape hatch (path must start with '/', no '..' or '?', query
+params as an object, 60K response cap):
+
+| Worker | Tool | Reaches |
+|---|---|---|
+| halopsa-mcp | `halo_api_get` | any Halo API path |
+| ninjarmm-mcp | `ninja_api_get` | any NinjaOne v2 path |
+| meraki-mcp | `meraki_api_get` | any Dashboard API v1 path |
+| cipp-mcp | `cipp_api_get` | any CIPP endpoint by name |
+| unifi-mcp | `unifi_api_get` | any Site Manager path on api.ui.com |
+| unifi-mcp | `unifi_network_get` | one console's local Network Integration API via the Cloud Connector (`host_id` + path) |
+| peplink-mcp | `peplink_api_get` | any InControl2 `/rest/` path |
+| jumpcloud-mcp | `jc_api_get` | any JumpCloud v1/v2 path (GET only; `jc_raw_request` still allows every method) |
+
+huntress-mcp and Hudu proxy the vendors' own MCP servers, whose tools are
+read-only already. unifi-mcp and peplink-mcp ship an older wrangler that
+fails on `/memberships` with this token; deploy them with
+`../meraki-mcp/node_modules/.bin/wrangler deploy`.
+

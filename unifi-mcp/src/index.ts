@@ -97,6 +97,8 @@ async function connectorGetAllPages(env: Env, hostId: string, path: string, maxI
 
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to the UniFi Site Manager API and verify the API key", inputSchema: { type: "object", properties: {}, required: [] } },
+  { name: "unifi_api_get", description: "Read-only escape hatch: GET any UniFi Site Manager API path on api.ui.com (e.g. '/v1/hosts', '/v1/sites', '/v1/devices', '/ea/isp-metrics/5m', '/ea/sd-wan-configs') for data no dedicated tool covers. GET only. Optional query params as an object. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path starting with '/', e.g. /v1/hosts" }, params: { type: "object", description: "Optional query-string parameters", additionalProperties: true } }, required: ["path"] } },
+  { name: "unifi_network_get", description: "Read-only escape hatch into one console's local UniFi Network Integration API, through the Cloud Connector: GET any path under /proxy/network/integration for a host_id from list_hosts - e.g. '/v1/sites', '/v1/sites/{siteId}/devices', '/v1/sites/{siteId}/devices/{deviceId}', '/v1/sites/{siteId}/devices/{deviceId}/statistics/latest', '/v1/sites/{siteId}/clients', '/v1/sites/{siteId}/clients/{clientId}', '/v1/info'. GET only. Optional query params (offset, limit, filter) as an object. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { host_id: { type: "string", description: "Console host_id from list_hosts (state connected)" }, path: { type: "string", description: "Path starting with '/', relative to /proxy/network/integration" }, params: { type: "object", description: "Optional query-string parameters", additionalProperties: true } }, required: ["host_id", "path"] } },
 
   // Hosts / Sites
   { name: "list_hosts", description: "List all UniFi hosts (consoles/sites) accessible with this API key", inputSchema: { type: "object", properties: {} } },
@@ -118,6 +120,22 @@ const TOOLS = [
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
   switch (name) {
+    case "unifi_api_get": {
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..") || path.includes("?")) throw new Error("unifi_api_get: path must start with '/', contain no '..' and no '?' (pass query params via params).");
+      const params = (args.params && typeof args.params === "object") ? Object.fromEntries(Object.entries(args.params as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined;
+      const text = JSON.stringify(await unifiGet(env, path, params), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
+    case "unifi_network_get": {
+      const hostId = String(args.host_id ?? "");
+      if (!/^[A-Za-z0-9:_-]+$/.test(hostId)) throw new Error("unifi_network_get: host_id must be a host id from list_hosts.");
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..") || path.includes("?")) throw new Error("unifi_network_get: path must start with '/', contain no '..' and no '?' (pass query params via params).");
+      const params = (args.params && typeof args.params === "object") ? Object.fromEntries(Object.entries(args.params as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined;
+      const text = JSON.stringify(await connectorGet(env, hostId, path, params), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
     case "healthcheck": { const data = await unifiGet(env, "/v1/hosts"); return `Connected OK to ${UNIFI_BASE} - ${JSON.stringify(data).substring(0, 150)}`; }
 
     case "list_hosts": return JSON.stringify(await unifiGet(env, "/v1/hosts"), null, 2);

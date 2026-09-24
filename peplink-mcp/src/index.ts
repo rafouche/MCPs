@@ -54,6 +54,7 @@ async function ic2Get(env: Env, path: string, params?: Record<string, string>): 
 
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to Peplink InControl2 and verify OAuth credentials", inputSchema: { type: "object", properties: {}, required: [] } },
+  { name: "peplink_api_get", description: "Read-only escape hatch: GET any Peplink InControl2 REST path for data no dedicated tool covers - e.g. '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/interfaces', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/bandwidth', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/event_log', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/client_list', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/cellular_status', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/wan_status', '/rest/o/{orgId}/g/{groupId}/d/{deviceId}/pepvpn'. GET only. Optional query params as an object. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path starting with '/rest/'" }, params: { type: "object", description: "Optional query-string parameters", additionalProperties: true } }, required: ["path"] } },
 
   // Organizations / Groups
   { name: "list_organizations", description: "List InControl2 organizations accessible with these credentials", inputSchema: { type: "object", properties: {} } },
@@ -67,6 +68,14 @@ const TOOLS = [
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
   switch (name) {
+    case "peplink_api_get": {
+      const path = String(args.path ?? "");
+      if (!path.startsWith("/") || path.includes("..") || path.includes("?")) throw new Error("peplink_api_get: path must start with '/', contain no '..' and no '?' (pass query params via params).");
+      const params = (args.params && typeof args.params === "object") ? Object.fromEntries(Object.entries(args.params as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined;
+      if (!path.startsWith("/rest/")) throw new Error("peplink_api_get: path must start with '/rest/'.");
+      const text = JSON.stringify(await ic2Get(env, path, params), null, 2);
+      return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
     case "healthcheck": { const data = await ic2Get(env, "/rest/o"); return `Connected OK to ${IC2_BASE} - ${JSON.stringify(data).substring(0, 150)}`; }
 
     case "list_organizations": return JSON.stringify(await ic2Get(env, "/rest/o"), null, 2);
