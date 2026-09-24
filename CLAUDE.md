@@ -263,8 +263,14 @@ params as an object, 60K response cap):
 | peplink-mcp | `peplink_api_get` | any InControl2 `/rest/` path |
 | jumpcloud-mcp | `jc_api_get` | any JumpCloud v1/v2 path (GET only; `jc_raw_request` still allows every method) |
 
-huntress-mcp and Hudu proxy the vendors' own MCP servers, whose tools are
-read-only already. unifi-mcp and peplink-mcp ship an older wrangler that
+| hudu-mcp | `hudu_api_get` | any Hudu REST v1 path (password endpoints refused, secrets redacted) |
+
+huntress-mcp proxies Huntress's own MCP server, whose tools are read-only
+already. hudu-mcp (new, 2026-09-24) replaces Hudu's hosted MCP, which takes
+only an OAuth sign-in that kept expiring on the server: same tool names over
+the REST API with an API key, fails closed until HUDU_API_KEY and
+MCP_AUTH_TOKEN are set, and redacts secrets (password fields, secret-named
+keys, "Password: x"-style text in articles). See hudu-mcp/README.md. unifi-mcp and peplink-mcp ship an older wrangler that
 fails on `/memberships` with this token; deploy them with
 `../meraki-mcp/node_modules/.bin/wrangler deploy`.
 

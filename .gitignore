@@ -4,3 +4,4 @@ node_modules/
 MCPs.txt
 **/altec-mcp-server-*.json
 .DS_Store
+.dev.vars

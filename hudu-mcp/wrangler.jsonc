@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hudu-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Secrets (never in this file): HUDU_API_KEY (Hudu > Admin > API Keys) and
+  // MCP_AUTH_TOKEN (the Bearer token the MCP client registration sends).
+  // Unlike the other Workers, /mcp refuses every call until MCP_AUTH_TOKEN
+  // is set - Hudu is the client documentation store.
+  "vars": { "HUDU_BASE_URL": "https://altecusa.huducloud.com" }
+}
