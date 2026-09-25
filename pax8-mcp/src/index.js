@@ -40,12 +40,37 @@ const JSON_HEADERS = {
 
 let restToken = { token: null, expires: 0 };
 
+// Constant-time string compare for the inbound bearer check in fetch().
+function timingSafeEqual(a, b) {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
+    // Inbound auth (opt-in, same as the other Workers): once the
+    // MCP_AUTH_TOKEN secret is set, every route needs
+    // "Authorization: Bearer <token>" except the read-only wallboard routes
+    // (Roger, 2026-09-25, "option 1"): GET/HEAD on /health and the
+    // /api/pax8/ REST passthrough, which the wallboard polls without a token.
+    const readMethod = request.method === "GET" || request.method === "HEAD";
+    const publicRead = readMethod && (url.pathname === "/health" || url.pathname.startsWith("/api/pax8/"));
+    if (env.MCP_AUTH_TOKEN && !publicRead) {
+      const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
+      }
     }
 
     if (url.pathname === "/health") {
@@ -57,6 +82,12 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/pax8/")) {
+      // The passthrough carries the Pax8 account's full API credentials
+      // (orders included), so it is read-only: the wallboard only reads.
+      // Before 2026-09-25 it forwarded any method with no auth at all.
+      if (!readMethod) {
+        return new Response(JSON.stringify({ error: "The REST passthrough is read-only (GET/HEAD)." }), { status: 405, headers: { ...JSON_HEADERS, Allow: "GET, HEAD" } });
+      }
       // Wrapped in try/catch now — an auth failure here previously
       // crashed as an unhandled error instead of returning a readable
       // JSON message, which is what made this bug hard to diagnose.

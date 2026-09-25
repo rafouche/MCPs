@@ -1,5 +1,8 @@
 {
   "name": "pax8-mcp",
   "main": "src/index.js",
-  "compatibility_date": "2026-06-01"
+  "compatibility_date": "2026-06-01",
+  // A deploy keeps variables set in the Cloudflare dashboard instead of
+  // replacing them (a token entered as plain text there must not be wiped).
+  "keep_vars": true
 }

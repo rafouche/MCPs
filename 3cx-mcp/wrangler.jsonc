@@ -4,5 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-05-21",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // A deploy keeps variables set in the Cloudflare dashboard instead of
+  // replacing them (a token entered as plain text there must not be wiped).
+  "keep_vars": true
 }

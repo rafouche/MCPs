@@ -47,7 +47,13 @@ export default {
     // registrations already send. Unset = unchanged behavior, so this code
     // deploys safely ahead of the secret. Same check as every TypeScript
     // Worker in this repo; see CLAUDE.md "Inbound auth".
-    if (env.MCP_AUTH_TOKEN && url.pathname !== "/health") {
+    // Read-only wallboard routes stay open (Roger, 2026-09-25, "option 1"):
+    // GET/HEAD on /health, /status and /licenses and the /api/huntress/ REST passthrough, which the wallboard
+    // (rafouche/Dashboard, a static page) polls without a token. Every tool
+    // and pipeline route needs the token once MCP_AUTH_TOKEN is set.
+    const readMethod = request.method === "GET" || request.method === "HEAD";
+    const publicRead = readMethod && (["/health", "/status", "/licenses"].includes(url.pathname) || url.pathname.startsWith("/api/huntress/"));
+    if (env.MCP_AUTH_TOKEN && !publicRead) {
       const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
       if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
@@ -63,6 +69,11 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/huntress/")) {
+      // The passthrough carries the account's full API credentials, so it
+      // is read-only: the wallboard only ever reads (2026-09-25).
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response(JSON.stringify({ error: "The REST passthrough is read-only (GET/HEAD)." }), { status: 405, headers: { ...JSON_HEADERS, Allow: "GET, HEAD" } });
+      }
       return proxyRest(request, env, url);
     }
 

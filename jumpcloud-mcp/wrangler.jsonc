@@ -4,8 +4,11 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-05-21",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
   // Secrets (set via wrangler secret put — do NOT put values here):
   //   JUMPCLOUD_API_KEY   — required, JumpCloud Admin API key
   //   JUMPCLOUD_ORG_ID    — optional, MSP multi-org only (adds x-org-id header)
+  // A deploy keeps variables set in the Cloudflare dashboard instead of
+  // replacing them (a token entered as plain text there must not be wiped).
+  "keep_vars": true
 }

@@ -10,5 +10,8 @@
   // 2026-09-22 with `wrangler kv namespace create NINJA_TOKENS`.
   "kv_namespaces": [
     { "binding": "NINJA_TOKENS", "id": "67d6fba4a3b04ab7a13c1154b9cf8e56" }
-  ]
+  ],
+  // A deploy keeps variables set in the Cloudflare dashboard instead of
+  // replacing them (a token entered as plain text there must not be wiped).
+  "keep_vars": true
 }

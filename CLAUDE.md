@@ -283,3 +283,43 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
+## STANDING RULE: inbound auth for every Worker (Roger, 2026-09-25 - "option 1")
+
+Apply this to every Worker, including any new one. Roger chose it over a
+separate view-only key for the wallboard.
+
+- **Token:** `MCP_AUTH_TOKEN`, always a Cloudflare **Secret** (never a
+  plain-text variable). Opt-in: unset means the Worker accepts any caller.
+  The MCP registration sends it as `Authorization: Bearer <token>`.
+- **Open without the token, GET/HEAD only:**
+  - `/health`, `/status`, `/licenses` - the wallboard (rafouche/Dashboard,
+    a static page on a TV) polls these with no token, so it can never carry
+    one.
+  - The wallboard's REST passthroughs, `/api/huntress/*` and `/api/pax8/*`.
+    These are **read-only**: any other method gets 405, because they carry
+    the account's full API credentials (Pax8's forwarded any method with no
+    auth at all until this change).
+  - Browser-only sign-in routes that carry their own protection: ninjarmm's
+    `/oauth/start`, `/oauth/callback` (one-time state cookie) and
+    `/oauth/status`.
+- **Everything else needs the token:** `/mcp` (every tool), the HelpDeskAgent
+  pipeline routes (`/helpdesk-gate`, `/helpdesk-triage`,
+  `/helpdesk-candidates`), anything that writes.
+- **hudu-mcp is the exception:** it fails closed (no token set = 503) and
+  serves no wallboard routes.
+- **Every wrangler config has `"keep_vars": true`,** so a deploy never deletes
+  a variable set in the dashboard. Without it, a normal deploy replaces all
+  plain-text dashboard variables with the ones in the config - this is how
+  the Halo token was silently removed on 2026-09-24.
+- **Before deploying a Worker,** compare its live code with the repo (tool
+  names from `/workers/scripts/<name>/content/v2`) so a deploy cannot roll
+  back something deployed from elsewhere, and list its bindings.
+- unifi-mcp and peplink-mcp ship an old wrangler; deploy every Worker with
+  `../meraki-mcp/node_modules/.bin/wrangler deploy`.
+
+State on 2026-09-25 after the rollout: token set and enforced on halopsa,
+cipp, ninjarmm (plain text - convert to Secret) and hudu; not yet set on
+meraki, unifi, peplink, jumpcloud, huntress, m365, gworkspace, pax8. m365
+`/status` returns 502 because its M365_TENANTS secret is not valid JSON
+(pre-existing; the wallboard does not use m365).
+

@@ -501,7 +501,16 @@ export default {
     // credential-less request on its public workers.dev URL, while the client
     // side had been sending a Bearer token all along that nothing ever
     // checked.
-    if (env.MCP_AUTH_TOKEN && url.pathname !== "/health") {
+    // Read-only wallboard routes stay open (Roger, 2026-09-25, "option 1"):
+    // GET/HEAD on /health, /status and /licenses, which the wallboard
+    // (rafouche/Dashboard, a static page) polls without a token. Every tool
+    // and pipeline route needs the token once MCP_AUTH_TOKEN is set.
+    // The NinjaOne sign-in routes are hit by a technician's browser, which
+    // cannot send the token; /oauth/callback is protected by its own
+    // one-time state cookie, /oauth/start only redirects to NinjaOne's login,
+    // and /oauth/status reports whether a sign-in is stored (no secrets).
+    const publicRead = (request.method === "GET" || request.method === "HEAD") && ["/health", "/status", "/licenses", "/oauth/start", "/oauth/callback", "/oauth/status"].includes(url.pathname);
+    if (env.MCP_AUTH_TOKEN && !publicRead) {
       const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
       if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });

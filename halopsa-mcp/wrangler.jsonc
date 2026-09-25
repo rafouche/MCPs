@@ -16,5 +16,8 @@
     "PIPELINE_AGENT_ID": "17",
     "ON_CALL_SHIFT_TYPE_ID": "1",
     "ON_CALL_SMS_DOMAIN": "altec.text.email"
-  }
+  },
+  // A deploy keeps variables set in the Cloudflare dashboard instead of
+  // replacing them (a token entered as plain text there must not be wiped).
+  "keep_vars": true
 }
