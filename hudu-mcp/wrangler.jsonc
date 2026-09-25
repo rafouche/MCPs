@@ -9,5 +9,10 @@
   // MCP_AUTH_TOKEN (the Bearer token the MCP client registration sends).
   // Unlike the other Workers, /mcp refuses every call until MCP_AUTH_TOKEN
   // is set - Hudu is the client documentation store.
-  "vars": { "HUDU_BASE_URL": "https://altecusa.huducloud.com" }
+  "vars": { "HUDU_BASE_URL": "https://altecusa.huducloud.com" },
+  // Safety net: a deploy normally replaces every plain-text variable set in
+  // the dashboard with the ones above. HUDU_API_KEY was entered as plain
+  // text (2026-09-25 check) and would have been wiped by the next deploy.
+  // Keep it as a Secret; this line only protects against the mistake.
+  "keep_vars": true
 }
