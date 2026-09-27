@@ -142,3 +142,13 @@ curl https://m365-mcp.young-math-a33a.workers.dev/status
 ```
 
 > **Note:** PowerShell quoting is unreliable for JSON. Use CMD or pipe from echo.
+
+## Inbound auth (MCP_AUTH_TOKEN)
+Follows the repo's standing rule (see `CLAUDE.md`, "STANDING RULE: inbound
+auth for every Worker"). Set `MCP_AUTH_TOKEN` as a Cloudflare **Secret**
+(Worker > Settings > Variables and Secrets, type Secret), never a plain-text
+variable; `wrangler.jsonc` has `"keep_vars": true` so a deploy never removes
+it. Once set, every request needs `Authorization: Bearer <token>` except
+`/health`, `/status`, which the wallboard polls without a token. Until it's set the Worker
+accepts any caller. Add `-H "Authorization: Bearer <token>"` to the `/mcp`
+test commands above once the token is on.

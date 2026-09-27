@@ -59,3 +59,13 @@ curl https://pax8-mcp.young-math-a33a.workers.dev/status
 ```
 
 > **Note:** PowerShell quoting is unreliable for JSON bodies. Use CMD (cmd.exe) for curl test commands.
+
+## Inbound auth (MCP_AUTH_TOKEN)
+Follows the repo's standing rule (see `CLAUDE.md`, "STANDING RULE: inbound
+auth for every Worker"). Set `MCP_AUTH_TOKEN` as a Cloudflare **Secret**
+(Worker > Settings > Variables and Secrets, type Secret), never a plain-text
+variable; `wrangler.jsonc` has `"keep_vars": true` so a deploy never removes
+it. Once set, every request needs `Authorization: Bearer <token>` except
+`/health` and the read-only `/api/pax8/*` passthrough (GET/HEAD only; any other method gets 405), which the wallboard polls without a token. Until it's set the Worker
+accepts any caller. Add `-H "Authorization: Bearer <token>"` to the `/mcp`
+test commands above once the token is on.

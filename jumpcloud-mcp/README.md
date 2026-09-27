@@ -124,3 +124,18 @@ async function jcHeaders(env: Env): Promise<Record<string, string>> {
 ```
 
 Then set `wrangler secret put JUMPCLOUD_API_KEY` instead of the two Service Account secrets.
+
+## Inbound auth (MCP_AUTH_TOKEN)
+Follows the repo's standing rule (see `CLAUDE.md`, "STANDING RULE: inbound
+auth for every Worker"). Set `MCP_AUTH_TOKEN` as a Cloudflare **Secret**
+(Worker > Settings > Variables and Secrets, type Secret), never a plain-text
+variable; `wrangler.jsonc` has `"keep_vars": true` so a deploy never removes
+it. Once set, every request needs `Authorization: Bearer <token>` except
+`/health`, `/status`, which the wallboard polls without a token. Until it's set the Worker
+accepts any caller. Add `-H "Authorization: Bearer <token>"` to the `/mcp`
+test commands above once the token is on.
+
+## Raw read-only tool
+`jc_api_get` calls any GET endpoint of the vendor API the named tools don't
+cover (HelpDeskAgent's resolver uses it for diagnostics). GET only. (`jc_raw_request` can
+write, and is never on HelpDeskAgent's allowlist.)

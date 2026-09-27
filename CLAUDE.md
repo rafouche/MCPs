@@ -21,13 +21,14 @@ A NOC-style wallboard dashboard (`dashboard.html`) polls several of these worker
 | `cipp-mcp` | CIPP (M365 via CIPP) | tool-implementation | feeds Dashboard's Security zone. Points at the CyberDrain-hosted "CIPP-NG" instance `https://cipp.altecusa.com` (client-credentials against a dedicated, non-MCP-flagged CIPP-API client — separate from CIPP's own native MCP feature). Beyond its ~33 named tools it also exposes generic `cipp_api_get`/`cipp_api_post` tools that call any CIPP endpoint by name (see the file header comment in `cipp-mcp/src/index.ts`), giving it full read/write coverage of CIPP's API without one hand-written tool per endpoint — this is why the native CIPP MCP connector was retired in favor of this worker. |
 | `m365-mcp` | Microsoft Graph (direct, multi-tenant) | tool-implementation | not yet wired into Dashboard |
 | `jumpcloud-mcp` | JumpCloud directory | tool-implementation | OAuth2 Service Account, org-scoped only — not yet wired into Dashboard. Contains a fully duplicated nested project at `jumpcloud-mcp/jumpcloud-mcp/` (own `wrangler.jsonc`/`src`/`package.json`, currently identical to the outer one) — treat the outer `jumpcloud-mcp/src/index.ts` as canonical and confirm which copy you're editing before making changes |
-| `ninjarmm-mcp` | NinjaRMM | tool-implementation | feeds Dashboard's Network zone (individually-tracked devices) |
+| `ninjarmm-mcp` | NinjaRMM | tool-implementation | feeds Dashboard's Network zone (individually-tracked devices). `ninja_api_get` raw read tool; script runs need the user-context token from `/oauth/start` (see below) |
 | `gworkspace-mcp` | Google Workspace | tool-implementation | uses a service-account JSON key file in-folder |
 | `3cx-mcp` | 3CX phone system | tool-implementation | |
 | `peplink-mcp` | Peplink InControl2 | tool-implementation | also exposes `/licenses` |
 | `unifi-mcp` | UniFi | tool-implementation | |
-| `huntress-mcp` | Huntress EDR | **passthrough gateway** | plain JS, not TS |
-| `pax8-mcp` | Pax8 billing/provisioning | **passthrough gateway** | plain JS, not TS |
+| `hudu-mcp` | Hudu documentation | tool-implementation | 2026-09-24. Drop-in for Hudu's hosted OAuth MCP (same tool names) over Hudu's REST API with an `x-api-key`; `HUDU_BASE_URL` https://altecusa.huducloud.com. Fails closed without `MCP_AUTH_TOKEN`, redacts passwords and secret-looking text, refuses password endpoints, edits send only changed fields. Registered as `HUDU` in HelpDeskAgent. See its README and the section below. |
+| `huntress-mcp` | Huntress EDR | **passthrough gateway** | plain JS, not TS. `/api/huntress/*` is read-only (405 on writes) |
+| `pax8-mcp` | Pax8 billing/provisioning | **passthrough gateway** | plain JS, not TS. `/api/pax8/*` is read-only (405 on writes) |
 | `teams-meeting-notes-worker` | Microsoft Graph + Teams + Claude API | **webhook automation** | not an MCP tool server — no `TOOLS`/`runTool`, no `/mcp` endpoint. Receives Graph change notifications when a Teams meeting transcript is ready, summarizes it via the Claude API, and posts to a Teams channel via Incoming Webhook. Plain JS, not TS. See its own README for the full secrets list and setup flow. |
 
 ## Commands
@@ -38,7 +39,8 @@ Every `*-mcp/` project uses the same scripts (run from inside that project's fol
 npm install          # only needed once per project; m365-mcp currently has no node_modules installed
 wrangler dev          # local dev server
 wrangler deploy       # deploy — this is the only way changes take effect; there is no CI
-wrangler secret put <NAME>   # set a secret (never put values in wrangler.jsonc)
+                      # (use ../meraki-mcp/node_modules/.bin/wrangler deploy: unifi/peplink ship an old wrangler)
+wrangler secret put <NAME>   # set a secret (never put values in wrangler.jsonc); Roger usually sets them in the Cloudflare dashboard
 wrangler secret list  # list secret names (not values) on the deployed worker
 ```
 
@@ -84,16 +86,24 @@ These don't implement their own `TOOLS`/`runTool` at all. They relay `POST /mcp`
 - **Static API key header**: Meraki, UniFi.
 - **OAuth2 client-credentials** (POST to a token endpoint with Basic auth of `client_id:client_secret`, cache the bearer token, retry): JumpCloud, Peplink, Pax8, HaloPSA. For JumpCloud specifically, Service Account credentials are org-scoped only — JumpCloud does not currently support a single MSP-wide credential across child orgs (confirmed via their own docs: Service Accounts are "not available for MSP customers" as of this writing).
 - **Basic auth passthrough**: Huntress (credentials attached to every proxied request, not exchanged for a token).
+- **API key header (`x-api-key`)**: Hudu.
+- **OAuth2 client-credentials plus an optional user-context token** (authorization code, for script runs): NinjaOne - see below.
 
 Getting the auth type wrong for a given vendor is the most common cause of "tools/list works but every tools/call fails" — because every tool call in a tool-implementation worker re-derives its token/headers first, one bad credential fails 100% of tools uniformly. The repo convention across every project is to **never swallow API errors**: every `xGet`/`xPost`/etc. helper throws `Error(status + response body text)`, and the top-level `tools/call` catch puts that straight into the JSON-RPC `error.message` — so a real vendor HTTP status and response body should always be visible in the tool result, not a generic message. If a worker isn't doing this, that's a regression, not the intended pattern.
 
 ## Inbound auth (MCP_AUTH_TOKEN) — every Worker, opt-in
 
-Until 2026-09-19 no Worker in this repo checked who was calling it: `tools/list` — and so every write tool — answered a bare, credential-less request on the public `workers.dev` URL, even though the MCP client registrations (HelpDeskAgent's README, `claude mcp add --header "Authorization: Bearer <token>"`) had been sending a token all along. Every Worker's `fetch()` now starts with the same check: if the `MCP_AUTH_TOKEN` secret is set, every route except `OPTIONS` and `/health` must present exactly that bearer token (constant-time compare) or gets a `401`; if the secret is unset, behavior is unchanged. That ordering is deliberate — deploy the code first, then `wrangler secret put MCP_AUTH_TOKEN` per Worker with the token its registrations already send, so nothing breaks in between. Keep the check when adding a new Worker (copy the block; it's identical everywhere), and never make it conditional on the route beyond the two exemptions above.
+History: until 2026-09-19 no Worker checked who was calling it; every tool,
+write tools included, answered a bare request on the public `workers.dev`
+URL. Every Worker's `fetch()` now starts with the same constant-time bearer
+check against `MCP_AUTH_TOKEN`. **The current rule (which routes are open,
+Secrets only, `keep_vars`, which Workers have it set) is the "STANDING RULE:
+inbound auth for every Worker" section below** — follow that, and copy the
+same block into any new Worker.
 
 ## Secrets
 
-Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root currently holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt` and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
+Secrets are per-worker via `wrangler secret put <NAME>` and never appear in `wrangler.jsonc` (some files include a comment block listing expected secret names, but the values themselves must never be committed there). `MCPs.txt` at the repo root (on Roger's machine; not in cloud checkouts) holds plaintext copies of several live API keys/secrets — this is a standing risk, not a documented convention; don't add to it, and flag it if asked to touch credentials in this repo. `MCPs.txt` and `**/altec-mcp-server-*.json` are gitignored, so they won't show up in `git status`/diffs even though they're on disk — don't assume gitignored means absent.
 
 ## Replay support in halopsa-mcp: `as_of` on the action-log tools
 `get_ticket_time_entries` and `get_ticket_history` take an optional `as_of`
