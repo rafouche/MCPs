@@ -328,7 +328,7 @@ separate view-only key for the wallboard.
   `../meraki-mcp/node_modules/.bin/wrangler deploy`.
 
 State on 2026-09-25 after the rollout: token set and enforced on halopsa,
-cipp, ninjarmm (plain text - convert to Secret) and hudu; not yet set on
+cipp, ninjarmm (converted to a Secret 2026-09-28) and hudu; not yet set on
 meraki, unifi, peplink, jumpcloud, huntress, m365, gworkspace, pax8. m365
 `/status` returns 502 because its M365_TENANTS secret is not valid JSON
 (pre-existing; the wallboard does not use m365).
