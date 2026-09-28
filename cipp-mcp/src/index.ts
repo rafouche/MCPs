@@ -115,7 +115,7 @@ const TOOLS = [
 
   // Licenses
   { name: "list_licenses", description: "List all M365 license SKUs and usage counts for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string", description: "Tenant domain" } }, required: ["tenantFilter"] } },
-  { name: "list_user_licenses", description: "List licenses assigned to users in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+  { name: "list_user_licenses", description: "List the licenses assigned to each user in a tenant (license names, from ListUsers), or to one user if userId is given", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, userId: { type: "string", description: "Optional user ID or UPN to return just that user" } }, required: ["tenantFilter"] } },
   { name: "set_user_license", description: "Assign or remove licenses on a user", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, UserId: { type: "string" }, AddLicenses: { type: "array", items: { type: "string" }, description: "License SKU IDs to add" }, RemoveLicenses: { type: "array", items: { type: "string" }, description: "License SKU IDs to remove" } }, required: ["tenantFilter", "UserId"] } },
 
   // Groups
@@ -141,18 +141,18 @@ const TOOLS = [
   // Devices / Intune
   { name: "list_intune_devices", description: "List Intune-managed devices for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
   { name: "list_autopilot_devices", description: "List Autopilot-registered devices for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
-  { name: "list_intune_policies", description: "List Intune configuration profiles/policies for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+  { name: "list_intune_policies", description: "List the tenant's actual Intune configuration profiles, settings-catalog, administrative-template and compliance policies, with their assignments (ListIntunePolicy type=Policies)", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
 
   // SharePoint / OneDrive
-  { name: "list_sharepoint_sites", description: "List SharePoint sites in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
-  { name: "list_onedrive_usage", description: "List OneDrive usage stats per user in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+  { name: "list_sharepoint_sites", description: "List SharePoint sites in a tenant with usage: URL, template, file count, storage used, last activity (ListSites type=SharePointSiteUsage)", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+  { name: "list_onedrive_usage", description: "List OneDrive sites per user in a tenant with usage where Microsoft reports it (ListSites type=OneDriveUsageAccount)", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
 
   // Alerts & Logs
   { name: "list_alerts", description: "List active CIPP alerts queue", inputSchema: { type: "object", properties: {} } },
   { name: "list_logs", description: "List CIPP activity/audit logs", inputSchema: { type: "object", properties: { tenantFilter: { type: "string", description: "Optional: filter by tenant" } } } },
 
   // Standards
-  { name: "list_standards", description: "List applied CIPP standards for a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
+  { name: "list_standards", description: "CIPP standards for a tenant: the standards templates that target it (name, standards, run mode) and the latest compliance comparison (ListStandardsCompare). An empty comparison means no standards run has reported for this tenant yet.", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
 
   // Generic passthrough — every other CIPP API endpoint (message trace, quarantine,
   // conditional access templates, GDAP, transport rules, etc.) that doesn't have a
@@ -181,7 +181,14 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     // Licenses
     case "list_licenses": return JSON.stringify(await cippGet(env, "ListLicenses", { tenantFilter: t! }), null, 2);
-    case "list_user_licenses": return JSON.stringify(await cippGet(env, "ListUserLicenses", { tenantFilter: t! }), null, 2);
+    case "list_user_licenses": {
+      // CIPP has no ListUserLicenses endpoint (404); ListUsers carries
+      // LicJoined, the assigned license names, for every user.
+      const p: Record<string, string> = { tenantFilter: t! };
+      if (args.userId) p.userId = args.userId as string;
+      const users = (await cippGet(env, "ListUsers", p)) as Array<Record<string, unknown>>;
+      return JSON.stringify((Array.isArray(users) ? users : []).map(u => ({ displayName: u.displayName, userPrincipalName: u.userPrincipalName, accountEnabled: u.accountEnabled, licenses: u.LicJoined || "" })), null, 2);
+    }
     case "set_user_license": return JSON.stringify(await cippPost(env, "ExecLicense", { tenantFilter: t, UserId: args.UserId, AddLicenses: args.AddLicenses ?? [], RemoveLicenses: args.RemoveLicenses ?? [] }), null, 2);
 
     // Groups
@@ -212,18 +219,30 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     // Devices / Intune
     case "list_intune_devices": return JSON.stringify(await cippGet(env, "ListIntuneDevices", { tenantFilter: t! }), null, 2);
     case "list_autopilot_devices": return JSON.stringify(await cippGet(env, "ListAutopilotDevices", { tenantFilter: t! }), null, 2);
-    case "list_intune_policies": return JSON.stringify(await cippGet(env, "ListIntuneTemplates", { tenantFilter: t! }), null, 2);
+    case "list_intune_policies": return JSON.stringify(await cippGet(env, "ListIntunePolicy", { tenantFilter: t!, type: "Policies" }), null, 2);
 
     // SharePoint / OneDrive
-    case "list_sharepoint_sites": return JSON.stringify(await cippGet(env, "ListSites", { tenantFilter: t! }), null, 2);
-    case "list_onedrive_usage": return JSON.stringify(await cippGet(env, "ListOneDriveUsage", { tenantFilter: t! }), null, 2);
+    case "list_sharepoint_sites": return JSON.stringify(await cippGet(env, "ListSites", { tenantFilter: t!, Type: "SharePointSiteUsage" }), null, 2);
+    case "list_onedrive_usage": return JSON.stringify(await cippGet(env, "ListSites", { tenantFilter: t!, Type: "OneDriveUsageAccount" }), null, 2);
 
     // Alerts & Logs
     case "list_alerts": return JSON.stringify(await cippGet(env, "ListAlertsQueue"), null, 2);
     case "list_logs": { const p: Record<string, string> = {}; if (t) p.tenantFilter = t; return JSON.stringify(await cippGet(env, "ListLogs", p), null, 2); }
 
     // Standards
-    case "list_standards": return JSON.stringify(await cippGet(env, "ListStandardsRun", { tenantFilter: t! }), null, 2);
+    case "list_standards": {
+      // ListStandardsRun does not exist (404). Templates live in
+      // listStandardTemplates (tenant-agnostic, so filter here); per-tenant
+      // results in ListStandardsCompare.
+      const tl = t!.toLowerCase();
+      const templates = (await cippGet(env, "listStandardTemplates")) as Array<Record<string, unknown>>;
+      const targeting = (Array.isArray(templates) ? templates : []).filter(tp => {
+        const tf = Array.isArray(tp.tenantFilter) ? tp.tenantFilter as Array<Record<string, unknown>> : [];
+        return tf.some(e => { const v = String(e.value ?? "").toLowerCase(); const l = String(e.label ?? "").toLowerCase(); return v === "alltenants" || v === tl || l.includes(tl); });
+      }).map(tp => ({ templateName: tp.templateName, GUID: tp.GUID, runManually: tp.runManually, standards: Object.keys((tp.standards as Record<string, unknown>) ?? {}), updatedAt: tp.updatedAt }));
+      const compare = await cippGet(env, "ListStandardsCompare", { tenantFilter: t! });
+      return JSON.stringify({ templates: targeting, compare }, null, 2);
+    }
 
     // Generic passthrough
     case "cipp_api_get": return JSON.stringify(await cippGet(env, args.endpoint as string, args.params as Record<string, string> | undefined), null, 2);
