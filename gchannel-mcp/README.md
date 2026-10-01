@@ -15,6 +15,8 @@ It **fails closed** like hudu-mcp. `/mcp` answers 503 until both
 `MCP_AUTH_TOKEN` and `GOOGLE_SERVICE_ACCOUNT_JSON` are set, and 401 without the
 Bearer token. `/health` is open and reports what is configured.
 
+**Step-by-step setup (Google Cloud, reseller, each tenant, Cloudflare): [SETUP.md](SETUP.md).**
+
 ## How access works
 
 Both kinds of tenant use **one service account key** with domain-wide
