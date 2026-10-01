@@ -80,19 +80,20 @@ Standalone tenants do not need `apps.order`.
 
 ### 4. Secrets
 
-Run these from this folder. Each one prompts for the value.
+Set these in the Cloudflare dashboard: Workers & Pages > gchannel-mcp >
+Settings > Variables and Secrets. Add each one with type **Secret**, then
+click Deploy.
 
-```bash
-npx wrangler secret put MCP_AUTH_TOKEN
-npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
-npx wrangler secret put GOOGLE_RESELLER_ADMIN_EMAIL
-npx wrangler secret put CHANNEL_ACCOUNT_ID
-npx wrangler secret put GOOGLE_TENANTS
-```
+| Secret | Value |
+|---|---|
+| `MCP_AUTH_TOKEN` | a long random string; the same value goes in the MCP registration's `Authorization: Bearer` header |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | the full contents of the service account JSON key file |
+| `GOOGLE_RESELLER_ADMIN_EMAIL` | super admin in the reseller domain (Channel side) |
+| `CHANNEL_ACCOUNT_ID` | Partner Sales Console > Settings > Account ID (Channel side) |
+| `GOOGLE_TENANTS` | optional JSON array of standalone tenants (above) |
 
-`MCP_AUTH_TOKEN` is any long random string. The same value goes in the MCP
-registration's `Authorization: Bearer` header. Either side, Channel or
-standalone, can be left unset.
+Either side, Channel or standalone, can be left unset. Code changes are
+deployed from this repo by Claude; secrets never go in the repo.
 
 Then run `healthcheck` with no arguments, and again with `tenant` set to test
 a specific tenant's access.
