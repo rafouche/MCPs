@@ -23,33 +23,78 @@ export interface Env {
 
 const IC2_BASE = "https://api.ic.peplink.com";
 
+// InControl2 appears to keep only the newest client_credentials token per
+// client: when another isolate of this Worker (or another caller of the
+// same API client) fetches a token, the one cached here starts failing
+// with 401 invalid_accessor while still inside its stated lifetime.
+// Confirmed live 2026-10-01: back-to-back /status calls alternated between
+// full data, data with one org silently missing (its fetch 401'd and the
+// per-org catch skipped it), and a whole-request 401. So a 401 drops the
+// cached token and retries once with a fresh one, and concurrent callers
+// in one isolate share a single in-flight token request instead of each
+// minting their own. A single retry wasn't enough: the wallboard polls
+// /status and /licenses at the same moment, they land in different
+// isolates, and each isolate's fresh token killed the other's (confirmed
+// live right after the first fix). So the token is also shared across
+// isolates through the colo's Cache API - an isolate reuses the token
+// another one just minted instead of minting its own - and a request gets
+// up to three tries.
 let cachedToken: { token: string; expires: number } | null = null;
+let tokenRequest: Promise<string> | null = null;
+const TOKEN_CACHE_KEY = "https://peplink-mcp.internal/oauth-token";
 
-async function getToken(env: Env): Promise<string> {
-  if (cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
-  const res = await fetch(`${IC2_BASE}/api/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.PEPLINK_CLIENT_ID,
-      client_secret: env.PEPLINK_CLIENT_SECRET,
-      grant_type: "client_credentials",
-    }).toString(),
-  });
-  if (!res.ok) throw new Error(`InControl2 auth failed (${res.status}): ${await res.text()}`);
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  cachedToken = { token: data.access_token, expires: Date.now() + data.expires_in * 1000 };
-  return data.access_token;
+async function getToken(env: Env, force = false, rejected?: string): Promise<string> {
+  if (!force && cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
+  if (tokenRequest) return tokenRequest;
+  tokenRequest = (async () => {
+    // Another isolate may already hold a newer token than the one just rejected.
+    const shared = await (caches as unknown as { default: Cache }).default.match(TOKEN_CACHE_KEY);
+    if (shared) {
+      const s = (await shared.json()) as { token: string; expires: number };
+      if (s.token !== rejected && s.expires > Date.now() + 60000) {
+        cachedToken = s;
+        return s.token;
+      }
+    }
+    const res = await fetch(`${IC2_BASE}/api/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.PEPLINK_CLIENT_ID,
+        client_secret: env.PEPLINK_CLIENT_SECRET,
+        grant_type: "client_credentials",
+      }).toString(),
+    });
+    if (!res.ok) throw new Error(`InControl2 auth failed (${res.status}): ${await res.text()}`);
+    const data = (await res.json()) as { access_token: string; expires_in: number };
+    cachedToken = { token: data.access_token, expires: Date.now() + data.expires_in * 1000 };
+    const ttl = Math.max(60, data.expires_in - 120);
+    await (caches as unknown as { default: Cache }).default.put(TOKEN_CACHE_KEY, new Response(JSON.stringify(cachedToken), { headers: { "Cache-Control": `max-age=${ttl}` } }));
+    return data.access_token;
+  })();
+  try {
+    return await tokenRequest;
+  } finally {
+    tokenRequest = null;
+  }
 }
 
 async function ic2Get(env: Env, path: string, params?: Record<string, string>): Promise<unknown> {
-  const token = await getToken(env);
-  const url = new URL(`${IC2_BASE}${path}`);
-  url.searchParams.set("access_token", token);
-  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`GET ${path} failed (${res.status}): ${await res.text()}`);
-  return res.json();
+  let rejected: string | undefined;
+  for (let attempt = 0; ; attempt++) {
+    const token = await getToken(env, attempt > 0, rejected);
+    const url = new URL(`${IC2_BASE}${path}`);
+    url.searchParams.set("access_token", token);
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString());
+    if (res.status === 401 && attempt < 2) {
+      if (cachedToken?.token === token) cachedToken = null;
+      rejected = token;
+      continue;
+    }
+    if (!res.ok) throw new Error(`GET ${path} failed (${res.status}): ${await res.text()}`);
+    return res.json();
+  }
 }
 
 const TOOLS = [
