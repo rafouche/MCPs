@@ -23,6 +23,7 @@ A NOC-style wallboard dashboard (`dashboard.html`) polls several of these worker
 | `jumpcloud-mcp` | JumpCloud directory | tool-implementation | **Being retired (Roger, 2026-09-30)** - removed from HelpDeskAgent in v2.15.7; still deployed with no `MCP_AUTH_TOKEN` (open, write tools included) until the Worker is deleted. OAuth2 Service Account, org-scoped only — not yet wired into Dashboard. Contains a fully duplicated nested project at `jumpcloud-mcp/jumpcloud-mcp/` (own `wrangler.jsonc`/`src`/`package.json`, currently identical to the outer one) — treat the outer `jumpcloud-mcp/src/index.ts` as canonical and confirm which copy you're editing before making changes |
 | `ninjarmm-mcp` | NinjaRMM | tool-implementation | feeds Dashboard's Network zone (individually-tracked devices). `ninja_api_get` raw read tool; script runs need the user-context token from `/oauth/start` (see below) |
 | `gworkspace-mcp` | Google Workspace | tool-implementation | uses a service-account JSON key file in-folder |
+| `gchannel-mcp` | Google Cloud Channel (Partner Sales Console) + Admin SDK, multi-tenant | tool-implementation | 2026-10-01. Google counterpart of cipp-mcp: every tool takes `tenant` (domain, C0... customer ID, or name). One service account key with domain-wide delegation reaches both Channel Partner customers (impersonating `GOOGLE_RESELLER_ADMIN_EMAIL`, customer addressed by its `cloudIdentityId`; customers listed via the Channel API under `CHANNEL_ACCOUNT_ID`, cached 5 min) and standalone tenants not in the Partner portal (`GOOGLE_TENANTS` JSON secret; each tenant authorizes the same client ID in its own Admin console; a standalone match wins over a Channel match). Tokens request only the scopes each call needs, so a tenant that authorized a subset still works for those tools. Channel/billing side is read-only by design (no ordering/entitlement changes); no user delete. Fails closed like hudu-mcp. Not yet verified with live credentials - see its README for the setup steps, full scope list, and the open questions (Alert Center/Reports on Channel customers via the reseller admin). |
 | `3cx-mcp` | 3CX phone system | tool-implementation | |
 | `peplink-mcp` | Peplink InControl2 | tool-implementation | also exposes `/licenses` |
 | `unifi-mcp` | UniFi | tool-implementation | |
@@ -286,6 +287,7 @@ params as an object, 60K response cap):
 | jumpcloud-mcp | `jc_api_get` | any JumpCloud v1/v2 path (GET only; `jc_raw_request` still allows every method) |
 
 | hudu-mcp | `hudu_api_get` | any Hudu REST v1 path (password endpoints refused, secrets redacted) |
+| gchannel-mcp | `channel_api_get`, `google_api_get` | any Cloud Channel v1 path (`{account}` substituted); any Directory/Reports/Licensing/Alert Center path in a tenant (`{customer}` substituted) |
 
 huntress-mcp proxies Huntress's own MCP server, whose tools are read-only
 already. hudu-mcp (new, 2026-09-24) replaces Hudu's hosted MCP, which takes

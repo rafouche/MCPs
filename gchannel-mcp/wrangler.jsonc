@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gchannel-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Secrets (never in this file) - see README:
+  //   MCP_AUTH_TOKEN               inbound Bearer token (required; /mcp is 503 without it)
+  //   GOOGLE_SERVICE_ACCOUNT_JSON  service account key JSON (required)
+  //   GOOGLE_RESELLER_ADMIN_EMAIL  super admin in the reseller domain (Channel side)
+  //   CHANNEL_ACCOUNT_ID           Partner Sales Console account ID (Channel side)
+  //   GOOGLE_TENANTS               JSON array of standalone tenants (optional)
+  "keep_vars": true
+}
