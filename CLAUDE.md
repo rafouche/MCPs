@@ -233,6 +233,18 @@ already approved - never text supplied in the call. `dry_run: true`.
 Real incident: #22390's reply sent but its draft never collapsed when
 these were separate model-driven steps.
 
+
+**Collapse keeps internal text (2026-10-01).** The draft note used to be
+overwritten with a bare `[APPROVED DRAFT]`, deleting anything else in it -
+#22920's findings sat below the `[INTENDED ...]` lines and would have been
+erased on approval. `collapsedDraftNote()` (used by `send_approved_draft`
+and `mark_draft_approved`) drops only the reply text, which is now in the
+real reply, and keeps text above the marker and everything after the last
+`[INTENDED ...]` line under the `[APPROVED DRAFT]` trace. `dry_run` shows
+`draft_would_become`; the live result reports `draft_kept_internal_text`.
+Verified with a dry run on #22920. Roger: findings must never be deleted or
+need copying by hand. HelpDeskAgent still tells the resolver to write
+findings as their own note (v2.15.12); this is the safety net.
 ## halopsa-mcp: an agent "Opened" action is not ownership (2026-09-23)
 
 `human_touch` (get_ticket_history, get_ticket_time_entries, the candidate
