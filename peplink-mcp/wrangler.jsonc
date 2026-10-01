@@ -4,5 +4,11 @@
   "compatibility_date": "2026-06-01",
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
-  "keep_vars": true
+  "keep_vars": true,
+  // Shared InControl2 OAuth token. InControl2 honours only the newest
+  // client_credentials token per API client, so every isolate must reuse
+  // one token instead of minting its own (see getToken in src/index.ts).
+  "kv_namespaces": [
+    { "binding": "PEPLINK_TOKENS", "id": "db180c4f2ba0477e9d36e658fd7861d3" }
+  ]
 }

@@ -15,10 +15,17 @@
  *   PEPLINK_CLIENT_SECRET
  */
 
+// Just the KV methods used here - this project has no @cloudflare/workers-types.
+interface KVNamespace {
+  get<T>(key: string, options: { type: "json" }): Promise<T | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface Env {
   MCP_AUTH_TOKEN?: string; // optional inbound bearer token - see the check at the top of fetch()
   PEPLINK_CLIENT_ID: string;
   PEPLINK_CLIENT_SECRET: string;
+  PEPLINK_TOKENS: KVNamespace; // shared OAuth token, see getToken()
 }
 
 const IC2_BASE = "https://api.ic.peplink.com";
@@ -29,32 +36,29 @@ const IC2_BASE = "https://api.ic.peplink.com";
 // with 401 invalid_accessor while still inside its stated lifetime.
 // Confirmed live 2026-10-01: back-to-back /status calls alternated between
 // full data, data with one org silently missing (its fetch 401'd and the
-// per-org catch skipped it), and a whole-request 401. So a 401 drops the
-// cached token and retries once with a fresh one, and concurrent callers
-// in one isolate share a single in-flight token request instead of each
-// minting their own. A single retry wasn't enough: the wallboard polls
+// per-org catch skipped it), and a whole-request 401 - the wallboard polls
 // /status and /licenses at the same moment, they land in different
-// isolates, and each isolate's fresh token killed the other's (confirmed
-// live right after the first fix). So the token is also shared across
-// isolates through the colo's Cache API - an isolate reuses the token
-// another one just minted instead of minting its own - and a request gets
-// up to three tries.
+// isolates, and each isolate's fresh token killed the other's.
+//
+// So the token lives in KV (PEPLINK_TOKENS), shared by every isolate: one
+// mints it, the rest reuse it. A 401 retries (up to three tries) and only
+// mints a new token if KV still holds the rejected one - if another
+// isolate already replaced it, that newer token is used instead. Concurrent
+// callers in one isolate share a single in-flight token request. The
+// Cache API was tried first and isn't enough (it's a no-op on workers.dev).
 let cachedToken: { token: string; expires: number } | null = null;
 let tokenRequest: Promise<string> | null = null;
-const TOKEN_CACHE_KEY = "https://peplink-mcp.internal/oauth-token";
+const TOKEN_KV_KEY = "ic2_token";
 
 async function getToken(env: Env, force = false, rejected?: string): Promise<string> {
   if (!force && cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
   if (tokenRequest) return tokenRequest;
   tokenRequest = (async () => {
     // Another isolate may already hold a newer token than the one just rejected.
-    const shared = await (caches as unknown as { default: Cache }).default.match(TOKEN_CACHE_KEY);
-    if (shared) {
-      const s = (await shared.json()) as { token: string; expires: number };
-      if (s.token !== rejected && s.expires > Date.now() + 60000) {
-        cachedToken = s;
-        return s.token;
-      }
+    const shared = await env.PEPLINK_TOKENS.get<{ token: string; expires: number }>(TOKEN_KV_KEY, { type: "json" });
+    if (shared && shared.token !== rejected && shared.expires > Date.now() + 60000) {
+      cachedToken = shared;
+      return shared.token;
     }
     const res = await fetch(`${IC2_BASE}/api/oauth2/token`, {
       method: "POST",
@@ -68,8 +72,7 @@ async function getToken(env: Env, force = false, rejected?: string): Promise<str
     if (!res.ok) throw new Error(`InControl2 auth failed (${res.status}): ${await res.text()}`);
     const data = (await res.json()) as { access_token: string; expires_in: number };
     cachedToken = { token: data.access_token, expires: Date.now() + data.expires_in * 1000 };
-    const ttl = Math.max(60, data.expires_in - 120);
-    await (caches as unknown as { default: Cache }).default.put(TOKEN_CACHE_KEY, new Response(JSON.stringify(cachedToken), { headers: { "Cache-Control": `max-age=${ttl}` } }));
+    await env.PEPLINK_TOKENS.put(TOKEN_KV_KEY, JSON.stringify(cachedToken), { expirationTtl: Math.max(60, data.expires_in - 120) });
     return data.access_token;
   })();
   try {
@@ -135,113 +138,90 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 }
 
 // ============================================================
-// Wallboard status route — device online/offline per org, for the
-// Network zone alongside Ninja and Meraki.
-// TODO: the device-list response's online/offline field name is not
-// directly confirmed from docs — verify against a real payload once
-// credentials are in hand and adjust the filter below if needed.
+// Wallboard /status and /licenses — device health and expiring
+// warranty/subscription/Prime dates, for the Network and Business zones.
 //
-// Both levels of this fan-out (org -> group -> devices) are PARALLEL —
-// confirmed live this was previously a fully sequential nested for-loop
-// (every group of every org awaited one at a time), which took 15-24+
-// seconds even with only 3 orgs, dangerously close to the dashboard's
-// own 30s poll interval. A slow-but-eventually-successful response
-// racing the next poll produces exactly a "data flickers in and out"
-// symptom. Org/group counts here are nowhere near Cloudflare's
-// per-invocation subrequest cap at this scale — no batching needed.
+// ONE call per org: GET /rest/o/{org}/d returns every device in the org,
+// each tagged with group_id/group_name (confirmed live 2026-10-01). The
+// previous version fetched devices group by group, which for "ASG Direct
+// Clients" - one org holding a group per client, 47 groups - meant ~50
+// calls per poll; that org kept failing partway and its per-org catch
+// silently dropped it from the wallboard entirely.
+//
+// An org with devices in more than one group is a container of clients
+// (ASG Direct Clients), so it becomes one tile per group, named after the
+// group - same idea as unifi-mcp splitting a shared console by site. An
+// org with a single group is one client and keeps the org name as before
+// (SBC, Dade County 911, Justice Jewelers). Decided from the data each
+// poll; no org name is hardcoded.
+//
+// Expiry field names (expiry_date, sub_expiry_date, prime_expiry_date)
+// come from the published InControl2 device schema; expiry_date is
+// confirmed live on the org-level device list.
 // ============================================================
 
-async function buildNetworkStatus(env: Env) {
+async function listOrgDevices(env: Env): Promise<Array<{ org: any; devices: any[]; multiGroup: boolean }>> {
   const orgs = (await ic2Get(env, "/rest/o")) as any;
   const orgList: any[] = orgs.data || orgs || [];
-
-  const networks = (await Promise.all(orgList.map(async (org) => {
-    try {
-      const groupsResp = (await ic2Get(env, `/rest/o/${org.id}/g`)) as any;
-      const groups: any[] = groupsResp.data || groupsResp || [];
-
-      const perGroup = await Promise.all(groups.map(async (group) => {
-        const devicesResp = (await ic2Get(env, `/rest/o/${org.id}/g/${group.id}/d`)) as any;
-        const devices: any[] = devicesResp.data || devicesResp || [];
-        return devices;
-      }));
-      const devices = perGroup.flat();
-      const offlineDevices = devices
-        .filter((d) => d.online === false || d.status === "offline")
-        .map((d) => ({ name: d.name || d.sn, status: "offline" }));
-
-      return {
-        orgName: org.name || `Org ${org.id}`,
-        totalDevices: devices.length,
-        offlineCount: offlineDevices.length,
-        offlineDevices,
-      };
-    } catch {
-      return null;
-    }
-  }))).filter((n): n is NonNullable<typeof n> => n !== null);
-
-  return { updated: new Date().toISOString(), networks };
-}
-
-// ============================================================
-// Wallboard /licenses route — warranty/subscription/Prime expiry
-// per device, for the wallboard's Business zone.
-//
-// Field names here are directly confirmed from Peplink's official
-// IC2 API docs (expiry_date, sub_expiry_date, prime_expiry_date,
-// expired) — higher confidence than most of the other TODO-marked
-// guesses in this build, since these came straight from their
-// published device object schema rather than inference.
-// ============================================================
-
-async function buildLicenseStatus(env: Env) {
-  const orgs = (await ic2Get(env, "/rest/o")) as any;
-  const orgList: any[] = orgs.data || orgs || [];
-  const now = Date.now();
-  const in60Days = now + 60 * 24 * 3600 * 1000;
-
-  // Same sequential nested fan-out issue as buildNetworkStatus above —
-  // parallelized for the same reason (this route is polled by the
-  // Business zone on the same 30s cadence as /status is by Network).
   const perOrg = await Promise.all(orgList.map(async (org) => {
     try {
-      const groupsResp = (await ic2Get(env, `/rest/o/${org.id}/g`)) as any;
-      const groups: any[] = groupsResp.data || groupsResp || [];
-
-      const perGroup = await Promise.all(groups.map(async (group) => {
-        const devicesResp = (await ic2Get(env, `/rest/o/${org.id}/g/${group.id}/d`)) as any;
-        const devices: any[] = devicesResp.data || devicesResp || [];
-
-        const renewals: Array<{ company: string; product: string; renewalDate: string; source: string }> = [];
-        for (const d of devices) {
-          const checks: Array<[string, string | undefined]> = [
-            ["Warranty", d.expiry_date],
-            ["InControl2 Subscription", d.sub_expiry_date],
-            ["Prime", d.prime_expiry_date],
-          ];
-          for (const [label, dateStr] of checks) {
-            if (!dateStr) continue;
-            const t = new Date(dateStr).getTime();
-            if (t >= now && t < in60Days) { // exclude already-lapsed dates — assumed cancelled/not renewing
-              renewals.push({
-                company: org.name || `Org ${org.id}`,
-                product: `${d.name || d.sn || "Device"} — ${label}`,
-                renewalDate: new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-                source: "Peplink",
-              });
-            }
-          }
-        }
-        return renewals;
-      }));
-      return perGroup.flat();
+      const resp = (await ic2Get(env, `/rest/o/${org.id}/d`)) as any;
+      const devices: any[] = resp.data || resp || [];
+      const multiGroup = new Set(devices.map((d) => d.group_id)).size > 1;
+      return { org, devices, multiGroup };
     } catch {
-      return [];
+      return null; // skip an org that errors rather than failing the whole response
     }
   }));
-  const upcomingRenewals = perOrg.flat();
+  return perOrg.filter((o): o is NonNullable<typeof o> => o !== null);
+}
 
+function tileName(org: any, device: any, multiGroup: boolean): string {
+  return (multiGroup && device.group_name) || org.name || `Org ${org.id}`;
+}
+
+async function buildNetworkStatus(env: Env) {
+  const tiles = new Map<string, { orgName: string; totalDevices: number; offlineCount: number; offlineDevices: Array<{ name: string; status: string }> }>();
+  for (const { org, devices, multiGroup } of await listOrgDevices(env)) {
+    for (const d of devices) {
+      const name = tileName(org, d, multiGroup);
+      if (!tiles.has(name)) tiles.set(name, { orgName: name, totalDevices: 0, offlineCount: 0, offlineDevices: [] });
+      const t = tiles.get(name)!;
+      t.totalDevices++;
+      if (d.online === false || d.status === "offline") {
+        t.offlineCount++;
+        t.offlineDevices.push({ name: d.name || d.sn, status: "offline" });
+      }
+    }
+  }
+  return { updated: new Date().toISOString(), networks: [...tiles.values()] };
+}
+
+async function buildLicenseStatus(env: Env) {
+  const now = Date.now();
+  const in60Days = now + 60 * 24 * 3600 * 1000;
+  const upcomingRenewals: Array<{ company: string; product: string; renewalDate: string; source: string }> = [];
+  for (const { org, devices, multiGroup } of await listOrgDevices(env)) {
+    for (const d of devices) {
+      const checks: Array<[string, string | undefined]> = [
+        ["Warranty", d.expiry_date],
+        ["InControl2 Subscription", d.sub_expiry_date],
+        ["Prime", d.prime_expiry_date],
+      ];
+      for (const [label, dateStr] of checks) {
+        if (!dateStr) continue;
+        const t = new Date(dateStr).getTime();
+        if (t >= now && t < in60Days) { // exclude already-lapsed dates — assumed cancelled/not renewing
+          upcomingRenewals.push({
+            company: tileName(org, d, multiGroup),
+            product: `${d.name || d.sn || "Device"} — ${label}`,
+            renewalDate: new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            source: "Peplink",
+          });
+        }
+      }
+    }
+  }
   return { updated: new Date().toISOString(), upcomingRenewals };
 }
 
