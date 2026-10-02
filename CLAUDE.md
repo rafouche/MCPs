@@ -223,6 +223,18 @@ same night (obtained_at 2026-09-22T01:50Z); it needed the redirect URI
 added to the NinjaOne client app first (unauthorized_client / Invalid
 redirect_uri until then).
 
+## halopsa-mcp: ticket attachments (2026-10-02)
+`list_ticket_attachments` (GET /Attachment?ticket_id) and
+`get_ticket_attachment` fetch Halo's signed `s3url` for an attachment. An
+image (png/jpg/gif/webp, up to 3.5 MB) comes back as an MCP `image` content
+block - `runTool` may now return `{ content: [...] }` instead of a string,
+and tools/call passes it through; text files (txt/log/csv/json/xml/html/eml)
+come back as text (50K chars); anything else returns metadata only.
+`get_ticket_brief` adds `attachments` when `attachment_count` > 0. Read-only.
+Why: #22951's real error (AADSTS90072) was only in the screenshot and the
+resolver couldn't open it. Deployed version 288d9c09; brief listing verified
+live, base64 path verified offline on the #22951 PNG.
+
 ## halopsa-mcp `send_approved_draft` - FLOW A in one atomic call
 Posts the [DRAFT PENDING APPROVAL] note's own text (after the marker, up
 to any [INTENDED ...] line) verbatim as a public emailed reply, collapses
