@@ -19,7 +19,9 @@
  *   page, per_page, returned and has_more instead of total_pages.
  * - activity_logs_show_tool is not available over REST.
  *
- * Secrets are never returned: password-type asset fields are nulled, any
+ * Secrets are never returned: password-type asset fields, fields whose label
+ * looks secret ("Client Secret", "API Key", "Token"...) and every non-ID
+ * field on a secrets/credentials/API-key asset are nulled, any
  * `password`/`otp_secret`-style key is redacted, and hudu_api_get refuses
  * the password endpoints outright. asset_edit_tool refuses assets whose
  * layout has a password field, since a REST update could clear it.
@@ -188,20 +190,43 @@ function redactText(text: string): string {
   return text.replace(SECRET_TEXT, (_m, label: string) => `${label}[redacted]`);
 }
 
-// Walks any Hudu response: nulls password-type asset field values (by the
-// asset's layout) and redacts secret-named keys wherever they appear.
-function redact(value: any, secrets: Map<number, Set<string>>, names: Map<number, string> = new Map()): any {
+// Secrets kept in plain Text fields - found 2026-10-05: asset 6321 (layout 32,
+// "Api secrets") returned its "Client Secret" field in clear, because only
+// Password/ConfidentialText field TYPES were nulled. A field is now also
+// nulled when its LABEL looks secret, and on an asset whose type/layout name
+// says it holds secrets (secret, credential, api key) every field is nulled
+// except IDs ("Client ID", "Tenant ID") and dates/expiry.
+const SECRET_FIELD_LABEL = /(secret|password|passwd|\bpwd\b|pass ?phrase|passcode|\bpin\b|api[ _-]?key|access[ _-]?key|private[ _-]?key|signing[ _-]?key|encryption[ _-]?key|recovery[ _-]?key|pre-?shared|\bpsk\b|token|\botp\b|totp|credential|connection[ _-]?string|^key$)/i;
+const ID_LABEL = /(\bid\b|(client|tenant|app|application|object|key|secret|user|account|subscription|directory)id\b|identifier)/i;
+const DATE_LABEL = /(expir|\bexpires?\b|\bdate\b|\bcreated\b|\bupdated\b|\bchanged\b|\brotated\b)/i;
+const NON_SECRET_LABEL = /(\burl\b|\buri\b|\bname\b|user ?name|\blocation\b|\bvault\b)/i;
+const SECRET_ASSET_TYPE = /(secret|credential|api[ _-]?key)/i;
+
+function secretByLabel(label: string): boolean {
+  return SECRET_FIELD_LABEL.test(label) && !ID_LABEL.test(label) && !DATE_LABEL.test(label) && !NON_SECRET_LABEL.test(label);
+}
+
+type Secrets = { labels: Map<number, Set<string>>; layoutNames: Map<number, string> };
+
+// Walks any Hudu response: nulls secret asset field values (password-type by
+// the asset's layout, secret-looking labels, every non-ID field on a secrets
+// asset) and redacts secret-named keys wherever they appear.
+function redact(value: any, secrets: Secrets, names: Map<number, string> = new Map()): any {
   if (Array.isArray(value)) return value.map((v) => redact(v, secrets, names));
   if (typeof value === "string") return redactText(value);
   if (!value || typeof value !== "object") return value;
   const outObj: Record<string, unknown> = {};
-  const layoutId = typeof value.asset_layout_id === "number" ? value.asset_layout_id : undefined;
-  const secretSet = layoutId !== undefined ? secrets.get(layoutId) : undefined;
+  const layoutId = value.asset_layout_id != null && Number.isFinite(Number(value.asset_layout_id)) ? Number(value.asset_layout_id) : undefined;
+  const isAsset = layoutId !== undefined || typeof value.asset_type === "string";
+  const secretSet = layoutId !== undefined ? secrets.labels.get(layoutId) : undefined;
+  const secretAsset = isAsset && (SECRET_ASSET_TYPE.test(String(value.asset_type ?? "")) || (layoutId !== undefined && SECRET_ASSET_TYPE.test(secrets.layoutNames.get(layoutId) ?? "")));
+  const fieldIsSecret = (label: string) =>
+    Boolean(secretSet && secretSet.has(label.toLowerCase())) || secretByLabel(label) || (secretAsset && !ID_LABEL.test(label) && !DATE_LABEL.test(label));
   for (const [k, v] of Object.entries(value)) {
     if (SECRET_KEY.test(k) && v !== null && typeof v !== "boolean") { outObj[k] = "[redacted]"; continue; }
-    if (k === "fields" && Array.isArray(v) && layoutId !== undefined) {
+    if (k === "fields" && Array.isArray(v) && isAsset) {
       outObj[k] = v.map((f: any) => {
-        if (f && secretSet && secretSet.has(String(f.label).toLowerCase())) return { ...redact(f, secrets, names), value: null, redacted: true };
+        if (f && typeof f === "object" && fieldIsSecret(String(f.label ?? f.name ?? ""))) return { ...redact(f, secrets, names), value: null, redacted: true };
         const r = redact(f, secrets, names);
         if (r && typeof r === "object" && "value" in r) r.value = listValue(f.value, names);
         return r;
@@ -215,7 +240,9 @@ function redact(value: any, secrets: Map<number, Set<string>>, names: Map<number
 }
 
 async function safe(env: Env, value: unknown): Promise<unknown> {
-  return redact(value, await secretLabels(env), await listItemNames(env));
+  const layoutNames = new Map<number, string>();
+  for (const l of await layouts(env)) layoutNames.set(Number(l.id), String(l.name ?? ""));
+  return redact(value, { labels: await secretLabels(env), layoutNames }, await listItemNames(env));
 }
 
 // ─── Field keys ───────────────────────────────────────────────────────────────
@@ -266,7 +293,7 @@ const TOOLS = [
   { name: "article_create_tool", description: "Create a Hudu Knowledge Base Article. content must be clean HTML, not Markdown.", inputSchema: { type: "object", properties: { name: { type: "string" }, content: { type: "string" }, company_id: { type: "integer" }, folder_id: { type: "integer" }, draft: { type: "boolean" } }, required: ["name"] } },
   { name: "article_edit_tool", description: "Edit an existing Hudu Knowledge Base Article. Only the arguments passed are changed. content must be clean HTML.", inputSchema: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, content: { type: "string" }, draft: { type: "boolean" } }, required: ["id"] } },
   { name: "asset_index_tool", description: "List and search Hudu Assets. Paginated (default 25). Filter with asset_layout_id, company_id, company_q (company name search), q (asset name) or primary_serial. include adds fields, cards, meta; password records are never returned.", inputSchema: { type: "object", properties: { asset_layout_id: { type: "integer" }, company_id: { type: "integer" }, company_q: { type: "string" }, q: { type: "string" }, primary_serial: { type: "string" }, include: { type: "array", items: { type: "string", enum: ["meta", "fields", "cards", "related", "passwords", "runs", "files", "photos", "comments"] } }, include_fields: { type: "boolean" }, ...PAGE_PROPS } } },
-  { name: "asset_show_tool", description: "Retrieve a single Hudu Asset by ID with all field values. Password fields are present with value null.", inputSchema: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  { name: "asset_show_tool", description: "Retrieve a single Hudu Asset by ID with all field values. Password fields and secret-looking fields are present with value null and redacted: true.", inputSchema: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   { name: "asset_create_tool", description: "Create a Hudu Asset. Find the layout with asset_layout_index_tool, read its fields with asset_layout_show_tool, then pass custom_fields keyed by field label or key, e.g. {\"Hostname\": \"srv-01\"}. Password fields cannot be set. Verify with asset_show_tool.", inputSchema: { type: "object", properties: { name: { type: "string" }, company_id: { type: "integer" }, asset_layout_id: { type: "integer" }, custom_fields: { type: "object" }, primary_serial: { type: "string" }, primary_mail: { type: "string" }, primary_model: { type: "string" }, primary_manufacturer: { type: "string" }, primary_mac: { type: "array", items: { type: "string" } } }, required: ["name", "company_id", "asset_layout_id"] } },
   { name: "asset_edit_tool", description: "Edit an existing Hudu Asset. custom_fields keyed by field label or key; only the fields passed change. Refused for assets whose layout has a password field - edit those in Hudu. Verify with asset_show_tool.", inputSchema: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, custom_fields: { type: "object" }, primary_serial: { type: "string" }, primary_mail: { type: "string" }, primary_model: { type: "string" }, primary_manufacturer: { type: "string" }, primary_mac: { type: "array", items: { type: "string" } } }, required: ["id"] } },
   { name: "asset_layout_index_tool", description: "List Hudu Asset Layouts (id, name, active). q filters by name (case-insensitive substring).", inputSchema: { type: "object", properties: { q: { type: "string" } } } },
