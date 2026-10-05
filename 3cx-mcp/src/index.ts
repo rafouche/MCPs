@@ -145,7 +145,9 @@ function toClient(asset: any): Client {
   if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
   if (url) url = url.replace(/^(https?:\/\/[^/]+).*$/i, "$1");
   // "Altec 3CX API - https://..." -> "Altec"; fall back to the company.
-  const label = name.split(/\s+3cx\b/i)[0].replace(/\s*[-|:]\s*$/, "").trim() || asset.company_name || name;
+  // A name that starts with 3CX ("3CX API Secret - https://cfsp.mo.3cx.us/")
+  // has nothing before it, so the company names the client.
+  const label = name.split(/\b3cx\b/i)[0].replace(/\s*[-|:]\s*$/, "").trim() || asset.company_name || name;
   const c: Client = {
     key: slug(label),
     name: label,
