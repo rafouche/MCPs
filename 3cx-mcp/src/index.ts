@@ -167,8 +167,15 @@ async function loadClients(env: Env, refresh = false): Promise<Client[]> {
   if (clientRequest) return clientRequest;
   clientRequest = (async () => {
     const wanted = (env.HUDU_SECRETS_LAYOUT || "Api secrets").toLowerCase();
-    const layouts: any[] = (await huduGet(env, "/asset_layouts")).asset_layouts ?? [];
-    const layout = layouts.find((l) => String(l.name).toLowerCase() === wanted);
+    // /asset_layouts is paged (25 a page) - the Api secrets layout (id 32)
+    // was not on page 1 (2026-10-05). Ask by name first, then page.
+    const isWanted = (l: any) => String(l.name).toLowerCase() === wanted;
+    let layout = ((await huduGet(env, "/asset_layouts", { name: env.HUDU_SECRETS_LAYOUT || "Api secrets" })).asset_layouts ?? []).find(isWanted);
+    for (let page = 1; !layout && page <= 10; page++) {
+      const batch: any[] = (await huduGet(env, "/asset_layouts", { page })).asset_layouts ?? [];
+      layout = batch.find(isWanted);
+      if (batch.length < 25) break;
+    }
     if (!layout) throw new Error(`Hudu has no asset layout named "${env.HUDU_SECRETS_LAYOUT || "Api secrets"}" (HUDU_SECRETS_LAYOUT).`);
     const assets: any[] = [];
     for (let page = 1; page <= 20; page++) {
@@ -177,7 +184,9 @@ async function loadClients(env: Env, refresh = false): Promise<Client[]> {
       if (batch.length < 100) break;
     }
     const clients = assets
-      .filter((a) => !a.archived && (/3cx/i.test(a.name ?? "") || /3cx/i.test(fieldValue(a, /service\s*name/i))))
+      // "<Client> 3CX API - <url>", or 3CX as the Service Name - not every
+      // asset mentioning 3CX ("3CX MCP -> Hudu API Key" is this Worker's own key).
+      .filter((a) => !a.archived && (/3cx\s+api/i.test(a.name ?? "") || /^3cx\b/i.test(fieldValue(a, /service\s*name/i))))
       .map(toClient)
       .sort((a, b) => a.name.localeCompare(b.name));
     // Unique keys: a second "Altec" becomes "altec-2".
@@ -301,6 +310,10 @@ async function tcx(env: Env, c: Client, method: string, path: string, query?: Re
 
 function literal(name: string, type: string, nullable: boolean, value: unknown, aliases: Record<string, string>): string {
   if (value === undefined || value === null) {
+    // 3CX validates every function parameter as required, nullable or not:
+    // null for an optional string 400s ("The queueDns field is required"),
+    // an empty string is what the admin console sends (live, 2026-10-05).
+    if (nullable && type === "string" && value === undefined) return "''";
     if (nullable || value === null) return "null";
     throw new Error(`missing parameter ${name} (${type})`);
   }
@@ -397,7 +410,7 @@ const TOOLS = [
   { name: "tcx_find_endpoints", description: `Search the full 3CX XAPI catalog (${CATALOG.ops.length} operations from 3CX's own OpenAPI spec, PBX build ${CATALOG.version}) by keyword - e.g. 'queue agents', 'reboot phone', 'call log', 'forwarding profile', 'backup', 'trunk registration'. With no query, lists the API areas (tags) and how many operations each has. Each hit shows the operationId to pass to tcx_call, its parameters, OData query options, body and result type.`, inputSchema: { type: "object", properties: { query: { type: "string", description: "Words that must all appear in the operation id, path, area or summary" }, method: { type: "string", description: "Only GET / POST / PATCH / PUT / DELETE" }, area: { type: "string", description: "Only this area (tag), e.g. Users, Queues, Trunks" }, limit: { type: "number", description: "Max hits (default 40)" } } } },
   { name: "tcx_describe_endpoint", description: "Full detail of one XAPI operation: path template, typed parameters (with allowed enum values), OData query options, request body fields and result type, plus a ready tcx_call example.", inputSchema: { type: "object", properties: { operation: { type: "string", description: "operationId (e.g. GetCallLogData) or 'METHOD /path'" } }, required: ["operation"] } },
   { name: "tcx_describe_schema", description: "Properties and types of a 3CX entity/complex type (e.g. User, Queue, CallHistoryView, ForwardingProfile), or the values of an enum - use it to build $select/$filter or a PATCH body.", inputSchema: { type: "object", properties: { name: { type: "string", description: "Schema name, with or without the 'Pbx.' prefix" } }, required: ["name"] } },
-  { name: "tcx_call", description: "Run ANY 3CX XAPI operation on a client's PBX by its operationId (find it with tcx_find_endpoints). The Worker builds the OData URL from the spec: path/key/function parameters go in params (typed literals are written for you; a nullable one may be omitted), OData options in query, and the JSON body in body (for actions, the action's parameters may be given in params instead). GET operations only read; POST/PATCH/PUT/DELETE CHANGE THE PBX - confirm with the user first. Collections default to $top=100.", inputSchema: { type: "object", properties: { ...CLIENT, operation: { type: "string", description: "operationId, e.g. ListUser, GetUser, UpdateUser, GetCallLogData, MakeCall" }, params: { type: "object", description: "Path/key/function parameters by name, e.g. {\"Id\": 12} or {\"periodFrom\": \"2026-10-01T00:00:00Z\", ...}", additionalProperties: true }, query: { type: "object", description: "OData options, e.g. {\"$filter\": \"Number eq '100'\", \"$select\": \"Id,Number\", \"$expand\": \"Groups\", \"$top\": 20}", additionalProperties: true }, body: { description: "JSON request body for POST/PATCH/PUT (PATCH sends only the fields given)" } }, required: ["operation"] } },
+  { name: "tcx_call", description: "Run ANY 3CX XAPI operation on a client's PBX by its operationId (find it with tcx_find_endpoints). The Worker builds the OData URL from the spec: path/key/function parameters go in params (typed literals are written for you; an omitted optional text parameter is sent as '' - 3CX rejects null - and report time-of-day filters such as callTimeFilterFrom take '0:00:0' for none), OData options in query, and the JSON body in body (for actions, the action's parameters may be given in params instead). GET operations only read; POST/PATCH/PUT/DELETE CHANGE THE PBX - confirm with the user first. Collections default to $top=100.", inputSchema: { type: "object", properties: { ...CLIENT, operation: { type: "string", description: "operationId, e.g. ListUser, GetUser, UpdateUser, GetCallLogData, MakeCall" }, params: { type: "object", description: "Path/key/function parameters by name, e.g. {\"Id\": 12} or {\"periodFrom\": \"2026-10-01T00:00:00Z\", ...}", additionalProperties: true }, query: { type: "object", description: "OData options, e.g. {\"$filter\": \"Number eq '100'\", \"$select\": \"Id,Number\", \"$expand\": \"Groups\", \"$top\": 20}", additionalProperties: true }, body: { description: "JSON request body for POST/PATCH/PUT (PATCH sends only the fields given)" } }, required: ["operation"] } },
   { name: "tcx_api_get", description: "Read-only escape hatch: GET any raw XAPI path on a client's PBX, relative to /xapi/v1 - e.g. '/Users', \"/Users(12)/ForwardingProfiles\", '/SystemStatus/Pbx.SystemHealthStatus()'. OData options go in query. Response truncated at 60K chars.", inputSchema: { type: "object", properties: { ...CLIENT, path: { type: "string", description: "Path starting with '/', relative to /xapi/v1 (no '?' - use query)" }, query: { type: "object", description: "Query options, e.g. {\"$filter\": \"...\", \"$top\": 50}", additionalProperties: true } }, required: ["path"] } },
   { name: "tcx_api_request", description: "Write escape hatch: POST/PATCH/PUT/DELETE any raw XAPI path on a client's PBX (relative to /xapi/v1). CHANGES THE PBX - confirm with the user first. Prefer tcx_call, which builds the URL and body shape from the spec.", inputSchema: { type: "object", properties: { ...CLIENT, method: { type: "string", enum: ["POST", "PATCH", "PUT", "DELETE"] }, path: { type: "string" }, query: { type: "object", additionalProperties: true }, body: { description: "JSON body" } }, required: ["method", "path"] } },
 
@@ -411,7 +424,6 @@ const TOOLS = [
   { name: "list_trunks", description: "List a client's SIP trunks (provider, numbers, direction, registration).", inputSchema: { type: "object", properties: { ...CLIENT, ...ODATA } } },
   { name: "list_active_calls", description: "Calls in progress right now on a client's PBX.", inputSchema: { type: "object", properties: { ...CLIENT } } },
   { name: "get_call_log", description: "A client's call log report (the admin console's Call Log: source, destination, direction, status, answered, durations) for a date range, newest first.", inputSchema: { type: "object", properties: { ...CLIENT, ...RANGE, calls_type: { type: "number", description: "0 all (default), 1 answered, 2 unanswered" }, filter: ODATA.filter, top: ODATA.top, skip: ODATA.skip }, required: ["from", "to"] } },
-  { name: "get_call_history", description: "A client's raw call history segments (CallHistoryView) for a date range, newest first; filter e.g. \"SrcCallerNumber eq '100'\".", inputSchema: { type: "object", properties: { ...CLIENT, ...RANGE, filter: ODATA.filter, select: ODATA.select, top: ODATA.top, skip: ODATA.skip }, required: ["from", "to"] } },
   { name: "list_event_logs", description: "A client's PBX event log (errors, warnings, info), newest first.", inputSchema: { type: "object", properties: { ...CLIENT, ...ODATA } } },
 ];
 
@@ -427,13 +439,6 @@ function listQuery(args: Record<string, unknown>, defaults: Record<string, unkno
   };
 }
 
-function rangeFilter(field: string, args: Record<string, unknown>): string {
-  const from = new Date(String(args.from));
-  const to = new Date(String(args.to));
-  if (isNaN(from.getTime()) || isNaN(to.getTime())) throw new Error("from and to must be ISO date-times");
-  const f = `${field} ge ${from.toISOString()} and ${field} lt ${to.toISOString()}`;
-  return args.filter ? `${f} and (${args.filter})` : f;
-}
 
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
   switch (name) {
@@ -591,21 +596,15 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const path = buildOpPath(op, {
         periodFrom: args.from, periodTo: args.to,
         sourceType: 0, sourceFilter: "", destinationType: 0, destinationFilter: "",
-        callsType: args.calls_type ?? 0, callTimeFilterType: 0, callTimeFilterFrom: null, callTimeFilterTo: null,
-        hidePcalls: false,
+        // The admin console's own defaults; null/'' for the time filters is
+        // rejected or returns nothing (live, 2026-10-05).
+        callsType: args.calls_type ?? 0, callTimeFilterType: 0, callTimeFilterFrom: "0:00:0", callTimeFilterTo: "0:00:0",
+        hidePcalls: true,
       }, aliases);
       const q: Record<string, unknown> = { $top: args.top ?? 100, $orderby: "StartTime desc", ...aliases };
       if (args.filter) q.$filter = args.filter;
       if (args.skip) q.$skip = args.skip;
       return out(await tcx(env, c, "GET", path, q));
-    }
-
-    case "get_call_history": {
-      const c = await resolveClient(env, args.client);
-      const q: Record<string, unknown> = { $filter: rangeFilter("SegmentStartTime", args), $orderby: "SegmentStartTime desc", $top: args.top ?? 100 };
-      if (args.select) q.$select = args.select;
-      if (args.skip) q.$skip = args.skip;
-      return out(await tcx(env, c, "GET", "/CallHistoryView", q));
     }
 
     case "list_event_logs": {

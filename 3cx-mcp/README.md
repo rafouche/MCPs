@@ -36,7 +36,7 @@ shows it with `ready: false` and says what's missing.
 | `tcx_describe_schema` | An entity's fields (User, Queue, ForwardingProfile...) or an enum's values. |
 | `tcx_call` | Runs **any** operation by operationId on any client. The worker writes the OData URL: typed key and function literals, and parameter aliases for complex values. Collections default to `$top=100`. |
 | `tcx_api_get` / `tcx_api_request` | Raw `/xapi/v1` path, GET only / write. |
-| `get_system_status`, `list_users`, `get_user`, `list_queues`, `list_ring_groups`, `list_receptionists`, `list_groups`, `list_trunks`, `list_active_calls`, `get_call_log`, `get_call_history`, `list_event_logs` | Shortcuts for common lookups. |
+| `get_system_status`, `list_users`, `get_user`, `list_queues`, `list_ring_groups`, `list_receptionists`, `list_groups`, `list_trunks`, `list_active_calls`, `get_call_log`, `list_event_logs` | Shortcuts for common lookups. |
 
 Every tool takes `client`: the key from `list_clients`, or the client's
 name, company or PBX host. A unique partial match also works.
@@ -46,6 +46,20 @@ the client's phone system.
 
 Responses redact fields named like passwords, PINs and secrets
 (`AuthPassword`, `VMPIN`, ...). Responses over 60K characters are cut off.
+
+## Live findings (Altec PBX, 20.0.9.995, 2026-10-05)
+
+- **Report functions require every parameter.** Passing `null` for an
+  optional text parameter gets a 400 ("The queueDns field is required"), so
+  `tcx_call` sends `''` for omitted ones. The call log's time-of-day filters
+  take `'0:00:0'` (the admin console's default), with `hidePcalls=true`.
+- **`CallHistoryView` is the legacy table.** On Altec its data stops in June
+  2025, and a `$filter` on `SegmentStartTime` returns a 500. Use
+  `get_call_log` (ReportCallLogData) for real call history.
+- **`GetExtensionStatisticsData` returns a 500** on this 20.0.9 PBX. The
+  catalog is from 20.0.10, so some reports may differ by build.
+- **Asset matching.** Only Hudu assets named "... 3CX API ..." (or with
+  Service Name "3CX") count as PBXs. "3CX MCP -> Hudu API Key" is ignored.
 
 ## Design notes
 
