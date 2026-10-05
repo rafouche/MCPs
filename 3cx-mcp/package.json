@@ -7,11 +7,13 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "catalog": "node scripts/build-catalog.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.4",
     "@types/node": "^25.9.1",
+    "js-yaml": "^5.4.2",
     "typescript": "^5.5.2",
     "vitest": "~3.2.0",
     "wrangler": "^4.94.0"

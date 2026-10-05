@@ -5,6 +5,20 @@
   "compatibility_date": "2026-05-21",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Secrets (never in this file): HUDU_API_KEY (a Hudu API key that can read
+  // the "Api secrets" layout - the client list and each PBX's XAPI
+  // credential live there) and MCP_AUTH_TOKEN (the Bearer token the MCP
+  // client registration sends). Fails closed: nothing but /health answers
+  // until both are set.
+  "vars": {
+    "HUDU_BASE_URL": "https://altecusa.huducloud.com",
+    "HUDU_SECRETS_LAYOUT": "Api secrets"
+  },
+  // One shared access token per PBX (3CX keeps only one active token per API
+  // client, so isolates must not mint their own) - see getToken().
+  "kv_namespaces": [
+    { "binding": "TCX_TOKENS", "id": "489712bfbd99493bbb6c240f337a59b1" }
+  ],
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
   "keep_vars": true
