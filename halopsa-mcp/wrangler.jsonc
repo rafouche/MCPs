@@ -15,8 +15,21 @@
   "vars": {
     "PIPELINE_AGENT_ID": "17",
     "ON_CALL_SHIFT_TYPE_ID": "1",
-    "ON_CALL_SMS_DOMAIN": "altec.text.email"
+    "ON_CALL_SMS_DOMAIN": "altec.text.email",
+    // Billing tools (POST /billing/mcp only; see README "Billing tools").
+    // The only Halo collections they may write. Anything else is refused, and
+    // agents/roles/API applications/integration secrets are refused even if
+    // listed here. This tenant has /ClientContract, not /Contract.
+    "BILLING_WRITE_PATHS": "/RecurringInvoice,/ClientContract,/Client,/Item,/SoftwareLicence,/Pax8Details,/Control,/Invoice",
+    // The only /Control (system settings) keys the billing tools may change.
+    "BILLING_CONTROL_KEYS": "autocreaterecurringinvoices,autosendemailforautorinvoices,automaticallysendinvoiceemails,enableinvoiceapprovals,mergerecurringinvoices"
   },
+  // Optional KV for the billing audit trail. Every real billing write is
+  // always logged to Workers Logs as a "BILLING_AUDIT {...}" line; binding a
+  // KV namespace here as BILLING_AUDIT also keeps the entries indefinitely and
+  // makes get_billing_audit work. To enable: `wrangler kv namespace create
+  // BILLING_AUDIT`, then add
+  //   "kv_namespaces": [{ "binding": "BILLING_AUDIT", "id": "<id it prints>" }]
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
   "keep_vars": true

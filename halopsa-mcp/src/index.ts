@@ -1,3 +1,4 @@
+import { BILLING_TOOLS, runBillingTool } from "./billing";
 export interface Env {
   MCP_AUTH_TOKEN?: string;
   HUMAN_TOUCH_IGNORE_APP_IDS?: string;
@@ -20,6 +21,16 @@ export interface Env {
   HALO_CLIENT_ID: string;
   HALO_CLIENT_SECRET: string;
   HALO_TENANT: string;
+  // Billing tools (src/billing.ts) - served only on POST /billing/mcp, never on
+  // /mcp. Their own inbound token and their own Halo API application; see
+  // README "Billing tools".
+  BILLING_MCP_AUTH_TOKEN?: string;
+  HALO_BILLING_CLIENT_ID?: string;
+  HALO_BILLING_CLIENT_SECRET?: string;
+  HALO_BILLING_SCOPE?: string;
+  BILLING_WRITE_PATHS?: string;
+  BILLING_CONTROL_KEYS?: string;
+  BILLING_AUDIT?: KVNamespace;
 }
 async function getToken(env: Env): Promise<string> {
   const res = await fetch(`${env.HALO_BASE_URL}/auth/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "client_credentials", client_id: env.HALO_CLIENT_ID, client_secret: env.HALO_CLIENT_SECRET, scope: "all" }).toString() });
@@ -1350,10 +1361,43 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+async function handleBillingMcp(request: Request, env: Env): Promise<Response> {
+  if (!env.BILLING_MCP_AUTH_TOKEN) return new Response(JSON.stringify({ error: "Billing route disabled: BILLING_MCP_AUTH_TOKEN is not set." }), { status: 503, headers: JSON_HEADERS });
+  if (env.MCP_AUTH_TOKEN && timingSafeEqual(env.BILLING_MCP_AUTH_TOKEN, env.MCP_AUTH_TOKEN)) return new Response(JSON.stringify({ error: "Billing route disabled: BILLING_MCP_AUTH_TOKEN must differ from MCP_AUTH_TOKEN." }), { status: 503, headers: JSON_HEADERS });
+  const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!timingSafeEqual(provided, env.BILLING_MCP_AUTH_TOKEN)) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
+  if (request.method !== "POST") return new Response(JSON.stringify({ error: "POST JSON-RPC to /billing/mcp" }), { status: 405, headers: JSON_HEADERS });
+  let body: unknown;
+  try { body = await request.json(); } catch { return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }), { status: 400, headers: JSON_HEADERS }); }
+  const caller = { route: "/billing/mcp", ip: request.headers.get("CF-Connecting-IP"), user_agent: request.headers.get("User-Agent"), cf_ray: request.headers.get("CF-Ray") };
+  const messages = Array.isArray(body) ? body : [body];
+  const responses: unknown[] = [];
+  for (const msg of messages as Array<{ jsonrpc: string; id?: unknown; method: string; params?: Record<string, unknown> }>) {
+    const { id, method, params } = msg;
+    if (id === undefined) continue;
+    try {
+      if (method === "initialize") responses.push({ jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "HaloPSA Billing MCP", version: "1.0.0" } } });
+      else if (method === "tools/list") responses.push({ jsonrpc: "2.0", id, result: { tools: BILLING_TOOLS } });
+      else if (method === "tools/call") { const text = await runBillingTool(params?.name as string, (params?.arguments ?? {}) as Record<string, unknown>, env, caller); responses.push({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } }); }
+      else if (method === "ping") responses.push({ jsonrpc: "2.0", id, result: {} });
+      else responses.push({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } });
+    } catch (err) { responses.push({ jsonrpc: "2.0", id, error: { code: -32000, message: (err as Error).message } }); }
+  }
+  const out = responses.length === 0 ? null : responses.length === 1 ? responses[0] : responses;
+  if (out === null) return new Response(null, { status: 204, headers: CORS });
+  return new Response(JSON.stringify(out), { headers: JSON_HEADERS });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    // Billing tools: their own route and token, checked here instead of
+    // MCP_AUTH_TOKEN, so the Help Desk agent's token (which only reaches /mcp)
+    // can never call them, and /mcp's tool list stays exactly as it was.
+    // Fails closed: no BILLING_MCP_AUTH_TOKEN = route off. The two tokens must
+    // differ, or the agent's token would open this route too.
+    if (url.pathname === "/billing/mcp") return handleBillingMcp(request, env);
     // Inbound auth (opt-in): once the MCP_AUTH_TOKEN secret is set on this
     // Worker, every route except OPTIONS and /health must carry
     // "Authorization: Bearer <that token>" - the same header the MCP client
