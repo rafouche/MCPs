@@ -15,6 +15,26 @@ wrangler deploy
 
 Deploys to `https://huntress-mcp.young-math-a33a.workers.dev`.
 
+## Rotating the key (2026-10-14)
+
+- The API credentials must be able to read **identities** (Huntress ITDR /
+  M365 users). The original key could read organizations, agents, signals,
+  incidents and escalations, but `list_identities`/`get_identity` returned
+  `{"error":"Access denied","code":"forbidden"}` and the REST passthrough
+  `/api/huntress/identities` said "You are not authorized to access this
+  page" (HelpDeskAgent ticket #23377). A user's API credentials fixed it.
+- **Editing a secret in the Cloudflare dashboard only saves a new version.**
+  It is not live until that version is deployed (Workers & Pages >
+  huntress-mcp > Deployments > the new version > Deploy). On 2026-10-14 the
+  new secrets sat in two undeployed versions while the Worker kept running
+  the old key. `wrangler secret put` deploys immediately.
+- Test identity access with `list_identities`, not `get_actor`: for an API
+  key `get_actor` shows only the account, whichever key it is.
+
+```cmd
+curl https://huntress-mcp.young-math-a33a.workers.dev/api/huntress/identities?limit=1
+```
+
 ## Test
 
 ```bash
