@@ -319,6 +319,21 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
+## GET and DELETE on /mcp answer 405 (2026-10-26, NOT YET DEPLOYED)
+
+The nine Workers HelpDeskAgent uses (halopsa, cipp, ninjarmm, hudu, huntress,
+meraki, unifi, peplink, threecx) answered GET /mcp with the 200 text banner.
+A Streamable HTTP client opens GET /mcp as its event stream; AllieService's
+.NET client read the banner as a stream that kept closing and retried it 3-6
+times every cycle (cipp-mcp Workers observability, 2026-10-26). They now
+answer GET and DELETE on /mcp with 405 (`Allow: POST`), which the protocol
+defines as "no event stream here". Live code was compared with the repo
+before this change: identical apart from this line. The deploy was blocked by
+the session's auto-mode check as a production deploy; deploy each with
+`../meraki-mcp/node_modules/.bin/wrangler deploy` once Roger approves, then
+check GET /mcp gives 405 (or 401 where MCP_AUTH_TOKEN is set and no token is
+sent) and the connector still lists its tools.
+
 ## STANDING RULE: inbound auth for every Worker (Roger, 2026-09-25 - "option 1")
 
 Apply this to every Worker, including any new one. Roger chose it over a

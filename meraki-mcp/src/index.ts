@@ -439,6 +439,10 @@ export default {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
       }
     }
+    // Streamable HTTP (MCP 2025-03-26): a server with no event stream of its own answers GET and DELETE on
+    // /mcp with 405. The 200 text reply this route used to give was read by the AllieService client as a
+    // stream that kept closing, retried 3-6 times every cycle (cipp-mcp log, 2026-10-26).
+    if (url.pathname === "/mcp" && (request.method === "GET" || request.method === "DELETE")) return new Response(null, { status: 405, headers: { Allow: "POST" } });
     if (url.pathname === "/mcp" && request.method === "POST") {
       let body: unknown;
       try { body = await request.json(); } catch { return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }), { status: 400, headers: JSON_HEADERS }); }
