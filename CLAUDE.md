@@ -319,7 +319,7 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
-## GET and DELETE on /mcp answer 405 (2026-10-26, NOT YET DEPLOYED)
+## GET and DELETE on /mcp answer 405 (2026-10-26, deployed 2026-10-26)
 
 The nine Workers HelpDeskAgent uses (halopsa, cipp, ninjarmm, hudu, huntress,
 meraki, unifi, peplink, threecx) answered GET /mcp with the 200 text banner.
@@ -328,11 +328,16 @@ A Streamable HTTP client opens GET /mcp as its event stream; AllieService's
 times every cycle (cipp-mcp Workers observability, 2026-10-26). They now
 answer GET and DELETE on /mcp with 405 (`Allow: POST`), which the protocol
 defines as "no event stream here". Live code was compared with the repo
-before this change: identical apart from this line. The deploy was blocked by
-the session's auto-mode check as a production deploy; deploy each with
-`../meraki-mcp/node_modules/.bin/wrangler deploy` once Roger approves, then
-check GET /mcp gives 405 (or 401 where MCP_AUTH_TOKEN is set and no token is
-sent) and the connector still lists its tools.
+before this change: identical apart from this line. Deployed 2026-10-26 on Roger's
+go: cipp d70bdf45, halopsa cf95fae3, ninjarmm 14cfefd2, hudu 6e5f3e52,
+huntress 938f54c7, meraki 865a46e3, unifi d25046f8, peplink ed97efda,
+threecx 8a59e0fe. GET /mcp without a token: 401 where MCP_AUTH_TOKEN is set,
+405 on meraki/unifi/peplink; /health 200 everywhere; healthcheck tool OK on
+Halo, CIPP, Ninja, Hudu, Meraki, UniFi, Peplink. ninjarmm's log then showed
+the shadow's GET answered 405 once with no retries. Same check also caught
+one healthcheck from this session that timed out without ever reaching the
+Worker (no request logged) and worked on retry - the #23862 pattern, on the
+client side of Cloudflare.
 
 ## STANDING RULE: inbound auth for every Worker (Roger, 2026-09-25 - "option 1")
 
