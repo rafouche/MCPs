@@ -1350,6 +1350,29 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// /status is built at most once every 5 minutes per isolate (2026-10-29). Building it costs 10-100 ms of
+// CPU, over the free plan's 10 ms per request, and the wallboard polls it every minute: 197 refreshes on
+// cipp-mcp and halopsa-mcp were cut off in two days once the TV page was back on. The Cache API does
+// nothing on a workers.dev address, so the last answer is kept in memory instead; a cold isolate builds it
+// again. A build already in progress is shared, so two polls at once don't both pay for it. A failed
+// build isn't kept, so the next poll tries again.
+const STATUS_CACHE_MS = 5 * 60 * 1000;
+let statusCache: { body: string; at: number } | null = null;
+let statusBuilding: Promise<string> | null = null;
+async function cachedStatus(build: () => Promise<unknown>): Promise<string> {
+  if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) return statusCache.body;
+  if (!statusBuilding) {
+    statusBuilding = build()
+      .then((status) => {
+        const body = JSON.stringify(status);
+        statusCache = { body, at: Date.now() };
+        return body;
+      })
+      .finally(() => { statusBuilding = null; });
+  }
+  return statusBuilding;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -1377,8 +1400,7 @@ export default {
     if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok", instance: env.HALO_BASE_URL }), { headers: JSON_HEADERS });
     if (url.pathname === "/status") {
       try {
-        const status = await buildTicketStatus(env);
-        return new Response(JSON.stringify(status), { headers: JSON_HEADERS });
+        return new Response(await cachedStatus(() => buildTicketStatus(env)), { headers: JSON_HEADERS });
       } catch (err) {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
       }

@@ -319,6 +319,22 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
+## /status is rebuilt at most every 5 minutes on cipp-mcp and halopsa-mcp (2026-10-29)
+
+Cloudflare warned that Workers hit the free plan's CPU limit (10 ms per
+request) 100+ times in a day. Observability: all 197 hits in 48 h were
+wallboard GET /status calls (cipp-mcp 129, halopsa-mcp 68; building it costs
+cipp ~24-52 ms, halopsa ~8-19 ms), starting 2026-10-28 ~18:00 UTC when the
+wallboard was polling every 30 s again. No /mcp or /helpdesk-* request went
+over. Both Workers now keep the last /status body in memory for 5 minutes
+(`cachedStatus`; the Cache API does nothing on workers.dev) and share a
+build in progress; a failed build isn't kept. Deployed: cipp f833b07e,
+halopsa ad29aaa9. The wallboard (rafouche/Dashboard v1.6) polls every 60 s.
+Also seen in the same logs, separate and older: buildSecurityStatus fails
+for ~17 tenants every build with "Too many subrequests" (the free plan's
+50-per-request cap) and a few with CIPP consent errors (CIPP-SAM not
+consented, tenants showing RequiresRefresh in list_tenants).
+
 ## GET and DELETE on /mcp answer 405 (2026-10-26, deployed 2026-10-26)
 
 The nine Workers HelpDeskAgent uses (halopsa, cipp, ninjarmm, hudu, huntress,
