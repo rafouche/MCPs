@@ -319,6 +319,21 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
+## cipp-mcp /status comes in batches (2026-10-29)
+
+`/status?batch=i&of=n` builds only the i-th of n slices of the tenant list
+(sorted by name). The free plan allows 50 outbound calls per request and each
+tenant costs 2, so one build for 35 tenants left ~17 out ("Too many
+subrequests"). Tenants with a LastGraphError in ListTenants (consent
+withdrawn: Champ, Christian County Health, Fair Grove, Just The Doc, Ozarks
+Transportation, Republic Animal Hospital; missing service principal: SMART
+Transportation, Truck Parts) are skipped and listed in batch 1's `noAccess`.
+RequiresRefresh alone doesn't count (the partner tenant shows it and works).
+Each batch returns `tenants` (per-tenant secure score/MFA) and is cached for 5
+minutes on its own. The wallboard (v1.7) fetches 3 batches and combines them.
+Verified after deploy 537610f8: 27 tenants built across 3 batches, 8 no-access,
+repeat requests answered from memory. Plain `/status` is batch 1 of 1.
+
 ## /status is rebuilt at most every 5 minutes on cipp-mcp and halopsa-mcp (2026-10-29)
 
 Cloudflare warned that Workers hit the free plan's CPU limit (10 ms per

@@ -292,8 +292,21 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
   return results;
 }
 
-async function buildSecurityStatus(env: Env) {
-  const tenants = (await cippGet(env, "ListTenants")) as any[];
+// Batches (2026-10-29): one request may make 50 outbound calls on the free plan, and every tenant costs 2,
+// so with 33 tenants about 17 failed every build with "Too many subrequests" and were missing from the
+// wallboard. `/status?batch=i&of=n` builds only the i-th of n equal slices of the tenant list (sorted by
+// name, so the slices stay stable); the wallboard fetches every slice and combines them from `tenants`.
+// Tenants CIPP itself can't reach (a LastGraphError, e.g. consent withdrawn) are skipped and listed in `noAccess`
+// instead of costing two calls that are bound to fail. Plain `/status` is one batch of everything.
+async function buildSecurityStatus(env: Env, batch = 1, of = 1) {
+  const all = ((await cippGet(env, "ListTenants")) as any[])
+    .sort((a, b) => String(a.displayName || a.defaultDomainName).localeCompare(String(b.displayName || b.defaultDomainName)));
+  // Only a real access error counts: the partner tenant shows RequiresRefresh with no error and answers fine.
+  const unreachable = (t: any) => typeof t.LastGraphError === "string" && t.LastGraphError.length > 0;
+  const reachable = all.filter((t) => !unreachable(t));
+  const size = Math.ceil(reachable.length / of);
+  const tenants = reachable.slice((batch - 1) * size, batch * size);
+  const noAccess = batch === 1 ? all.filter(unreachable).map((t) => ({ tenant: t.displayName || t.defaultDomainName, error: String(t.LastGraphError).slice(0, 160) })) : [];
 
   const perTenant: TenantSecuritySummary[] = await mapWithConcurrency(tenants, 5, async (tenant): Promise<TenantSecuritySummary> => {
       const tenantFilter = tenant.defaultDomainName || tenant.customerId || tenant.tenantId;
@@ -345,11 +358,16 @@ async function buildSecurityStatus(env: Env) {
 
   return {
     updated: new Date().toISOString(),
+    batch,
+    of,
     tenantCount: tenants.length,
+    totalTenants: all.length,
     avgSecureScore,
     avgMfaPercent,
     lowScoreTenants,
     lowMfaTenants,
+    tenants: perTenant,
+    noAccess,
   };
 }
 
@@ -376,20 +394,24 @@ function timingSafeEqual(a: string, b: string): boolean {
 // again. A build already in progress is shared, so two polls at once don't both pay for it. A failed
 // build isn't kept, so the next poll tries again.
 const STATUS_CACHE_MS = 5 * 60 * 1000;
-let statusCache: { body: string; at: number } | null = null;
-let statusBuilding: Promise<string> | null = null;
-async function cachedStatus(build: () => Promise<unknown>): Promise<string> {
-  if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) return statusCache.body;
-  if (!statusBuilding) {
-    statusBuilding = build()
+// Keyed by batch ("1/3", "2/3", ...), each with its own 5-minute life.
+const statusCache = new Map<string, { body: string; at: number }>();
+const statusBuilding = new Map<string, Promise<string>>();
+async function cachedStatus(key: string, build: () => Promise<unknown>): Promise<string> {
+  const hit = statusCache.get(key);
+  if (hit && Date.now() - hit.at < STATUS_CACHE_MS) return hit.body;
+  let pending = statusBuilding.get(key);
+  if (!pending) {
+    pending = build()
       .then((status) => {
         const body = JSON.stringify(status);
-        statusCache = { body, at: Date.now() };
+        statusCache.set(key, { body, at: Date.now() });
         return body;
       })
-      .finally(() => { statusBuilding = null; });
+      .finally(() => { statusBuilding.delete(key); });
+    statusBuilding.set(key, pending);
   }
-  return statusBuilding;
+  return pending;
 }
 
 export default {
@@ -419,7 +441,9 @@ export default {
     if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok", instance: env.CIPP_URL }), { headers: JSON_HEADERS });
     if (url.pathname === "/status") {
       try {
-        return new Response(await cachedStatus(() => buildSecurityStatus(env)), { headers: JSON_HEADERS });
+        const of = Math.min(Math.max(parseInt(url.searchParams.get("of") || "1", 10) || 1, 1), 10);
+        const batch = Math.min(Math.max(parseInt(url.searchParams.get("batch") || "1", 10) || 1, 1), of);
+        return new Response(await cachedStatus(`${batch}/${of}`, () => buildSecurityStatus(env, batch, of)), { headers: JSON_HEADERS });
       } catch (err) {
         return new Response(JSON.stringify({ error: (err as Error).message }), { status: 502, headers: JSON_HEADERS });
       }
