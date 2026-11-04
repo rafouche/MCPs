@@ -128,6 +128,33 @@ function hasPipelineNoteMarker(note: string): boolean {
 // deleted or need copying by hand; #22920 had put its findings below the
 // [INTENDED] lines and the old collapse to a bare "[APPROVED DRAFT]" erased
 // them.
+// A draft note's text with its line breaks. Real incident, #24147 (2026-11-04): Halo now keeps a note_html for
+// a note written as plain text, and GET /Actions rebuilds `note` from it with every line break dropped, so the
+// [DRAFT PENDING APPROVAL] marker and the reply came back run together on one line and send_approved_draft
+// refused an approved draft (nothing was sent). note_html still has the breaks as <br>. The plain note is used
+// when its marker still sits on a line of its own; otherwise the text is rebuilt from note_html.
+function hasMarkerLine(text: string): boolean {
+  return text.split(/\r\n|\r|\n/).some((l) => l.trim() === "[DRAFT PENDING APPROVAL]");
+}
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&")
+    .split("\n").map((l) => l.replace(/\s+$/, "")).join("\n");
+}
+function draftNoteText(action: any): string {
+  const note = String(action?.note ?? "");
+  if (hasMarkerLine(note)) return note;
+  if (typeof action?.note_html === "string" && action.note_html) {
+    const rebuilt = htmlToText(action.note_html);
+    if (hasMarkerLine(rebuilt)) return rebuilt;
+  }
+  return note;
+}
+
 function collapsedDraftNote(rawNote: string): string {
   const lines = rawNote.split(/\r\n|\r|\n/);
   const markerIdx = lines.findIndex((l) => l.trim() === "[DRAFT PENDING APPROVAL]");
@@ -789,7 +816,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         draft = drafts[0];
       }
       // Reply text: everything after the marker line, stopping at the first [INTENDED ...] line.
-      const rawNote: string = String(draft.note ?? "");
+      const rawNote: string = draftNoteText(draft);
       const lines = rawNote.split(/\r\n|\r|\n/);
       const markerIdx = lines.findIndex((l) => l.trim() === "[DRAFT PENDING APPROVAL]");
       if (markerIdx < 0) throw new Error(`send_approved_draft: draft ${draft.id} has no marker line. Nothing was sent.`);
@@ -910,7 +937,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // re-verified specifically for /Actions from a live call - worth
       // confirming the first time this runs for real, the same way every
       // other not-yet-deployed MCP change this project ships gets flagged.
-      const shortNote = collapsedDraftNote(note);
+      const shortNote = collapsedDraftNote(draftNoteText(action));
       await haloPost(env, "/Actions", [{ id: args.action_id, ticket_id: args.ticket_id, note: shortNote, note_html: noteToHtml(shortNote), hiddenfromuser: true, outcome_id: 7 }]);
       return JSON.stringify({ edited: true, action_id: args.action_id, ticket_id: args.ticket_id, note: shortNote }, null, 2);
     }
