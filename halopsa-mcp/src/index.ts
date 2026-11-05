@@ -816,7 +816,12 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         draft = drafts[0];
       }
       // Reply text: everything after the marker line, stopping at the first [INTENDED ...] line.
-      const rawNote: string = draftNoteText(draft);
+      let rawNote: string = draftNoteText(draft);
+      if (!hasMarkerLine(rawNote)) {
+        // The ticket's action list carries no note_html (#24147, 2026-11-05): fetch the draft action itself, which does.
+        const full = (await haloGet(env, `/Actions/${draft.id}`, { ticket_id: String(ticketId) })) as any;
+        rawNote = draftNoteText(full);
+      }
       const lines = rawNote.split(/\r\n|\r|\n/);
       const markerIdx = lines.findIndex((l) => l.trim() === "[DRAFT PENDING APPROVAL]");
       if (markerIdx < 0) throw new Error(`send_approved_draft: draft ${draft.id} has no marker line. Nothing was sent.`);

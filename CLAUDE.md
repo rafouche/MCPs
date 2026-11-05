@@ -319,6 +319,20 @@ is unchanged. Ticket #22609 (assigned to Michael, set to Ready for AI) was
 invisible to the gate once untracked, so HelpDeskAgent skipped every cycle
 as "nothing changed" (fixed in HelpDeskAgent v2.15.2).
 
+## halopsa-mcp: approved drafts read from note_html (2026-11-05)
+
+#24147: Halo now keeps a note_html for a note written as plain text and
+rebuilds `note` from it with every line break dropped, so an approved
+draft's marker and reply came back on one line and send_approved_draft
+refused it (nothing sent). draftNoteText uses the plain note when the
+[DRAFT PENDING APPROVAL] marker still has a line of its own, otherwise
+rebuilds the text from note_html (<br> to line breaks, tags stripped,
+entities decoded). The ticket's action list (GET /Actions?ticket_id) has no
+note_html, so send_approved_draft fetches the single action
+(GET /Actions/{id}) when it needs it; mark_draft_approved already did.
+Deployed 596d593d; dry run on #24147's draft gave the full reply with its
+line breaks. A draft with neither form usable is still refused.
+
 ## cipp-mcp /status comes in batches (2026-10-29)
 
 `/status?batch=i&of=n` builds only the i-th of n slices of the tenant list
