@@ -405,6 +405,50 @@ async function buildCandidateBrief(env: Env, id: string, historyCount: number, m
   }
 }
 
+// ---- Shifts calendar: list / create / update / delete -----------------------
+// Shifts are appointments with type 4 (see loadOnCallShifts). escalate_emergency
+// pages whoever the calendar says is on call, so every write here is scoped to
+// type-4 rows (a shift tool can never touch a client visit or a meeting), is
+// checked against the real agent, supports dry_run, and is re-read afterwards.
+function shiftTime(v: unknown, label: string): string {
+  const ms = v ? haloUtc(v) : NaN;
+  if (Number.isNaN(ms)) throw new Error(`${label} must be an ISO timestamp, e.g. 2026-11-10T13:00:00Z (no timezone = UTC, the same convention as every time Halo returns).`);
+  return new Date(ms).toISOString().slice(0, 19);
+}
+function trimShift(r: any) {
+  return {
+    id: r.id, agent_id: r.agent_id, agent_name: r.agent_name ?? null, subject: r.subject ?? "",
+    start_date: r.start_date, end_date: r.end_date, shift_type_id: r.shift_type_id ?? null,
+    shift_team_id: r.shift_team_id ?? null, is_ad_hoc_shift: r.is_ad_hoc_shift ?? null,
+    recurring_master: !!r._recurringmaster, recurring_master_id: r.recurring_master_id || r.halo_recurring_master_id || null, recurring_desc: r.recurring_desc || null,
+  };
+}
+async function loadShiftRows(env: Env, fromMs: number, toMs: number): Promise<any[]> {
+  const rows = (await haloGet(env, "/Appointment", { showshifts: "true", shiftsonly: "true", showall: "true", start_date: new Date(fromMs).toISOString().slice(0, 10), end_date: new Date(toMs).toISOString().slice(0, 10) })) as any[];
+  return (Array.isArray(rows) ? rows : []).filter((r: any) => r && Number(r.type) === 4);
+}
+async function getShiftOrThrow(env: Env, id: unknown, tool: string): Promise<any> {
+  const r = (await haloGet(env, `/Appointment/${id}`, { showshifts: "true" })) as any;
+  if (!r || typeof r !== "object" || !r.id) throw new Error(`${tool}: no appointment with id ${id}.`);
+  if (Number(r.type) !== 4) throw new Error(`${tool}: appointment ${id} is not a shift (type ${r.type}) - refusing to touch a visit, meeting or other calendar entry.`);
+  return r;
+}
+async function requireShiftAgent(env: Env, id: unknown, tool: string): Promise<any> {
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 1) throw new Error(`${tool}: agent_id must be a real agent (not 0 or the Unassigned placeholder, 1) - find it with list_agents.`);
+  const a = (await haloGet(env, `/Agent/${n}`)) as any;
+  if (!a || !a.id) throw new Error(`${tool}: no agent with id ${n}.`);
+  if (a.isdisabled) throw new Error(`${tool}: agent ${n} (${a.name}) is disabled - refusing to put a disabled agent on a shift.`);
+  return a;
+}
+async function onCallNowSummary(env: Env) {
+  const r = await resolveOnCall(env, new Date());
+  return { at: r.at, agents: r.on_call.map((p) => p.agent_name), lookup_error: r.error ?? null };
+}
+function shiftOverlaps(rows: any[], agentId: number, startMs: number, endMs: number, exceptId?: number) {
+  return rows.filter((r: any) => !r._recurringmaster && Number(r.agent_id) === agentId && Number(r.id) !== exceptId && haloUtc(r.start_date) < endMs && startMs < haloUtc(r.end_date));
+}
+
 type OnCallPerson = { agent_id: number; agent_name: string; email: string | null; mobile: string | null; sms: string[]; shift: { appointment_id: number; subject: string; start: string; end: string; shift_type_id: number } };
 type OnCallResolution = { at: string; source: "halo" | "previous" | "none"; on_call: OnCallPerson[]; emailto: string | null; emailcc: string[]; error?: string };
 // The agent's Mobile Number (Halo's `sms` field) as an email-to-SMS address at
@@ -540,6 +584,10 @@ const TOOLS = [
   { name: "emergency_follow_up", description: "Run every cycle by the service for each ticket it raised an emergency on - not for the resolver. Reads the ticket's [EMERGENCY ACK SENT] note and does whatever is due, once each: nobody was paged -> a second alert on the next run (fallback list first, then the current on-call); 30 minutes with no human action -> re-page the current on-call (else the fallback list); 60 minutes -> page the fallback list (previous on-call). Each re-page is a hidden emailed action carrying '[EMERGENCY REPAGE] stage=...'; a re-page that reaches nobody writes a private note saying a person must call on-call by hand. Stops (done: true) once a person acts on the ticket, the ticket is closed, or the 60-minute page has run. dry_run (with optional `now`) shows what would happen.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, dry_run: { type: "boolean" }, now: { type: "string", description: "dry_run only: evaluate as of this ISO timestamp (UTC)" } }, required: ["ticket_id"] } },
   { name: "get_on_call", description: "Who is on call right now (or at `at`), read from Halo's own Shifts calendar: the agent whose On-call shift covers that moment, with the email (Halo agent record) and text address (the record's Mobile Number at the email-to-SMS service domain; none = email only) escalate_emergency would page - plus the fallback list (whoever had the most recent On-call shift that already ended), which is paged when nobody is on shift or that page fails. Read-only; use it to check the schedule before relying on it.", inputSchema: { type: "object", properties: { at: { type: "string", description: "Optional ISO timestamp (UTC, e.g. 2026-09-22T01:45:00Z) to evaluate instead of now" } }, required: [] } },
   { name: "halo_api_get", description: "Read-only escape hatch: GET any HaloPSA API path (e.g. '/Appointment', '/ShiftType', '/Agent/28') with optional query params, for data no dedicated tool covers. GET only - it cannot change anything. Not part of the Help Desk agent's allowlist; for humans and discovery.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path under /api, starting with '/'" }, params: { type: "object", additionalProperties: { type: "string" }, description: "Query string parameters" } }, required: ["path"] } },
+  { name: "list_shifts", description: "List shifts on Halo's Shifts calendar (appointments of type 4 - they are invisible to list_appointments). Defaults to 1 day back through 14 days ahead. Returns each shift's id, agent, start/end (UTC, no suffix, like every Halo time), shift_type_id (1 = On-call in this tenant), subject, and whether it is a recurring template. Use it to find the id update_shift/delete_shift need. Read-only.", inputSchema: { type: "object", properties: { from: { type: "string", description: "ISO start of window (default: now - 1 day)" }, to: { type: "string", description: "ISO end of window (default: now + 14 days)" }, agent_id: { type: "number" }, shift_type_id: { type: "number", description: "e.g. 1 for On-call" }, include_recurring_masters: { type: "boolean", description: "Include recurring-series templates (default false - they are not real shifts)" } } } },
+  { name: "create_shift", description: "Create a shift on Halo's Shifts calendar for an agent. escalate_emergency pages whoever the calendar says is on call, so this changes who gets paged: shift_type_id defaults to the On-call type, times are ISO (no timezone = UTC, like Halo's own), the agent must be a real, enabled agent, and the same agent cannot be double-booked unless allow_overlap is true. The result is re-read from Halo to confirm it landed and includes `on_call_now` (who the paging logic would use right now). dry_run: true shows exactly what would be posted without creating anything.", inputSchema: { type: "object", properties: { agent_id: { type: "number", description: "Agent who is on shift (list_agents)" }, start: { type: "string", description: "ISO start, e.g. 2026-11-10T13:00:00Z" }, end: { type: "string", description: "ISO end, must be after start" }, subject: { type: "string", description: "Shift title (default 'On call')" }, shift_type_id: { type: "number", description: "Default: the On-call shift type" }, shift_team_id: { type: "number" }, allow_overlap: { type: "boolean" }, dry_run: { type: "boolean" } }, required: ["agent_id", "start", "end"] } },
+  { name: "update_shift", description: "Change an existing shift's agent, start/end, subject or shift type, in place. Fetches the appointment first and refuses unless it is a shift (type 4) - it cannot edit a visit or meeting - and refuses a recurring-series template (change those in Halo's own UI so the whole series is handled deliberately). Re-reads afterwards and reports `on_call_now`. dry_run: true shows the before/after without changing anything.", inputSchema: { type: "object", properties: { appointment_id: { type: "number", description: "Shift id from list_shifts" }, agent_id: { type: "number" }, start: { type: "string" }, end: { type: "string" }, subject: { type: "string" }, shift_type_id: { type: "number" }, allow_overlap: { type: "boolean" }, dry_run: { type: "boolean" } }, required: ["appointment_id"] } },
+  { name: "delete_shift", description: "Delete one shift from Halo's Shifts calendar (DELETE /Appointment/{id}). Fetches it first and refuses unless it is a shift (type 4) and not a recurring-series template; returns what was deleted plus `on_call_now`. There is no undo (recreate it with create_shift). dry_run: true shows what would be deleted.", inputSchema: { type: "object", properties: { appointment_id: { type: "number", description: "Shift id from list_shifts" }, dry_run: { type: "boolean" } }, required: ["appointment_id"] } },
   { name: "delete_ticket_note", description: "Delete a stale pending draft note this pipeline previously wrote, using HaloPSA's real DELETE /Actions/{id} endpoint - e.g. before writing a revised '[DRAFT PENDING APPROVAL]' draft, so the ticket never accumulates more than one at a time. Deliberately narrow, not a general-purpose delete: this call fetches the action first and refuses (no delete performed) unless it belongs to the given ticket_id, is private (hiddenfromuser: true), and its note contains the exact literal '[DRAFT PENDING APPROVAL]' marker on its own line (not necessarily as the very first characters - a note that also records something else first, e.g. a contact relink, ahead of the marker still matches) - it cannot be used to remove a human's note, a real client-facing reply, or anything this pipeline didn't itself write as a pending draft. Also accepts this pipeline's own transient status notes - a private note whose text carries the literal '[PIPELINE NOTE]' marker on its own line AND whose actionby_application_id is 'Claude' (v2.12.2) - so FLOW A can clear its 'waiting on a human' notes once the ticket proceeds; a human's note can never match that. Real incident: this tool didn't exist for a long time because an earlier investigation found update_ticket has no edit/delete parameter and concluded (correctly, for that tool) that deleting a note wasn't possible at all - it never checked whether HaloPSA's own REST API has a dedicated delete endpoint, which it does (confirmed directly against HaloPSA's own API reference). Without this, a superseded draft was never removed - just left behind as a second, stale note - which piled up into a ticket carrying 3 separate '[DRAFT PENDING APPROVAL]' notes over several revision rounds, tripping FLOW A's own 'exactly one draft note or stop' safety check. Second real incident, ticket #22265: this check originally required the marker to be the very first characters of the note, which refused a legitimate delete because the resolver had recorded a contact relink in the same note ahead of the marker - relaxed to match the marker anywhere on its own line instead.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, action_id: { type: "number", description: "The id of the Action/note to delete, from get_ticket_time_entries' own action list." } }, required: ["ticket_id", "action_id"] } },
   { name: "mark_draft_approved", description: "Collapse a sent '[DRAFT PENDING APPROVAL]' note down to a short '[APPROVED DRAFT]' marker, in place (keeping any internal text the note carried outside the reply - above the marker or below its [INTENDED ...] lines - so findings are never lost) - the full draft text is already redundant once the real reply has actually been sent (it's visible in that reply action itself), so this keeps the ticket's action history from carrying the same reply text twice. Same safety scoping as delete_ticket_note (fetches the action first and refuses - no edit performed - unless it belongs to the given ticket_id, is private, and its note contains the exact literal '[DRAFT PENDING APPROVAL]' marker on its own line, not necessarily as the very first characters), but edits the action's note in place via POST /Actions with its own id (HaloPSA's update-via-POST convention, the same one update_ticket already relies on for /Tickets) instead of deleting it outright - use this when the caller wants a visible trace that a draft existed and was approved, not zero trace at all (delete_ticket_note is still the right call for a superseded draft nobody approved).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, action_id: { type: "number", description: "The id of the Action/note to collapse, from get_ticket_time_entries' own action list." } }, required: ["ticket_id", "action_id"] } },
   { name: "list_clients", description: "List clients/customers in HaloPSA", inputSchema: { type: "object", properties: { count: { type: "number" }, search: { type: "string" }, include_inactive: { type: "boolean" } } } },
@@ -996,6 +1044,64 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const data = await haloGet(env, path, params);
       const text = JSON.stringify(data, null, 2);
       return text.length > 60000 ? text.slice(0, 60000) + "\n... [truncated]" : text;
+    }
+    case "list_shifts": {
+      const day = 86400000, now = Date.now();
+      const fromMs = args.from ? haloUtc(shiftTime(args.from, "from")) : now - day;
+      const toMs = args.to ? haloUtc(shiftTime(args.to, "to")) : now + 14 * day;
+      let rows = (await loadShiftRows(env, fromMs - day, toMs + day)).filter((r: any) => haloUtc(r.start_date) < toMs && fromMs < haloUtc(r.end_date));
+      if (!args.include_recurring_masters) rows = rows.filter((r: any) => !r._recurringmaster);
+      if (args.agent_id) rows = rows.filter((r: any) => Number(r.agent_id) === Number(args.agent_id));
+      if (args.shift_type_id !== undefined) rows = rows.filter((r: any) => Number(r.shift_type_id) === Number(args.shift_type_id));
+      rows.sort((a: any, b: any) => haloUtc(a.start_date) - haloUtc(b.start_date));
+      return JSON.stringify({ from: new Date(fromMs).toISOString().slice(0, 19), to: new Date(toMs).toISOString().slice(0, 19), count: rows.length, shifts: rows.map(trimShift) }, null, 2);
+    }
+    case "create_shift": {
+      const day = 86400000;
+      const startS = shiftTime(args.start, "start"), endS = shiftTime(args.end, "end");
+      const startMs = haloUtc(startS), endMs = haloUtc(endS);
+      if (endMs <= startMs) throw new Error("create_shift: end must be after start.");
+      if (endMs - startMs > 14 * day) throw new Error("create_shift: a shift longer than 14 days looks like a mistake - create it in pieces if it is intended.");
+      const agent = await requireShiftAgent(env, args.agent_id, "create_shift");
+      const shiftTypeId = Number(args.shift_type_id ?? env.ON_CALL_SHIFT_TYPE_ID ?? 1);
+      const body: Record<string, unknown> = { type: 4, agent_id: agent.id, subject: String(args.subject || "On call"), start_date: startS, end_date: endS, shift_type_id: shiftTypeId, allday: false };
+      if (args.shift_team_id) body.shift_team_id = args.shift_team_id;
+      const overlaps = shiftOverlaps(await loadShiftRows(env, startMs - day, endMs + day), agent.id, startMs, endMs).map(trimShift);
+      if (overlaps.length && !args.allow_overlap) throw new Error(`create_shift: ${agent.name} already has an overlapping shift (${overlaps.map((o) => `#${o.id} ${o.start_date} - ${o.end_date}`).join("; ")}). Change that one with update_shift, or pass allow_overlap: true to double-book on purpose.`);
+      if (args.dry_run) return JSON.stringify({ dry_run: true, agent: agent.name, would_post: body, overlaps_existing: overlaps }, null, 2);
+      const res = (await haloPost(env, "/Appointment", [body])) as any;
+      const created = Array.isArray(res) ? res[0] : res;
+      const after = await loadShiftRows(env, startMs - day, endMs + day);
+      const found = after.find((r: any) => created?.id && Number(r.id) === Number(created.id)) ?? after.find((r: any) => Number(r.agent_id) === agent.id && haloUtc(r.start_date) === startMs && haloUtc(r.end_date) === endMs && Number(r.shift_type_id) === shiftTypeId);
+      return JSON.stringify({ created: !!found, shift: found ? trimShift(found) : null, halo_response_id: created?.id ?? null, note: found ? undefined : "Halo accepted the POST but the shift was not found on re-read - check with list_shifts before retrying so it is not created twice.", overlaps_allowed: overlaps.length ? overlaps : undefined, on_call_now: await onCallNowSummary(env) }, null, 2);
+    }
+    case "update_shift": {
+      const day = 86400000;
+      const cur = await getShiftOrThrow(env, args.appointment_id, "update_shift");
+      if (cur._recurringmaster) throw new Error("update_shift: this is a recurring-series template, not a single shift - change recurring series in Halo's own calendar so the whole series is handled deliberately. (Individual dates of the series show up in list_shifts and can be changed here.)");
+      const agentId = args.agent_id !== undefined ? Number((await requireShiftAgent(env, args.agent_id, "update_shift")).id) : Number(cur.agent_id);
+      const startS = args.start !== undefined ? shiftTime(args.start, "start") : shiftTime(cur.start_date, "current start");
+      const endS = args.end !== undefined ? shiftTime(args.end, "end") : shiftTime(cur.end_date, "current end");
+      const startMs = haloUtc(startS), endMs = haloUtc(endS);
+      if (endMs <= startMs) throw new Error("update_shift: end must be after start.");
+      if (endMs - startMs > 14 * day) throw new Error("update_shift: a shift longer than 14 days looks like a mistake.");
+      const body: Record<string, unknown> = { id: cur.id, type: 4, agent_id: agentId, subject: args.subject !== undefined ? String(args.subject) : String(cur.subject ?? ""), start_date: startS, end_date: endS, shift_type_id: args.shift_type_id !== undefined ? Number(args.shift_type_id) : Number(cur.shift_type_id) };
+      const overlaps = shiftOverlaps(await loadShiftRows(env, startMs - day, endMs + day), agentId, startMs, endMs, Number(cur.id)).map(trimShift);
+      if (overlaps.length && !args.allow_overlap) throw new Error(`update_shift: that would overlap another shift for the same agent (${overlaps.map((o) => `#${o.id} ${o.start_date} - ${o.end_date}`).join("; ")}). Pass allow_overlap: true to double-book on purpose.`);
+      if (args.dry_run) return JSON.stringify({ dry_run: true, before: trimShift(cur), would_post: body, overlaps_existing: overlaps }, null, 2);
+      await haloPost(env, "/Appointment", [body]);
+      const after = (await haloGet(env, `/Appointment/${cur.id}`, { showshifts: "true" })) as any;
+      const landed = !!after && shiftTime(after.start_date, "s") === startS && shiftTime(after.end_date, "e") === endS && Number(after.agent_id) === agentId && Number(after.shift_type_id) === Number(body.shift_type_id) && String(after.subject ?? "") === body.subject;
+      return JSON.stringify({ updated: landed, before: trimShift(cur), after: trimShift(after), part_of_recurring_series: !!(cur.recurring_master_id || cur.halo_recurring_master_id) || undefined, note: landed ? undefined : "Halo accepted the POST but the re-read does not match what was requested - check with list_shifts.", on_call_now: await onCallNowSummary(env) }, null, 2);
+    }
+    case "delete_shift": {
+      const cur = await getShiftOrThrow(env, args.appointment_id, "delete_shift");
+      if (cur._recurringmaster) throw new Error("delete_shift: this is a recurring-series template - deleting it would remove the whole series. Do that deliberately in Halo's own calendar.");
+      if (args.dry_run) return JSON.stringify({ dry_run: true, would_delete: trimShift(cur) }, null, 2);
+      await haloDelete(env, `/Appointment/${cur.id}`);
+      let stillThere = false;
+      try { const again = (await haloGet(env, `/Appointment/${cur.id}`, { showshifts: "true" })) as any; stillThere = !!(again && again.id); } catch { stillThere = false; }
+      return JSON.stringify({ deleted: !stillThere, shift: trimShift(cur), note: stillThere ? "DELETE was accepted but the shift can still be read - check with list_shifts." : undefined, on_call_now: await onCallNowSummary(env) }, null, 2);
     }
     case "delete_ticket_note": {
       // Deliberately scoped to exactly one use case - superseding this

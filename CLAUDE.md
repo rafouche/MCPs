@@ -451,3 +451,21 @@ meraki, unifi, peplink, jumpcloud, huntress, m365, gworkspace, pax8. m365
 `/status` returns 502 because its M365_TENANTS secret is not valid JSON
 (pre-existing; the wallboard does not use m365).
 
+
+## halopsa-mcp: Shifts calendar write tools (2026-11-09)
+`list_shifts`, `create_shift`, `update_shift`, `delete_shift` manage Halo's
+Shifts calendar (appointments of `type` 4, invisible to `list_appointments`;
+`/Appointment` with `showshifts/shiftsonly/showall`). Roger asked for write
+access because `escalate_emergency` pages whoever the calendar says is on
+call. Scoped to type-4 rows (a visit or meeting is refused), refuse
+recurring-series templates (change those in Halo's own calendar), require a
+real enabled agent (not Unassigned/disabled), refuse double-booking the same
+agent unless `allow_overlap`, take `dry_run`, re-read after writing, and
+report `on_call_now`. Times are ISO; no timezone = UTC (Halo's own
+convention). **Deployed 2026-11-09 (version 6d5e4d13) but NOT yet verified
+live**: Halo's exact required fields for creating/updating a shift and
+whether DELETE needs extra params are unconfirmed - test with a clearly
+labeled scratch shift before relying on it. The claude.ai "Halo" connector
+keeps an old tool list; use a fresh session/connector refresh to see the new
+tools. Deploying needs `CLOUDFLARE_ACCOUNT_ID=77913d04ce44a8767e3736930eadc0c4`
+(wrangler now sees several accounts and can't pick one non-interactively).
