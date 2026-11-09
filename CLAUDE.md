@@ -157,7 +157,9 @@ altec.text.email, Roger's email-to-SMS service), no number = email only.
 First agent = `emailto`, the rest + every SMS address = `emailcc`.
 
 **Reworked 2026-11-09 (Roger): page first, acknowledge second, with a
-fallback.** Order in `escalate_emergency`: (1) page the current on-call
+fallback.** Deployed 2026-11-09 (78d5dff, version 9471aa87); live check:
+get_on_call showed nobody on shift and the fallback = Roger (agent 28,
+email + text, shift ended 2026-11-06 23:00Z). Order in `escalate_emergency`: (1) page the current on-call
 (`pageOnCall`); if nobody's shift covers the moment, nobody on it has an
 email, or that page fails to post, page the FALLBACK list instead: whoever
 had the most recent On-call shift that already ended (`resolvePreviousOnCall`,
