@@ -5,3 +5,4 @@ MCPs.txt
 **/altec-mcp-server-*.json
 .DS_Store
 .dev.vars
+halopsa-mcp/test/.emergency-worker.mjs

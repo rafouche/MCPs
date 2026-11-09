@@ -1,20 +1,31 @@
 export interface Env {
   MCP_AUTH_TOKEN?: string;
   HUMAN_TOUCH_IGNORE_APP_IDS?: string;
-  // escalate_emergency (HelpDeskAgent v2.13.x): the on-call page is ONE hidden
-  // emailed action on the ticket itself (outcome 16, emailto/emailcc
-  // overrides, hiddenfromuser) addressed to whoever Halo's own Shifts
-  // calendar has on call at that moment: the email on their Halo agent record
-  // and, when the record has a Mobile Number (Halo's `sms` field), a text at
+  // escalate_emergency (HelpDeskAgent v2.13.x, reworked 2026-11-09): PAGE
+  // FIRST, ACKNOWLEDGE SECOND. The on-call page is ONE hidden emailed action
+  // on the ticket itself (outcome 16, emailto/emailcc overrides,
+  // hiddenfromuser) addressed to whoever Halo's own Shifts calendar has on
+  // call at that moment: the email on their Halo agent record and, when the
+  // record has a Mobile Number (Halo's `sms` field), a text at
   // <digits>@ON_CALL_SMS_DOMAIN (default altec.text.email). No mobile number =
   // email only. Nobody with an On-call shift (shift_type_id
-  // ON_CALL_SHIFT_TYPE_ID, default 1) = NOBODY is paged, on purpose: there is
-  // no fallback address (Roger, 2026-09-21); the ticket gets the private
-  // [EMERGENCY ACK SENT] note saying so and the tool response says sent=false,
-  // which the resolver turns into a NEEDS URGENT note for a human.
+  // ON_CALL_SHIFT_TYPE_ID, default 1) covering the moment, or that page
+  // failing = the FALLBACK list: whoever had the most recent On-call shift
+  // that already ended (Roger, 2026-11-09; this replaces "no fallback,
+  // nobody paged" from 2026-09-21). No previous shift either = nobody paged.
+  // Only then is the client acknowledged, with wording that matches what
+  // actually happened (never a promise of a page that did not go out). When
+  // nobody was paged the ticket is set to Critical (priority level
+  // CRITICAL_PRIORITY_ID, default 1) and the follow-up status. The
+  // [EMERGENCY ACK SENT] note records the result either way.
+  // emergency_follow_up (run every cycle by the caller): a second alert on
+  // the next run when nobody was paged, a re-page at 30 minutes with no
+  // human action (the Critical response target), the fallback list at 60.
   EMERGENCY_ACK_SIGNATURE?: string; // overrides the default Allie sign-off below
   ON_CALL_SHIFT_TYPE_ID?: string;
   ON_CALL_SMS_DOMAIN?: string;
+  CRITICAL_PRIORITY_ID?: string; // priority level set when nobody could be paged (default 1 = Critical/Urgent on every SLA)
+  FOLLOW_UP_STATUS_NAME?: string; // status set when nobody could be paged, unless the caller passes follow_up_status_id (default "Follow Up Needed")
   PIPELINE_AGENT_ID?: string; // the Help Desk agent's own Halo agent id (default 17, "Allie") - see guardUnassign
   HALO_BASE_URL: string;
   HALO_CLIENT_ID: string;
@@ -395,7 +406,7 @@ async function buildCandidateBrief(env: Env, id: string, historyCount: number, m
 }
 
 type OnCallPerson = { agent_id: number; agent_name: string; email: string | null; mobile: string | null; sms: string[]; shift: { appointment_id: number; subject: string; start: string; end: string; shift_type_id: number } };
-type OnCallResolution = { at: string; source: "halo" | "none"; on_call: OnCallPerson[]; emailto: string | null; emailcc: string[]; error?: string };
+type OnCallResolution = { at: string; source: "halo" | "previous" | "none"; on_call: OnCallPerson[]; emailto: string | null; emailcc: string[]; error?: string };
 // The agent's Mobile Number (Halo's `sms` field) as an email-to-SMS address at
 // the service domain: digits only, so "(417) 830-0075" -> 4178300075@<domain>.
 // Fewer than 10 digits is not a usable mobile number - email only.
@@ -405,43 +416,112 @@ function smsAddressFor(env: Env, mobile: string | null): string[] {
   const digits = raw.length === 11 && raw.startsWith("1") ? raw.slice(1) : raw; // "+1 417..." -> 10 digits, like the gateway expects
   return domain && digits.length >= 10 ? [`${digits}@${domain}`] : [];
 }
-// Who is on call at `at`, from Halo's Shifts calendar. Shifts are appointments
-// (type 4) that GET /Appointment only returns with showshifts=true; shiftsonly
-// drops everything else and showall ignores the API user's own calendar
-// filter. Recurring masters are templates, not shifts. Halo returns times in
-// UTC without a suffix. Nobody scheduled, or a lookup error, means nobody to
-// page (source "none", emailto null) - there is deliberately no fallback.
-async function resolveOnCall(env: Env, at: Date): Promise<OnCallResolution> {
+// Halo returns times in UTC without a suffix.
+function haloUtc(v: unknown): number {
+  return new Date(/Z$|[+-]\d\d:\d\d$/.test(String(v)) ? String(v) : `${String(v)}Z`).getTime();
+}
+// On-call shifts around `at`, from Halo's Shifts calendar. Shifts are
+// appointments (type 4) that GET /Appointment only returns with
+// showshifts=true; shiftsonly drops everything else and showall ignores the
+// API user's own calendar filter. Recurring masters are templates, not shifts.
+async function loadOnCallShifts(env: Env, at: Date): Promise<any[]> {
+  const shiftTypeId = Number(env.ON_CALL_SHIFT_TYPE_ID || 1);
+  const day = 86400000;
+  const rows = (await haloGet(env, "/Appointment", { showshifts: "true", shiftsonly: "true", showall: "true", start_date: new Date(at.getTime() - 14 * day).toISOString().slice(0, 10), end_date: new Date(at.getTime() + 2 * day).toISOString().slice(0, 10) })) as any[];
+  return (Array.isArray(rows) ? rows : []).filter((r: any) => r && !r._recurringmaster && Number(r.type) === 4
+    && (Number(r.shift_type_id) === shiftTypeId || /\bon[ -]?call\b/i.test(String(r.subject ?? "")))
+    && Number(r.agent_id) > 0);
+}
+// Shifts -> the people to page: email from each agent record, plus a text
+// address when the record has a mobile number. Nobody with an email = nobody.
+async function onCallFromShifts(env: Env, at: Date, shifts: any[], source: "halo" | "previous", noneReason: string): Promise<OnCallResolution> {
   const none: OnCallResolution = { at: at.toISOString(), source: "none", on_call: [], emailto: null, emailcc: [] };
-  try {
-    const shiftTypeId = Number(env.ON_CALL_SHIFT_TYPE_ID || 1);
-    const day = 86400000;
-    const rows = (await haloGet(env, "/Appointment", { showshifts: "true", shiftsonly: "true", showall: "true", start_date: new Date(at.getTime() - 14 * day).toISOString().slice(0, 10), end_date: new Date(at.getTime() + 2 * day).toISOString().slice(0, 10) })) as any[];
-    const asUtc = (v: unknown) => new Date(/Z$|[+-]\d\d:\d\d$/.test(String(v)) ? String(v) : `${String(v)}Z`).getTime();
-    const t = at.getTime();
-    const active = (Array.isArray(rows) ? rows : []).filter((r: any) => r && !r._recurringmaster && Number(r.type) === 4
-      && (Number(r.shift_type_id) === shiftTypeId || /\bon[ -]?call\b/i.test(String(r.subject ?? "")))
-      && Number(r.agent_id) > 0 && asUtc(r.start_date) <= t && t < asUtc(r.end_date));
-    const seen = new Set<number>();
-    const people: OnCallPerson[] = [];
-    for (const r of active) {
-      const agentId = Number(r.agent_id);
-      if (seen.has(agentId)) continue;
-      seen.add(agentId);
-      let email: string | null = null; let mobile: string | null = null;
-      try { const a = (await haloGet(env, `/Agent/${agentId}`)) as any; email = String(a?.email ?? "").trim().toLowerCase() || null; mobile = String(a?.sms ?? "").trim() || null; } catch { email = null; mobile = null; }
-      people.push({ agent_id: agentId, agent_name: String(r.agent_name ?? ""), email, mobile, sms: smsAddressFor(env, mobile), shift: { appointment_id: Number(r.id), subject: String(r.subject ?? ""), start: String(r.start_date), end: String(r.end_date), shift_type_id: Number(r.shift_type_id) } });
-    }
-    const withEmail = people.filter((p) => p.email);
-    if (withEmail.length === 0) {
-      return { ...none, on_call: people, error: people.length ? `on-call agent(s) ${people.map((p) => p.agent_name || p.agent_id).join(", ")} have no email on their Halo agent record - nobody to page` : "nobody has an On-call shift covering this moment in Halo - nobody to page" };
-    }
-    const emailto = withEmail[0].email as string;
-    const emailcc = Array.from(new Set(withEmail.slice(1).map((p) => p.email as string).concat(withEmail.flatMap((p) => p.sms)).filter((x) => x.toLowerCase() !== emailto)));
-    return { at: at.toISOString(), source: "halo", on_call: people, emailto, emailcc };
-  } catch (err) {
-    return { ...none, error: `on-call lookup failed (${(err as Error).message}) - nobody to page` };
+  const seen = new Set<number>();
+  const people: OnCallPerson[] = [];
+  for (const r of shifts) {
+    const agentId = Number(r.agent_id);
+    if (seen.has(agentId)) continue;
+    seen.add(agentId);
+    let email: string | null = null; let mobile: string | null = null;
+    try { const a = (await haloGet(env, `/Agent/${agentId}`)) as any; email = String(a?.email ?? "").trim().toLowerCase() || null; mobile = String(a?.sms ?? "").trim() || null; } catch { email = null; mobile = null; }
+    people.push({ agent_id: agentId, agent_name: String(r.agent_name ?? ""), email, mobile, sms: smsAddressFor(env, mobile), shift: { appointment_id: Number(r.id), subject: String(r.subject ?? ""), start: String(r.start_date), end: String(r.end_date), shift_type_id: Number(r.shift_type_id) } });
   }
+  const withEmail = people.filter((p) => p.email);
+  if (withEmail.length === 0) {
+    return { ...none, on_call: people, error: people.length ? `${source === "previous" ? "previous " : ""}on-call agent(s) ${people.map((p) => p.agent_name || p.agent_id).join(", ")} have no email on their Halo agent record - nobody to page` : noneReason };
+  }
+  const emailto = withEmail[0].email as string;
+  const emailcc = Array.from(new Set(withEmail.slice(1).map((p) => p.email as string).concat(withEmail.flatMap((p) => p.sms)).filter((x) => x.toLowerCase() !== emailto)));
+  return { at: at.toISOString(), source, on_call: people, emailto, emailcc };
+}
+// Who is on call at `at`: every On-call shift covering that moment.
+async function resolveOnCall(env: Env, at: Date, shifts?: any[]): Promise<OnCallResolution> {
+  try {
+    const rows = shifts ?? await loadOnCallShifts(env, at);
+    const t = at.getTime();
+    return await onCallFromShifts(env, at, rows.filter((r: any) => haloUtc(r.start_date) <= t && t < haloUtc(r.end_date)), "halo", "nobody has an On-call shift covering this moment in Halo");
+  } catch (err) {
+    return { at: at.toISOString(), source: "none", on_call: [], emailto: null, emailcc: [], error: `on-call lookup failed (${(err as Error).message})` };
+  }
+}
+// The fallback list (Roger, 2026-11-09): whoever had the most recent On-call
+// shift that has already ended (looked back up to 14 days). Every shift
+// ending at that same latest moment counts, so a split shift pages both.
+async function resolvePreviousOnCall(env: Env, at: Date, shifts?: any[]): Promise<OnCallResolution> {
+  try {
+    const rows = shifts ?? await loadOnCallShifts(env, at);
+    const t = at.getTime();
+    const ended = rows.filter((r: any) => haloUtc(r.end_date) <= t);
+    const latest = ended.reduce((m: number, r: any) => Math.max(m, haloUtc(r.end_date)), -Infinity);
+    return await onCallFromShifts(env, at, ended.filter((r: any) => haloUtc(r.end_date) === latest), "previous", "no earlier On-call shift in Halo in the last 14 days");
+  } catch (err) {
+    return { at: at.toISOString(), source: "none", on_call: [], emailto: null, emailcc: [], error: `previous on-call lookup failed (${(err as Error).message})` };
+  }
+}
+function onCallLabelFor(r: OnCallResolution): string {
+  return r.on_call.filter((p) => p.email).map((p) => `${p.agent_name || `agent ${p.agent_id}`}${p.sms.length ? " (email + text)" : " (email only - no mobile number on their Halo record)"}`).join(", ");
+}
+function onCallWhoFor(r: OnCallResolution) {
+  return { source: r.source, at: r.at, agents: r.on_call.map((p) => ({ agent_id: p.agent_id, name: p.agent_name, email: p.email, mobile: p.mobile, sms: p.sms, shift: p.shift })), lookup_error: r.error ?? null };
+}
+type PageResult = { sent: boolean; list: "on_call" | "fallback" | "none"; who: string; to: string[]; action_id: number | null; email_status: unknown; tried: string[]; error: string | null; on_call: unknown; fallback: unknown };
+// Page on-call as one hidden emailed action on the ticket: outcome 16 (Email
+// User) makes Halo send it, emailto/emailcc override the recipients so it
+// goes to on-call instead of the client, hiddenfromuser keeps it out of the
+// client's portal view. The note text is the audit trail. Order: the current
+// on-call (unless preferFallback), then the fallback list; the first page
+// that posts wins. Nothing posts = sent false with every reason tried.
+async function pageOnCall(env: Env, ticketId: number, at: Date, subject: string, body: (list: "on_call" | "fallback") => string, preferFallback = false, dryRun = false): Promise<PageResult> {
+  let shifts: any[] | undefined;
+  try { shifts = await loadOnCallShifts(env, at); } catch { shifts = undefined; }
+  const current = await resolveOnCall(env, at, shifts);
+  const previous = await resolvePreviousOnCall(env, at, shifts);
+  const order: Array<["on_call" | "fallback", OnCallResolution]> = preferFallback ? [["fallback", previous], ["on_call", current]] : [["on_call", current], ["fallback", previous]];
+  const tried: string[] = [];
+  for (const [list, r] of order) {
+    const label = list === "on_call" ? "current on-call" : "fallback (previous on-call)";
+    if (!r.emailto) { tried.push(`${label}: ${r.error ?? "nobody to page"}`); continue; }
+    const to = [r.emailto].concat(r.emailcc);
+    if (dryRun) return { sent: false, list, who: onCallLabelFor(r), to, action_id: null, email_status: null, tried, error: "dry run - nothing sent", on_call: onCallWhoFor(current), fallback: onCallWhoFor(previous) };
+    try {
+      const payload: Record<string, unknown> = { ticket_id: ticketId, note: body(list), note_html: noteToHtml(body(list)), hiddenfromuser: true, outcome_id: 16, emailto: r.emailto, emailsubject: subject };
+      if (r.emailcc.length) payload.emailcc = r.emailcc.join(";");
+      const posted = (await haloPost(env, "/Actions", [payload])) as any;
+      const action = Array.isArray(posted) ? posted[0] : posted;
+      return { sent: true, list, who: onCallLabelFor(r), to, action_id: action?.id ?? null, email_status: action?.email_status ?? null, tried, error: null, on_call: onCallWhoFor(current), fallback: onCallWhoFor(previous) };
+    } catch (err) {
+      tried.push(`${label} (${onCallLabelFor(r)}): page failed - ${(err as Error).message}`);
+    }
+  }
+  return { sent: false, list: "none", who: "", to: [], action_id: null, email_status: null, tried, error: tried.join("; ") || "nobody to page", on_call: onCallWhoFor(current), fallback: onCallWhoFor(previous) };
+}
+async function statusIdByName(env: Env, name: string): Promise<number | null> {
+  try {
+    const data = (await haloGet(env, "/Status")) as any;
+    const list: any[] = data?.statuses || (Array.isArray(data) ? data : []);
+    const hit = list.find((x: any) => String(x?.name ?? "").trim().toLowerCase() === name.trim().toLowerCase());
+    return hit ? Number(hit.id) : null;
+  } catch { return null; }
 }
 
 const TOOLS = [
@@ -455,9 +535,10 @@ const TOOLS = [
   { name: "create_ticket", description: "Create a new ticket in HaloPSA", inputSchema: { type: "object", properties: { summary: { type: "string" }, details: { type: "string" }, client_id: { type: "number" }, user_id: { type: "number" }, team_id: { type: "number" }, agent_id: { type: "number" }, tickettype_id: { type: "number" }, priority_id: { type: "number" } }, required: ["summary"] } },
   { name: "update_ticket", description: "Update a ticket - add a note, change status, reassign, re-link to a different client/contact, or triage (set category/priority). HaloPSA has no separate 'triage' API action — triaging a ticket just means setting category_1 (and priority_id/team_id/agent_id) and moving it off its initial status in one call. IMPORTANT: note_is_private: false alone does NOT email the client - it only marks the note visible-in-portal. Every note this tool adds uses outcome_id 7 ('Private Note' in this tenant's Outcome list) unless send_email is also passed as true, and outcome 7 has hidesendemail set in HaloPSA, meaning it can never trigger an email regardless of hiddenfromuser. To actually send a client-facing reply by email, pass note_is_private: false AND send_email: true together. This tool CAN send a real, public, emailed reply - if the caller is a workflow that must hold every reply for human approval first (not yet decided this ticket is approved to send), use update_ticket_draft_only instead, which cannot send one no matter what arguments it's given. Pass verify: true to have this call re-check (with a couple of short built-in retries) that the note/field changes actually landed before returning - a `verified` field is added to the response with the result. Default (omitted/false) leaves the response exactly as it's always been, with no added delay - opt in only when you actually need the confirmation, e.g. on a ticket that might not be triaged yet in Halo (writes there can silently take a few extra seconds to become readable).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, verify: { type: "boolean", description: "If true, re-check (with short built-in retries) that the requested field changes and/or note actually landed before returning, and include a `verified` field in the response. Default false: identical to this tool's behavior before this parameter existed, no added delay." }, note_is_private: { type: "boolean" }, send_email: { type: "boolean", description: "Set true together with note_is_private: false to actually email this note to the ticket's contact - uses outcome_id 16 ('Email User' in this tenant's Outcome list) instead of the default 'Private Note' outcome, which never emails regardless of note_is_private. Leave false/unset for anything that should stay internal-only or portal-visible-but-not-emailed; true is ignored (forced to a visible, emailed note) only in the sense that it also forces hiddenfromuser to false, since emailing a note the client can't see back in the portal isn't a coherent request." }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number", description: "Re-link this ticket to a different client/company - e.g. correcting a ticket that came in against a generic/shared account (a voicemail line, a catch-all mailbox) once the real caller/client is identified. Set alongside user_id, which must belong to this client - or alongside site_id when there's no real contact to attach (an automated/system alert), since client_id and site_id have to be a consistent pair: real incident, ticket #22107 (Gold Mechanical) - client_id alone was corrected but site_id was left on the old client's site, so the ticket still displayed as 'Unknown' everywhere in Halo despite client_id being right." }, user_id: { type: "number", description: "Re-link this ticket to a different contact/end-user (find the ID with list_contacts/get_contact - use search_phonenumbers to match a caller's phone number to an existing contact). Must belong to the client given in client_id (or the ticket's current client if client_id is omitted)." }, site_id: { type: "number", description: "Re-link this ticket to a different site (physical location) under its client - use list_sites filtered by client_id to find valid site IDs. Set this alongside client_id whenever relinking a ticket that has no real contact to attach (an automated/system alert) - client_id and site_id must be a consistent pair or the ticket keeps displaying as its old client/site regardless of what client_id says." }, category_1: { type: "string", description: "Category, e.g. 'Infrastructure>Server' — use list_ticket_types/an existing ticket to see this tenant's category tree" }, priority_id: { type: "number", description: "Use list_priorities to find the ID" }, emailto: { type: "string", description: "Correct the ticket's own stored send-to address (HaloPSA's emailtolist field) - independent of, and not automatically kept in sync with, the linked contact's real email on file. Real incident, ticket #22067: a ticket relinked to the correct contact (user_id) still had a stale/wrong emailtolist from before the relink (a guessed company-domain address, not the contact's actual Gmail address on file), so a real client-facing reply went to the wrong address even though the contact record itself was right. Before sending a real reply, compare the ticket's emailtolist against get_contact's emailaddress for the currently-linked user_id - if they differ, set this to the contact's real address first. Pass the exact address(es) HaloPSA expects here (a single address, or semicolon-separated as seen in emailtolist on read)." } }, required: ["ticket_id"] } },
   { name: "update_ticket_draft_only", description: "Identical to update_ticket (same fields: status_id/agent_id/team_id/category_1/priority_id/client_id/site_id/user_id/note all work the same way) EXCEPT any note this tool writes is ALWAYS private and ALWAYS unemailed - note_is_private is forced true and send_email is forced false no matter what you pass, and passing send_email: true or note_is_private: false explicitly returns an error rather than silently sending. Use this instead of update_ticket for a ticket that is not yet approved to receive a real reply - e.g. a -RequireApproval workflow's private draft note (write your intended reply text into `note`, e.g. prefixed '[DRAFT PENDING APPROVAL]', and it will land privately regardless). Real incident: a workflow that relied purely on prompt instructions to hold replies for approval did not reliably hold them - some replies got sent for real anyway. This tool makes that structurally impossible instead of relying on instructions being followed. Always verifies its own write before returning (a couple of short built-in retries against Halo's own eventual-consistency delay - a write can report success and not be immediately readable back) and includes a `verified` field in the response ({confirmed, attempts, fields_confirmed, note_confirmed}) - no separate follow-up read call needed to check.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, note: { type: "string" }, status_id: { type: "number" }, agent_id: { type: "number" }, team_id: { type: "number" }, client_id: { type: "number" }, site_id: { type: "number" }, user_id: { type: "number" }, category_1: { type: "string" }, priority_id: { type: "number" }, emailto: { type: "string", description: "Correct the ticket's own stored send-to address (HaloPSA's emailtolist field) ahead of an eventual real send - see update_ticket's own emailto description for the real incident this fixes. Doesn't cause any email to go out on its own (this tool never sends real email, structurally)." } }, required: ["ticket_id"] } },
-  { name: "escalate_emergency", description: "The one-call emergency path, safe to keep available while every other client-facing send is held for human approval: (1) emails the ticket's contact a FIXED, templated acknowledgment - greeting by first name, 'we can see <issue_summary>, we've identified this as a priority issue and are notifying our on-call engineer right now', standard sign-off - the caller supplies only the one short summary phrase (max 200 chars, no links, no line breaks), never the message; (2) pages whoever Halo's Shifts calendar has on call at that moment (their Halo email, plus a text to the Mobile Number on their agent record when one is set) as ONE hidden emailed action on this same ticket, addressed to the on-call address with the SMS gateway CC'd - the subject carries the ticket id, the client never sees it, no second ticket is created (recipients come from Halo's schedule, never from arguments). Nobody scheduled = nobody paged, by design: the audit note records it and on_call_alert.sent is false; (3) writes a private '[EMERGENCY ACK SENT]' audit note; (4) optionally sets status/agent/team in the same call. Once per ticket: refuses if an '[EMERGENCY ACK SENT]' note already exists. If the on-call page fails, the acknowledgment still stands and the response says on_call_alert.sent=false with the error, so the caller can flag it for a human instead. Use dry_run: true to see exactly what would be sent without sending.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, issue_summary: { type: "string", description: "Completes the sentence 'we can see ...' - e.g. 'this is affecting sign-ins to the phone system for your team at Springfield Nissan'. Max 200 chars, plain words, no URLs." }, client_name: { type: "string", description: "Client name for the on-call page (defaults to the ticket's client_name)" }, details_for_on_call: { type: "string", description: "Optional: what's been found so far, for the on-call email body only (max 1500 chars)" }, follow_up_status_id: { type: "number", description: "Status to set after sending (follow_up_status_name's id)" }, team_id: { type: "number" }, agent_id: { type: "number", description: "Usually 1 (Unassigned) - omit to leave assignment alone" }, dry_run: { type: "boolean" }, at: { type: "string", description: "dry_run/page_test only: evaluate the on-call schedule as of this ISO timestamp (UTC) instead of now, to preview who a page at that time would reach" }, page_test: { type: "boolean", description: "Test ONLY the on-call page: sends a clearly-marked TEST page to whoever Halo has on call right now (or at `at`) and touches no client ticket; nobody on call = nothing sent, sent=false. ticket_id and issue_summary are ignored. Use after changing on-call settings." } }, required: [] } },
+  { name: "escalate_emergency", description: "The one-call emergency path, safe to keep available while every other client-facing send is held for human approval. PAGE FIRST, ACKNOWLEDGE SECOND: (1) pages whoever Halo's Shifts calendar has on call at that moment (their Halo email, plus a text to the Mobile Number on their agent record when one is set) as ONE hidden emailed action on this same ticket - the subject carries the ticket id, the client never sees it, no second ticket is created, recipients come from Halo's schedule, never from arguments. If no On-call shift covers the moment, or that page fails, it pages the FALLBACK list instead: whoever had the most recent On-call shift that already ended. No previous shift either = nobody paged; (2) only then emails the ticket's contact a FIXED, templated acknowledgment (greeting by first name, 'we can see <issue_summary>', standard sign-off) whose last sentence depends on the page result: paged -> 'our on-call engineer has been notified and will follow up as soon as possible'; nobody paged -> 'our team has been alerted and will respond as soon as possible'. The caller supplies only the one short summary phrase (max 200 chars, no links, no line breaks), never the message; (3) nobody paged -> sets the ticket to Critical priority and the Follow Up Needed status itself; (4) writes a private '[EMERGENCY ACK SENT]' audit note saying exactly who was paged or why nobody was; (5) optionally sets status/agent/team in the same call. Read on_call_alert.sent and on_call_alert.list in the response: never say on-call was paged unless sent is true. Once per ticket: refuses if an '[EMERGENCY ACK SENT]' note already exists. Re-pages are automatic (emergency_follow_up, run every cycle by the service): a second alert to the fallback list on the next run when nobody was paged, a re-page at 30 minutes with no human action, the fallback list at 60. Use dry_run: true to see exactly what would be sent without sending.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, issue_summary: { type: "string", description: "Completes the sentence 'we can see ...' - e.g. 'this is affecting sign-ins to the phone system for your team at Springfield Nissan'. Max 200 chars, plain words, no URLs." }, client_name: { type: "string", description: "Client name for the on-call page (defaults to the ticket's client_name)" }, details_for_on_call: { type: "string", description: "Optional: what's been found so far, for the on-call email body only (max 1500 chars)" }, follow_up_status_id: { type: "number", description: "Status to set after sending (follow_up_status_name's id)" }, team_id: { type: "number" }, agent_id: { type: "number", description: "Usually 1 (Unassigned) - omit to leave assignment alone" }, dry_run: { type: "boolean" }, at: { type: "string", description: "dry_run/page_test only: evaluate the on-call schedule as of this ISO timestamp (UTC) instead of now, to preview who a page at that time would reach" }, page_test: { type: "boolean", description: "Test ONLY the on-call page: sends a clearly-marked TEST page to whoever Halo has on call right now (or at `at`) and touches no client ticket; nobody on call = nothing sent, sent=false. ticket_id and issue_summary are ignored. Use after changing on-call settings." } }, required: [] } },
   { name: "send_approved_draft", description: "FLOW A in one atomic call, so no step can be skipped (real incident, ticket #22390: the reply went out but the draft was never collapsed and the status notes were left behind). Given a ticket whose human-approved draft sits in a private '[DRAFT PENDING APPROVAL]' note, this: (1) optionally corrects the ticket's send-to address (emailto) first; (2) posts the draft's reply text - the lines after the marker, up to any '[INTENDED ...]' line - VERBATIM as a real public emailed reply; (3) collapses the draft note to '[APPROVED DRAFT]', keeping any internal text it carried outside the reply (above the marker, or below the [INTENDED ...] lines, e.g. findings) so nothing internal is lost; (4) deletes every '[PIPELINE NOTE]' this pipeline wrote on the ticket; (5) sets status/agent/team; (6) verifies the writes landed. It can only ever send text that already sits in a draft note a human approved - never text supplied in the call. Refuses if there isn't exactly one draft note (or the given draft_action_id isn't one), if the draft has no reply text, or if require_status_id is given and the ticket isn't in that status. dry_run: true shows exactly what would be sent and changed.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, draft_action_id: { type: "number", description: "The draft note's action id. Omit to auto-find the single [DRAFT PENDING APPROVAL] note (refuses if there are 0 or more than 1)." }, status_id: { type: "number", description: "Status to set after sending ([INTENDED STATUS]'s id)" }, agent_id: { type: "number", description: "1 to unassign; omit to leave assignment alone (a human who holds it keeps it)" }, team_id: { type: "number" }, emailto: { type: "string", description: "Correct the ticket's send-to address (emailtolist) before sending - only when the contact's real address differs from it" }, require_status_id: { type: "number", description: "Refuse unless the ticket is currently in this status (pass ai_approved_status_name's id)" }, dry_run: { type: "boolean" } }, required: ["ticket_id"] } },
-  { name: "get_on_call", description: "Who is on call right now (or at `at`), read from Halo's own Shifts calendar: the agent whose On-call shift covers that moment, with the email (Halo agent record) and text address (the record's Mobile Number at the email-to-SMS service domain; none = email only) escalate_emergency would page, or nobody when no On-call shift covers that moment (there is no fallback address - the schedule is the only source). Read-only; use it to check the schedule before relying on it.", inputSchema: { type: "object", properties: { at: { type: "string", description: "Optional ISO timestamp (UTC, e.g. 2026-09-22T01:45:00Z) to evaluate instead of now" } }, required: [] } },
+  { name: "emergency_follow_up", description: "Run every cycle by the service for each ticket it raised an emergency on - not for the resolver. Reads the ticket's [EMERGENCY ACK SENT] note and does whatever is due, once each: nobody was paged -> a second alert on the next run (fallback list first, then the current on-call); 30 minutes with no human action -> re-page the current on-call (else the fallback list); 60 minutes -> page the fallback list (previous on-call). Each re-page is a hidden emailed action carrying '[EMERGENCY REPAGE] stage=...'; a re-page that reaches nobody writes a private note saying a person must call on-call by hand. Stops (done: true) once a person acts on the ticket, the ticket is closed, or the 60-minute page has run. dry_run (with optional `now`) shows what would happen.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, dry_run: { type: "boolean" }, now: { type: "string", description: "dry_run only: evaluate as of this ISO timestamp (UTC)" } }, required: ["ticket_id"] } },
+  { name: "get_on_call", description: "Who is on call right now (or at `at`), read from Halo's own Shifts calendar: the agent whose On-call shift covers that moment, with the email (Halo agent record) and text address (the record's Mobile Number at the email-to-SMS service domain; none = email only) escalate_emergency would page - plus the fallback list (whoever had the most recent On-call shift that already ended), which is paged when nobody is on shift or that page fails. Read-only; use it to check the schedule before relying on it.", inputSchema: { type: "object", properties: { at: { type: "string", description: "Optional ISO timestamp (UTC, e.g. 2026-09-22T01:45:00Z) to evaluate instead of now" } }, required: [] } },
   { name: "halo_api_get", description: "Read-only escape hatch: GET any HaloPSA API path (e.g. '/Appointment', '/ShiftType', '/Agent/28') with optional query params, for data no dedicated tool covers. GET only - it cannot change anything. Not part of the Help Desk agent's allowlist; for humans and discovery.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path under /api, starting with '/'" }, params: { type: "object", additionalProperties: { type: "string" }, description: "Query string parameters" } }, required: ["path"] } },
   { name: "delete_ticket_note", description: "Delete a stale pending draft note this pipeline previously wrote, using HaloPSA's real DELETE /Actions/{id} endpoint - e.g. before writing a revised '[DRAFT PENDING APPROVAL]' draft, so the ticket never accumulates more than one at a time. Deliberately narrow, not a general-purpose delete: this call fetches the action first and refuses (no delete performed) unless it belongs to the given ticket_id, is private (hiddenfromuser: true), and its note contains the exact literal '[DRAFT PENDING APPROVAL]' marker on its own line (not necessarily as the very first characters - a note that also records something else first, e.g. a contact relink, ahead of the marker still matches) - it cannot be used to remove a human's note, a real client-facing reply, or anything this pipeline didn't itself write as a pending draft. Also accepts this pipeline's own transient status notes - a private note whose text carries the literal '[PIPELINE NOTE]' marker on its own line AND whose actionby_application_id is 'Claude' (v2.12.2) - so FLOW A can clear its 'waiting on a human' notes once the ticket proceeds; a human's note can never match that. Real incident: this tool didn't exist for a long time because an earlier investigation found update_ticket has no edit/delete parameter and concluded (correctly, for that tool) that deleting a note wasn't possible at all - it never checked whether HaloPSA's own REST API has a dedicated delete endpoint, which it does (confirmed directly against HaloPSA's own API reference). Without this, a superseded draft was never removed - just left behind as a second, stale note - which piled up into a ticket carrying 3 separate '[DRAFT PENDING APPROVAL]' notes over several revision rounds, tripping FLOW A's own 'exactly one draft note or stop' safety check. Second real incident, ticket #22265: this check originally required the marker to be the very first characters of the note, which refused a legitimate delete because the resolver had recorded a contact relink in the same note ahead of the marker - relaxed to match the marker anywhere on its own line instead.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, action_id: { type: "number", description: "The id of the Action/note to delete, from get_ticket_time_entries' own action list." } }, required: ["ticket_id", "action_id"] } },
   { name: "mark_draft_approved", description: "Collapse a sent '[DRAFT PENDING APPROVAL]' note down to a short '[APPROVED DRAFT]' marker, in place (keeping any internal text the note carried outside the reply - above the marker or below its [INTENDED ...] lines - so findings are never lost) - the full draft text is already redundant once the real reply has actually been sent (it's visible in that reply action itself), so this keeps the ticket's action history from carrying the same reply text twice. Same safety scoping as delete_ticket_note (fetches the action first and refuses - no edit performed - unless it belongs to the given ticket_id, is private, and its note contains the exact literal '[DRAFT PENDING APPROVAL]' marker on its own line, not necessarily as the very first characters), but edits the action's note in place via POST /Actions with its own id (HaloPSA's update-via-POST convention, the same one update_ticket already relies on for /Tickets) instead of deleting it outright - use this when the caller wants a visible trace that a draft existed and was approved, not zero trace at all (delete_ticket_note is still the right call for a superseded draft nobody approved).", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, action_id: { type: "number", description: "The id of the Action/note to collapse, from get_ticket_time_entries' own action list." } }, required: ["ticket_id", "action_id"] } },
@@ -741,61 +822,96 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const history = isPageTest ? { actions: [] } : (await haloGet(env, "/Actions", { ticket_id: String(ticketId), count: "100" })) as any;
       const priorActions: any[] = history.actions || [];
       const already = priorActions.find((a: any) => typeof a.note === "string" && /\[EMERGENCY ACK SENT\]/.test(a.note));
-      if (already) throw new Error(`escalate_emergency: ticket ${ticketId} already had its emergency acknowledgment sent (action ${already.id} at ${already.datetime}) - this runs once per ticket. Do not send another; if on-call still needs re-paging, say so in a private note for a human.`);
+      if (already) throw new Error(`escalate_emergency: ticket ${ticketId} already had its emergency acknowledgment sent (action ${already.id} at ${already.datetime}) - this runs once per ticket. Do not send another; re-pages run automatically (emergency_follow_up, every cycle) - say in a private note what a human still needs to do.`);
       const rawName = String(ticket.user_name ?? "").trim();
       const looksLikeEmail = /@/.test(rawName);
       const firstName = looksLikeEmail || !rawName || /^(general user|unknown)$/i.test(rawName) ? "there" : rawName.split(/\s+/)[0];
       const signature = env.EMERGENCY_ACK_SIGNATURE || "Here to help,\nAllie\nVirtual Service Coordinator\nAltec Solutions Group\nAllie is Altec's AI-powered virtual service coordinator. Responses are reviewed by our service team.";
-      const ack = `Hi ${firstName},\n\nThank you for letting us know - we can see ${summary.replace(/[.!?]+$/, "")}. We've identified this as a priority issue and are notifying our on-call engineer right now.\n\n${signature}`;
+      // The acknowledgment is chosen AFTER the page, from its real result (Roger, 2026-11-09): never promise a page that did not happen.
+      const ackFor = (paged: boolean) => `Hi ${firstName},\n\nThank you for letting us know - we can see ${summary.replace(/[.!?]+$/, "")}. We've identified this as a priority issue and we're on it - ${paged ? "our on-call engineer has been notified and will follow up as soon as possible" : "our team has been alerted and will respond as soon as possible"}.\n\n${signature}`;
       const clientName = isPageTest ? "TEST" : String(args.client_name ?? ticket.client_name ?? "Unknown client").trim();
       const details = args.details_for_on_call ? String(args.details_for_on_call).slice(0, 1500) : "";
       // `at` is a preview aid only: a real send always pages whoever is on call now.
       const previewOnly = args.dry_run === true || isPageTest;
       const atArg = previewOnly && args.at ? new Date(String(args.at)) : null;
       if (atArg && Number.isNaN(atArg.getTime())) throw new Error("escalate_emergency: `at` must be an ISO timestamp, e.g. 2026-09-22T01:45:00Z.");
-      const onCallResolved = await resolveOnCall(env, atArg ?? new Date());
-      const onCallEmail = onCallResolved.emailto;
-      const onCallCc = onCallResolved.emailcc.join(";");
       const pageSubject = isPageTest ? `[TEST] Allie on-call page - no action needed` : `[EMERGENCY] ${clientName}: ${summary.slice(0, 90)} (Help Desk ticket #${ticketId})`;
-      const onCallWho = { source: onCallResolved.source, at: onCallResolved.at, agents: onCallResolved.on_call.map((p) => ({ agent_id: p.agent_id, name: p.agent_name, email: p.email, mobile: p.mobile, sms: p.sms, shift: p.shift })), lookup_error: onCallResolved.error ?? null };
-      const onCallLabel = onCallResolved.source === "halo" ? `${onCallResolved.on_call.filter((p) => p.email).map((p) => `${p.agent_name || `agent ${p.agent_id}`}${p.sms.length ? " (email + text)" : " (email only - no mobile number on their Halo record)"}`).join(", ")}, on call per Halo's schedule` : (onCallResolved.error ?? "nobody to page");
-      const pageBody = [isPageTest ? `TEST PAGE - no action needed` : `EMERGENCY - ${clientName}`, `Ticket #${ticketId}${ticket.summary ? ` - ${String(ticket.summary).slice(0, 120)}` : ""}`, ``, summary, details ? `` : ``, details ? `Found so far: ${details}` : ``, ``, isPageTest ? `Sent automatically by Allie as a TEST of the on-call page.` : `Sent automatically by Allie. The client has been emailed a brief acknowledgment saying on-call is being notified.`].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+      const pageBody = (list: "on_call" | "fallback") => [isPageTest ? `TEST PAGE - no action needed` : `EMERGENCY - ${clientName}`, `Ticket #${ticketId}${ticket.summary ? ` - ${String(ticket.summary).slice(0, 120)}` : ""}`, ``, summary, details ? `` : ``, details ? `Found so far: ${details}` : ``, ``, list === "fallback" ? `Nobody could be reached on Halo's current On-call shift, so this goes to the previous on-call.` : ``, isPageTest ? `Sent automatically by Allie as a TEST of the on-call page.` : `Sent automatically by Allie. The client is told right after this that our on-call engineer has been notified. If nobody acts on the ticket, Allie pages again at 30 minutes and pages the previous on-call at 60.`].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+      // 1. PAGE FIRST: current on-call, else the fallback list (previous on-call).
+      const page = await pageOnCall(env, ticketId, atArg ?? new Date(), pageSubject, pageBody, false, args.dry_run === true);
       if (args.dry_run === true) {
-        return JSON.stringify({ dry_run: true, would_email_contact: ticket.emailtolist ?? null, acknowledgment: ack, on_call_alert: { would_page: onCallEmail !== null, hidden_action_on_ticket: ticketId, emailto: onCallEmail, emailcc: onCallCc, on_call: onCallWho, body: pageBody }, status_change: { status_id: args.follow_up_status_id ?? null, agent_id: args.agent_id ?? null, team_id: args.team_id ?? null } }, null, 2);
+        const wouldPage = page.list !== "none";
+        return JSON.stringify({ dry_run: true, order: "page first, then acknowledge", on_call_alert: { would_page: wouldPage, list: page.list, who: page.who, hidden_action_on_ticket: ticketId, to: page.to, why_not: wouldPage ? null : page.tried, tried_before: page.tried, on_call: page.on_call, fallback: page.fallback, body: pageBody(page.list === "fallback" ? "fallback" : "on_call") }, would_email_contact: ticket.emailtolist ?? null, acknowledgment: ackFor(wouldPage), status_change: wouldPage ? { status_id: args.follow_up_status_id ?? null, agent_id: args.agent_id ?? null, team_id: args.team_id ?? null } : { priority_id: Number(env.CRITICAL_PRIORITY_ID || 1), status: env.FOLLOW_UP_STATUS_NAME || "Follow Up Needed", agent_id: args.agent_id ?? null, team_id: args.team_id ?? null } }, null, 2);
       }
-      // 1. the templated acknowledgment, as a real emailed reply (outcome 16) - skipped for a page test
-      const ackResult = isPageTest ? null : await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: ack, note_html: noteToHtml(ack), hiddenfromuser: false, outcome_id: 16 }]);
-      // 2. page on-call; a failure here never undoes step 1. Nobody scheduled =
-      // nobody paged (no fallback) - the audit note and sent=false carry that.
-      let onCall: Record<string, unknown> = { sent: false, via: "ticket", on_call: onCallWho, error: onCallResolved.error ?? "nobody to page" };
-      if (onCallEmail) {
-        // The page is a hidden action on the ticket itself: outcome 16 (Email
-        // User) makes Halo send it, emailto/emailcc override the recipients so
-        // it goes to on-call instead of the client, hiddenfromuser keeps it out
-        // of the client's portal view. The note text is the audit trail.
-        try {
-          const pagePayload: Record<string, unknown> = { ticket_id: ticketId, note: pageBody, note_html: noteToHtml(pageBody), hiddenfromuser: true, outcome_id: 16, emailto: onCallEmail, emailsubject: pageSubject };
-          if (onCallCc) pagePayload.emailcc = onCallCc;
-          const posted = (await haloPost(env, "/Actions", [pagePayload])) as any;
-          const postedAction = Array.isArray(posted) ? posted[0] : posted;
-          onCall = { sent: true, via: "ticket", action_id: postedAction?.id ?? null, to: [onCallEmail].concat(onCallCc ? onCallCc.split(";") : []), on_call: onCallWho, email_status: postedAction?.email_status ?? null, dateemailed: postedAction?.dateemailed ?? null, emailto_recorded: postedAction?.emailto ?? null, hiddenfromuser: postedAction?.hiddenfromuser ?? null };
-        } catch (err) {
-          onCall = { sent: false, via: "ticket", on_call: onCallWho, error: (err as Error).message };
-        }
-      }
+      const onCall = { sent: page.sent, list: page.list, who: page.who || null, via: "ticket", action_id: page.action_id, to: page.to, email_status: page.email_status, error: page.error, tried: page.tried, on_call: page.on_call, fallback: page.fallback };
       if (isPageTest) return JSON.stringify({ page_test: true, on_call_alert: onCall }, null, 2);
-      // 3. audit note
-      const audit = `[EMERGENCY ACK SENT] ${new Date().toISOString()} - acknowledgment emailed to ${ticket.emailtolist ?? "(no address on ticket)"}; on-call ${onCall.sent ? `paged: ${onCallLabel} - sent to ${(onCall.to as string[] | undefined)?.join(", ") ?? ""}` : `NOT paged - ${onCall.error}`}. Summary: ${summary}`;
-      await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: audit, note_html: noteToHtml(audit), hiddenfromuser: true, outcome_id: 7 }]);
-      // 4. optional status/assignment
-      let ticketUpdate: unknown = null;
+      // 2. ACKNOWLEDGE SECOND, worded by what actually happened.
+      const ack = ackFor(page.sent);
+      let ackResult: unknown = null; let ackError: string | null = null;
+      try { ackResult = await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: ack, note_html: noteToHtml(ack), hiddenfromuser: false, outcome_id: 16 }]); } catch (err) { ackError = (err as Error).message; }
+      // 3. Nobody paged: Critical + Follow Up Needed, so the queue shows it (Roger, 2026-11-09).
       const fieldPayload: Record<string, unknown> = { id: ticketId };
       let hasField = false;
-      if (args.follow_up_status_id) { fieldPayload.status_id = args.follow_up_status_id; hasField = true; }
+      let followUpStatusId: number | null = args.follow_up_status_id ? Number(args.follow_up_status_id) : null;
+      if (!page.sent) {
+        fieldPayload.priority_id = Number(env.CRITICAL_PRIORITY_ID || 1); hasField = true;
+        if (!followUpStatusId) followUpStatusId = await statusIdByName(env, env.FOLLOW_UP_STATUS_NAME || "Follow Up Needed");
+      }
+      if (followUpStatusId) { fieldPayload.status_id = followUpStatusId; hasField = true; }
       if (args.agent_id !== undefined && args.agent_id !== null) { fieldPayload.agent_id = args.agent_id; hasField = true; }
       if (args.team_id) { fieldPayload.team_id = args.team_id; hasField = true; }
-      if (hasField) ticketUpdate = await haloPost(env, "/Tickets", [fieldPayload]);
-      return JSON.stringify({ acknowledgment_sent_to: ticket.emailtolist ?? null, acknowledgment: ack, ack_action: ackResult, on_call_alert: onCall, ticket_update: ticketUpdate }, null, 2);
+      let ticketUpdate: unknown = null; let updateError: string | null = null;
+      if (hasField) { try { ticketUpdate = await haloPost(env, "/Tickets", [fieldPayload]); } catch (err) { updateError = (err as Error).message; } }
+      // 4. Audit note, either way. `page=` is read back by emergency_follow_up.
+      const pageLine = page.sent
+        ? `on-call PAGED${page.list === "fallback" ? " (fallback: previous on-call)" : ""}: ${page.who} - sent to ${page.to.join(", ")}${page.tried.length ? `. Before that: ${page.tried.join("; ")}` : ""}`
+        : `on-call NOT paged - ${page.error}. Ticket set to Critical and ${env.FOLLOW_UP_STATUS_NAME || "Follow Up Needed"}${updateError ? ` (that update FAILED: ${updateError})` : ""}; a second alert goes to the fallback list on the next run`;
+      const audit = `[EMERGENCY ACK SENT] ${new Date().toISOString()} page=${page.sent ? page.list : "none"} - ${pageLine}. Client acknowledgment ${ackError ? `FAILED (${ackError})` : `emailed to ${ticket.emailtolist ?? "(no address on ticket)"}, saying ${page.sent ? "our on-call engineer has been notified" : "our team has been alerted"}`}. Summary: ${summary}`;
+      await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: audit, note_html: noteToHtml(audit), hiddenfromuser: true, outcome_id: 7 }]);
+      return JSON.stringify({ order: "paged first, then acknowledged", on_call_alert: onCall, acknowledgment_sent_to: ackError ? null : ticket.emailtolist ?? null, acknowledgment: ack, ack_action: ackResult, ack_error: ackError, critical_set: !page.sent && !updateError, ticket_update: ticketUpdate, ticket_update_error: updateError, follow_up: page.sent ? "re-page at 30 min and fallback list at 60 min if nobody acts (emergency_follow_up)" : "second alert to the fallback list on the next run (emergency_follow_up)" }, null, 2);
+    }
+    case "emergency_follow_up": {
+      const ticketId = Number(args.ticket_id);
+      if (!Number.isInteger(ticketId) || ticketId <= 0) throw new Error("emergency_follow_up: ticket_id must be a positive integer.");
+      const dryRun = args.dry_run === true;
+      const now = dryRun && args.now ? new Date(String(args.now)) : new Date();
+      if (Number.isNaN(now.getTime())) throw new Error("emergency_follow_up: `now` must be an ISO timestamp.");
+      const ticket = (await haloGet(env, `/Tickets/${ticketId}`)) as any;
+      const actions: any[] = ((await haloGet(env, "/Actions", { ticket_id: String(ticketId), count: "200" })) as any).actions || [];
+      const ackAction = actions.find((a: any) => typeof a.note === "string" && /\[EMERGENCY ACK SENT\]/.test(a.note));
+      if (!ackAction) return JSON.stringify({ ticket_id: ticketId, done: true, reason: "no [EMERGENCY ACK SENT] note on this ticket - nothing to follow up" }, null, 2);
+      const t0 = haloUtc(ackAction.datetime);
+      const ignore = integrationAppIds(env);
+      const touched = actions.filter((a: any) => haloUtc(a.datetime) > t0 && isHumanAction(a, ignore));
+      if (touched.length) return JSON.stringify({ ticket_id: ticketId, done: true, reason: `a person has acted on the ticket since the page (${touched[0].who}, ${touched[0].outcome}, ${touched[0].datetime})` }, null, 2);
+      if (ticket.hasbeenclosed === true) return JSON.stringify({ ticket_id: ticketId, done: true, reason: "the ticket is closed" }, null, 2);
+      const initial = (/page=(on_call|fallback|none)/.exec(String(ackAction.note)) ?? [])[1] ?? (/NOT paged/.test(String(ackAction.note)) ? "none" : "on_call");
+      const stagesDone = new Set(actions.map((a: any) => (/\[EMERGENCY REPAGE\] stage=(retry|30min|60min)/.exec(String(a.note ?? "")) ?? [])[1]).filter(Boolean) as string[]);
+      const minutes = (now.getTime() - t0) / 60000;
+      const latestDone = stagesDone.has("60min") ? 3 : stagesDone.has("30min") ? 2 : stagesDone.has("retry") ? 1 : 0;
+      let stage: "retry" | "30min" | "60min" | null = null;
+      if (minutes >= 60 && latestDone < 3) stage = "60min";
+      else if (minutes >= 30 && latestDone < 2) stage = "30min";
+      else if (initial === "none" && minutes >= 5 && latestDone < 1) stage = "retry";
+      if (latestDone >= 3) return JSON.stringify({ ticket_id: ticketId, done: true, reason: "all automatic re-pages have run (30 and 60 minutes); a person has to take it from here" }, null, 2);
+      if (!stage) {
+        const nextAt = new Date(t0 + (initial === "none" && latestDone < 1 && minutes < 5 ? 5 : latestDone < 2 && minutes < 30 ? 30 : 60) * 60000).toISOString();
+        return JSON.stringify({ ticket_id: ticketId, done: false, stage: null, minutes_since_page: Math.round(minutes), next_check_due: nextAt }, null, 2);
+      }
+      const clientName = String(ticket.client_name ?? "Unknown client").trim();
+      const what: Record<string, string> = { retry: "SECOND ALERT - the first page reached nobody", "30min": "REMINDER - 30 minutes and nobody has picked this up", "60min": "REMINDER - 60 minutes and nobody has picked this up" };
+      const subject = `[EMERGENCY ${stage === "retry" ? "SECOND ALERT" : `REMINDER ${stage === "30min" ? "30" : "60"} min`}] ${clientName} (Help Desk ticket #${ticketId})`;
+      const marker = `[EMERGENCY REPAGE] stage=${stage}`;
+      const body = (list: "on_call" | "fallback") => [`${marker}`, `${what[stage!]} - ${clientName}`, `Ticket #${ticketId}${ticket.summary ? ` - ${String(ticket.summary).slice(0, 120)}` : ""}`, ``, list === "fallback" ? `Sent to the previous on-call (the fallback list).` : `Sent to the current on-call.`, `Sent automatically by Allie. Nobody has acted on this ticket since the first page at ${new Date(t0).toISOString()}.`].join("\n");
+      // retry: the fallback list first (the first page found nobody on the current shift); 30 min: current on-call again; 60 min: the fallback list.
+      const page = await pageOnCall(env, ticketId, now, subject, body, stage !== "30min", dryRun);
+      if (dryRun) return JSON.stringify({ ticket_id: ticketId, dry_run: true, stage, minutes_since_page: Math.round(minutes), would_page: page.list !== "none", list: page.list, who: page.who, to: page.to, tried: page.tried }, null, 2);
+      if (!page.sent) {
+        const note = `${marker} ${now.toISOString()} - ${what[stage]}: NOT paged - ${page.error}. A person needs to call on-call by hand.`;
+        await haloPost(env, "/Actions", [{ ticket_id: ticketId, note, note_html: noteToHtml(note), hiddenfromuser: true, outcome_id: 7 }]);
+        if (initial !== "none") { try { await haloPost(env, "/Tickets", [{ id: ticketId, priority_id: Number(env.CRITICAL_PRIORITY_ID || 1) }]); } catch { /* the note above already says it */ } }
+      }
+      return JSON.stringify({ ticket_id: ticketId, done: stage === "60min", stage, minutes_since_page: Math.round(minutes), paged: page.sent, list: page.list, who: page.who || null, to: page.to, action_id: page.action_id, error: page.error, tried: page.tried }, null, 2);
     }
     case "send_approved_draft": {
       const ticketId = Number(args.ticket_id);
@@ -866,8 +982,12 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_on_call": {
       const at = args.at ? new Date(String(args.at)) : new Date();
       if (Number.isNaN(at.getTime())) throw new Error("get_on_call: `at` must be an ISO timestamp, e.g. 2026-09-22T01:45:00Z.");
-      const r = await resolveOnCall(env, at);
-      return JSON.stringify({ at: r.at, source: r.source, would_page: r.emailto ? { emailto: r.emailto, emailcc: r.emailcc } : null, on_call: r.on_call, shift_type_id: Number(env.ON_CALL_SHIFT_TYPE_ID || 1), sms_domain: (env.ON_CALL_SMS_DOMAIN || "altec.text.email").replace(/^@/, ""), error: r.error ?? null, note: r.source === "halo" ? (r.on_call.some((p) => p.sms.length) ? "The scheduled on-call agent from Halo's Shifts calendar - email and text." : "The scheduled on-call agent from Halo's Shifts calendar - EMAIL ONLY: no Mobile Number on their Halo agent record.") : "Nobody has an On-call shift covering this moment in Halo. escalate_emergency would still acknowledge the client, but would page NOBODY (there is no fallback address) and record that on the ticket." }, null, 2);
+      let shifts: any[] | undefined;
+      try { shifts = await loadOnCallShifts(env, at); } catch { shifts = undefined; }
+      const r = await resolveOnCall(env, at, shifts);
+      const prev = await resolvePreviousOnCall(env, at, shifts);
+      const pages = r.emailto ? "the current on-call" : prev.emailto ? "the FALLBACK list (previous on-call), because nobody is on shift" : "NOBODY - no current and no previous on-call with an email";
+      return JSON.stringify({ at: r.at, source: r.source, would_page: r.emailto ? { emailto: r.emailto, emailcc: r.emailcc } : null, on_call: r.on_call, error: r.error ?? null, fallback: { would_page: prev.emailto ? { emailto: prev.emailto, emailcc: prev.emailcc } : null, on_call: prev.on_call, error: prev.error ?? null }, escalate_emergency_would_page: pages, shift_type_id: Number(env.ON_CALL_SHIFT_TYPE_ID || 1), sms_domain: (env.ON_CALL_SMS_DOMAIN || "altec.text.email").replace(/^@/, "") }, null, 2);
     }
     case "halo_api_get": {
       const path = String(args.path ?? "");

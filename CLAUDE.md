@@ -140,7 +140,8 @@ ticket id; the client never sees it; no second ticket. The older "halo"
 "m365" (m365-mcp send_on_call_alert; no Graph credentials) modes were
 removed on 2026-09-21 along with every fixed-recipient var. `page_test:
 true` with a scratch ticket_id of ours sends a marked TEST page from that
-ticket to whoever is on call right then (nobody on call = nothing sent).
+ticket to whoever it would page right then (current on-call, else the
+fallback list; nobody = nothing sent).
 
 Who gets paged is looked up at send time from Halo's own Shifts calendar,
 and ONLY from there: `resolveOnCall` GETs `/Appointment` with
@@ -155,15 +156,37 @@ number's digits (a leading US 1 dropped) at `ON_CALL_SMS_DOMAIN` (default
 altec.text.email, Roger's email-to-SMS service), no number = email only.
 First agent = `emailto`, the rest + every SMS address = `emailcc`.
 
-Nobody scheduled, an on-call agent with no email, or a lookup error =
-NOBODY is paged. There is deliberately no fallback address (Roger,
-2026-09-21: "If there isn't anybody on call in Halo, it obviously won't be
-able to send to anybody, no fallback. Just a silent record in the ticket").
-The client acknowledgment still goes out; `on_call_alert.sent` is false
-with the reason; the private `[EMERGENCY ACK SENT]` note on the ticket says
-"on-call NOT paged - nobody has an On-call shift covering this moment";
-and the resolver prompt already turns sent=false into a NEEDS URGENT note
-for a human. `get_on_call` (read-only, optional `at`) shows the same
+**Reworked 2026-11-09 (Roger): page first, acknowledge second, with a
+fallback.** Order in `escalate_emergency`: (1) page the current on-call
+(`pageOnCall`); if nobody's shift covers the moment, nobody on it has an
+email, or that page fails to post, page the FALLBACK list instead: whoever
+had the most recent On-call shift that already ended (`resolvePreviousOnCall`,
+14-day lookback; every shift ending at that same moment counts); no previous
+shift either = nobody paged. (2) Only then email the client the fixed
+acknowledgment, its last sentence chosen from the real result: paged = "our
+on-call engineer has been notified and will follow up as soon as
+possible"; nobody paged = "our team has been alerted and will respond as
+soon as possible" (never a promise of a page that did not happen; never
+"escalated"). (3) Nobody paged = the Worker sets priority level
+`CRITICAL_PRIORITY_ID` (default 1: "Critical"/"Critial"/"Urgent" on this
+tenant's three SLAs) and the follow-up status (`follow_up_status_id` if
+passed, else the status named `FOLLOW_UP_STATUS_NAME`, default "Follow Up
+Needed"). (4) The private `[EMERGENCY ACK SENT]` note says either way who
+was paged (and which list) or every reason nobody was, with
+`page=on_call|fallback|none` for the follow-up to read. This replaces the
+2026-09-21 rule "nobody on call = nobody paged, no fallback".
+
+`emergency_follow_up(ticket_id)` is called every cycle by AllieService for
+each ticket it raised an emergency on (not by the resolver). It does what
+is due, once each, marked by `[EMERGENCY REPAGE] stage=...` on the ticket:
+`retry` on the next run when nobody was paged (fallback list first, then
+the current on-call), `30min` with no human action (current on-call first:
+the Critical response target), `60min` (fallback list first). It stops
+(`done: true`) once a person acts on the ticket (same rule as human_touch),
+the ticket is closed, or the 60-minute page has run. A re-page that reaches
+nobody writes a private note that a person must call on-call by hand.
+Tested against a mock Halo: `test/emergency.sim.mjs` (how to run is at its
+top). `get_on_call` (read-only, optional `at`) shows the same
 resolution and says email+text vs email only; `escalate_emergency` accepts
 `at` only with `dry_run`/`page_test`. A Leo-style "Fixed shift"
 (shift_type_id 0) never matches. Verified against Roger's test shift
@@ -171,8 +194,8 @@ resolution and says email+text vs email only; `escalate_emergency` accepts
 agent 28 (email only - his record has no mobile number), outside it
 resolves to nobody and a real page_test sends nothing. `halo_api_get` is
 the read-only raw GET tool this was discovered with; it is not in the
-pipeline's allowlist. Worker vars are now just `ON_CALL_SHIFT_TYPE_ID` and
-`ON_CALL_SMS_DOMAIN`; the old `ON_CALL_ALERT_URL` secret is unused and can
+pipeline's allowlist. Worker vars: `ON_CALL_SHIFT_TYPE_ID`, `ON_CALL_SMS_DOMAIN`,
+`CRITICAL_PRIORITY_ID`, `FOLLOW_UP_STATUS_NAME` (all optional); the old `ON_CALL_ALERT_URL` secret is unused and can
 be deleted from the Worker whenever convenient.
 
 ## ninjarmm-mcp: running scripts needs a USER-context token (2026-09-22)
