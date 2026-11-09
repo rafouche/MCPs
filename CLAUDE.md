@@ -462,10 +462,15 @@ recurring-series templates (change those in Halo's own calendar), require a
 real enabled agent (not Unassigned/disabled), refuse double-booking the same
 agent unless `allow_overlap`, take `dry_run`, re-read after writing, and
 report `on_call_now`. Times are ISO; no timezone = UTC (Halo's own
-convention). **Deployed 2026-11-09 (version 6d5e4d13) but NOT yet verified
-live**: Halo's exact required fields for creating/updating a shift and
-whether DELETE needs extra params are unconfirmed - test with a clearly
-labeled scratch shift before relying on it. The claude.ai "Halo" connector
+convention). **Verified live 2026-11-09 (version 4861f05d)**: create needs only
+{type:4, agent_id, subject, start_date, end_date, shift_type_id, allday:false};
+update takes {id, type:4, agent_id, subject, start_date, end_date,
+shift_type_id} in place; DELETE /Appointment/{id} needs nothing extra. The
+overlap check only compares shifts of the SAME shift_type_id (an On-call week
+legitimately overlaps the agent's type-0 working shifts). Roger's first use:
+the weekly Fri 5pm Central (23:00Z in CST) rotation Steven > Erick > Leo >
+Roger, done by moving the three pre-existing On-call shifts (22403/22405/
+22406) and creating Roger's (22836); get_on_call confirmed each handover. The claude.ai "Halo" connector
 keeps an old tool list; use a fresh session/connector refresh to see the new
 tools. Deploying needs `CLOUDFLARE_ACCOUNT_ID=77913d04ce44a8767e3736930eadc0c4`
 (wrangler now sees several accounts and can't pick one non-interactively).
