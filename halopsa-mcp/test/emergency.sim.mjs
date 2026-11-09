@@ -4,8 +4,8 @@
 // Needed when nobody was paged, the next-run / 30 / 60 minute re-pages, stop on a human action, once per ticket.
 import worker from "./.emergency-worker.mjs";
 const H = "https://halo.test";
-function mkHalo({ shifts, failPageTo = [], actions = [] }) {
-  const st = { actions: [...actions], posts: [], ticketUpdates: [] };
+function mkHalo({ shifts, failPageTo = [], actions = [], failAck = false }) {
+  const st = { actions: [...actions], posts: [], ticketUpdates: [], failAck };
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url); const m = (init.method || "GET").toUpperCase();
     const j = (o) => new Response(JSON.stringify(o), { status: 200, headers: { "content-type": "application/json" } });
@@ -19,6 +19,7 @@ function mkHalo({ shifts, failPageTo = [], actions = [] }) {
     if (m === "POST" && p === "/Actions") {
       const b = JSON.parse(init.body)[0];
       if (b.emailto && failPageTo.includes(b.emailto)) return new Response("boom", { status: 500 });
+      if (!b.emailto && !b.hiddenfromuser && st.failAck) return new Response("Please complete the contact", { status: 400 });
       const a = { id: 100 + st.actions.length, datetime: new Date().toISOString().slice(0, 19), who: "Allie", who_type: 1, actionby_application_id: "Claude", ...b };
       st.actions.unshift(a); st.posts.push(b.emailto ? `PAGE->${b.emailto}` : b.hiddenfromuser ? `NOTE:${b.note.slice(0, 60)}` : `ACK:${b.note.split("\n")[2]}`);
       return j([a]);
@@ -99,4 +100,13 @@ check(out.done && st.posts.length === 0, "G a person acted -> no re-page");
 st = mkHalo({ shifts: [], actions: [ackNote(1, "on_call")] });
 out = await call("escalate_emergency", args);
 check(/already had its emergency acknowledgment/.test(out) && st.posts.length === 0, "H runs once per ticket");
+// I: ack fails -> page still out, retry sends ack only, once
+st = mkHalo({ shifts: [shift(1, 7, -hr, hr)], failAck: true });
+out = JSON.parse(await call("escalate_emergency", args));
+check(out.on_call_alert.sent && out.ack_error && out.ack_retry && st.posts[0] === "PAGE->agent7@altec.test", "I page out, ack failed, hint given");
+st.failAck = false; st.posts.length = 0;
+out = JSON.parse(await call("escalate_emergency", args));
+check(out.ack_only_retry && st.posts.length === 2 && st.posts[0].startsWith("ACK:") && /notified/.test(out.acknowledgment) && !st.posts.some(p => p.startsWith("PAGE")), "I retry sends only the ack: " + st.posts.map(p => p.slice(0, 30)).join(" | "));
+out = await call("escalate_emergency", args);
+check(/already had its emergency acknowledgment/.test(out) && st.posts.length === 2, "I retry runs once");
 console.log(ok ? "ALL PASS" : "SOME FAILED");

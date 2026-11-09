@@ -187,6 +187,12 @@ the Critical response target), `60min` (fallback list first). It stops
 (`done: true`) once a person acts on the ticket (same rule as human_touch),
 the ticket is closed, or the 60-minute page has run. A re-page that reaches
 nobody writes a private note that a person must call on-call by hand.
+Ack-only retry (2026-11-09, from #24262 where the contact had no email):
+when the first call's note says "Client acknowledgment FAILED", a second
+`escalate_emergency` call sends only the acknowledgment (worded by the
+first call's page result), writes `[EMERGENCY ACK RESENT]`, never pages
+again, and works once; the first response carries `ack_retry` telling the
+caller to fix the contact and call again.
 Tested against a mock Halo: `test/emergency.sim.mjs` (how to run is at its
 top). `get_on_call` (read-only, optional `at`) shows the same
 resolution and says email+text vs email only; `escalate_emergency` accepts
