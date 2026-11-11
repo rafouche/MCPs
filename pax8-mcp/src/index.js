@@ -9,21 +9,27 @@
  *   PAX8_CLIENT_ID      — OAuth2 client ID from app.pax8.com > Partner Portal > Company > API
  *   PAX8_CLIENT_SECRET  — OAuth2 client secret from same location
  *
- * FIXED (round 2): the REST proxy was targeting /v2/{path}, which doesn't
- * exist on Pax8's API — confirmed against their own official reference
- * docs (devx.pax8.com/reference/findsubscriptions) that the real path is
- * /v1/subscriptions. The previous fix (token endpoint → login.pax8.com)
- * was correct and got auth working; this was the next layer down — auth
- * succeeded, then the proxied request 404'd against a path that was never
- * real, and that 404 passed straight through to the browser.
+ * FIXED (round 3, 2026-11-11): Pax8 flagged this integration (client ID
+ * hrUIlCVE3KNaWwnoGaqbdq2CaJ7HtWpK) for minting ~770 tokens/day directly
+ * against their identity provider at login.pax8.com/oauth/token. That
+ * endpoint was never Pax8's documented one (devx.pax8.com/docs/authentication
+ * only documents api.pax8.com/v1/token, same JSON body shape: audience/
+ * grant_type/client_id/client_secret) — the in-memory `restToken` cache
+ * below only lives for one Worker isolate, so every cold isolate at every
+ * edge PoP minted its own fresh token straight from the IdP. Pax8's own
+ * /v1/token endpoint caches server-side and returns the same token to every
+ * caller until it's near its 24h expiry, so switching the URL alone fixes
+ * this regardless of how many isolates call it; the local cache stays too,
+ * since Pax8's docs say "you should not need to request a new access token
+ * before every request" either way.
  *
- * Token endpoint: https://login.pax8.com/oauth/token
+ * Token endpoint: https://api.pax8.com/v1/token
  * MCP endpoint:   https://mcp.pax8.com/v1/mcp
  * REST API base:  https://api.pax8.com/v1/
  */
 
 const PAX8_MCP_URL = "https://mcp.pax8.com/v1/mcp";
-const PAX8_TOKEN_URL = "https://login.pax8.com/oauth/token";
+const PAX8_TOKEN_URL = "https://api.pax8.com/v1/token";
 const PAX8_AUDIENCE = "https://api.pax8.com";
 const PAX8_REST_BASE = "https://api.pax8.com/v1";
 
@@ -212,7 +218,7 @@ async function getToken(env) {
   }
   const res = await fetch(PAX8_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify({
       grant_type: "client_credentials",
       client_id: env.PAX8_CLIENT_ID,
