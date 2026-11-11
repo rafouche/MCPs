@@ -254,6 +254,24 @@ same night (obtained_at 2026-09-22T01:50Z); it needed the redirect URI
 added to the NinjaOne client app first (unauthorized_client / Invalid
 redirect_uri until then).
 
+**KV write-quota fix (2026-11-11).** `NINJA_TOKENS` showed ~400 reads AND ~400
+writes a day on one key (free limit: 1,000 writes). Cause: the stored refresh
+token went dead on 2026-10-21 (`/oauth/status` last_error `invalid_token`;
+either NinjaOne's refresh-token lifetime or a rotation race), and `getToken`
+wrote `last_error` back to KV on every failed refresh, once per cold isolate,
+then fell back to client credentials. Now: module-memory cache first (a warm
+isolate never touches KV), one KV read per cold isolate, one KV put per real
+refresh, a shared in-flight load per isolate, and a failed refresh writes at
+most once per hour and only for a 4xx (transient errors write nothing). A lost
+rotation race uses the winner's token and never writes a stale record back. A
+401 from the API drops the cached token, refreshes once and retries once
+(`authedFetch`, skipped if the token was minted under a minute ago). The
+record is written WITHOUT `expirationTtl` - unlike peplink's disposable access
+token it also holds the refresh token, which a TTL would delete. `/oauth/status`
+now reports `user_context_working` and says so when the refresh token is being
+rejected. **While the refresh token is dead, script runs fail with
+`user_context_required`; a person must sign in again at `/oauth/start`.**
+
 ## halopsa-mcp: ticket attachments (2026-10-02)
 `list_ticket_attachments` (GET /Attachment?ticket_id) and
 `get_ticket_attachment` fetch Halo's signed `s3url` for an attachment. An

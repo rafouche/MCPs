@@ -19,9 +19,25 @@ const OAUTH_SCOPES = "monitoring management control offline_access";
 const CC_SCOPES = "monitoring management control";
 const KV_KEY = "oauth";
 
-type StoredOAuth = { access_token?: string; expires_at?: number; refresh_token: string; obtained_at: number; refreshed_at?: number; last_error?: string; note?: string };
+type StoredOAuth = { access_token?: string; expires_at?: number; refresh_token: string; obtained_at: number; refreshed_at?: number; last_error?: string; last_error_at?: number; note?: string };
 
-let cachedToken: { token: string; expires: number; source: "user" | "client_credentials" } | null = null;
+// Token caching, cheapest layer first (2026-11-11 - the KV write quota fix):
+//   1. cachedToken: module memory. A warm isolate never touches KV.
+//   2. NINJA_TOKENS KV, read once per cold isolate: a stored access token with
+//      more than 60 s left is reused as is.
+//   3. Only a true miss/expiry refreshes: ONE KV put per refresh.
+// The KV record is deliberately written WITHOUT expirationTtl (unlike
+// peplink-mcp's disposable access token): it also holds the signed-in user's
+// refresh token, and a TTL would delete that sign-in after an hour. The
+// absolute expiry (expires_at) lives in the value instead.
+// Outage that prompted this: the stored refresh token went dead (invalid_token
+// since 2026-10-21) and the old catch block wrote last_error to KV on EVERY
+// failed refresh, once per cold isolate - ~400 reads and ~400 writes a day,
+// 1:1, against the 1,000-writes/day free limit. A failed refresh now writes at
+// most once per FAIL_BACKOFF_MS, and only for a definitive 4xx rejection.
+let cachedToken: { token: string; expires: number; minted: number; source: "user" | "client_credentials" } | null = null;
+let tokenInflight: Promise<string> | null = null;
+const FAIL_BACKOFF_MS = 60 * 60 * 1000;
 
 async function tokenRequest(env: Env, body: Record<string, string>): Promise<{ access_token: string; expires_in: number; refresh_token?: string }> {
   const res = await fetch(`${env.NINJA_BASE_URL}/ws/oauth/token`, {
@@ -29,7 +45,7 @@ async function tokenRequest(env: Env, body: Record<string, string>): Promise<{ a
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: env.NINJA_CLIENT_ID, client_secret: env.NINJA_CLIENT_SECRET, ...body }).toString(),
   });
-  if (!res.ok) throw new Error(`NinjaOne auth failed (${res.status}): ${await res.text()}`);
+  if (!res.ok) throw Object.assign(new Error(`NinjaOne auth failed (${res.status}): ${await res.text()}`), { status: res.status });
   return await res.json() as { access_token: string; expires_in: number; refresh_token?: string };
 }
 
@@ -40,31 +56,78 @@ async function readStored(env: Env): Promise<StoredOAuth | null> {
   try { return JSON.parse(raw) as StoredOAuth; } catch { return null; }
 }
 
+// When the last refresh failure was recorded. Records written before
+// last_error_at existed carry the time as the ISO prefix of last_error.
+function failedAt(s: StoredOAuth): number {
+  if (s.last_error_at) return s.last_error_at;
+  const t = s.last_error ? Date.parse(s.last_error.split(" ")[0]) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+}
+
 // Prefer the user-context token when one is stored; refresh it when it has
-// under 2 minutes left; keep the newest refresh token NinjaOne hands back.
-// Any refresh failure is recorded (last_error) and the call falls back to
-// client credentials so read-only work never stops - script runs will then
-// fail with user_context_required until someone signs in again at /oauth/start.
-async function getToken(env: Env): Promise<string> {
-  if (cachedToken && cachedToken.expires > Date.now() + 60000) return cachedToken.token;
+// under 60 s left; keep the newest refresh token NinjaOne hands back. On a
+// failed refresh the call falls back to client credentials so read-only work
+// never stops - script runs then fail with user_context_required until
+// someone signs in again at /oauth/start. `force` skips the memory cache and
+// `rejected` is a token the API just 401'd, which must not be handed back
+// (same shape as peplink-mcp's getToken). Concurrent callers in one isolate
+// share a single in-flight load. Never logs a token.
+async function getToken(env: Env, force = false, rejected?: string): Promise<string> {
+  if (!force && cachedToken && cachedToken.expires > Date.now() + 60000) {
+    console.debug("ninja token cache hit (memory)");
+    return cachedToken.token;
+  }
+  if (tokenInflight) return tokenInflight;
+  tokenInflight = loadToken(env, rejected);
+  try {
+    return await tokenInflight;
+  } finally {
+    tokenInflight = null;
+  }
+}
+
+async function loadToken(env: Env, rejected?: string): Promise<string> {
+  const usable = (s: StoredOAuth) => !!s.access_token && s.access_token !== rejected && !!s.expires_at && s.expires_at > Date.now() + 60000;
   const stored = await readStored(env);
   if (stored && stored.refresh_token) {
-    if (stored.access_token && stored.expires_at && stored.expires_at > Date.now() + 120000) {
-      cachedToken = { token: stored.access_token, expires: stored.expires_at, source: "user" };
-      return stored.access_token;
+    if (usable(stored)) {
+      cachedToken = { token: stored.access_token!, expires: stored.expires_at!, minted: stored.refreshed_at ?? stored.obtained_at, source: "user" };
+      console.debug("ninja token cache hit (kv)");
+      return stored.access_token!;
     }
-    try {
-      const data = await tokenRequest(env, { grant_type: "refresh_token", refresh_token: stored.refresh_token });
-      const next: StoredOAuth = { ...stored, access_token: data.access_token, expires_at: Date.now() + data.expires_in * 1000, refresh_token: data.refresh_token || stored.refresh_token, refreshed_at: Date.now(), last_error: undefined };
-      await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify(next));
-      cachedToken = { token: data.access_token, expires: next.expires_at!, source: "user" };
-      return data.access_token;
-    } catch (err) {
-      try { await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify({ ...stored, last_error: `${new Date().toISOString()} ${(err as Error).message}` })); } catch { /* ignore */ }
+    if (Date.now() - failedAt(stored) < FAIL_BACKOFF_MS) {
+      console.debug("ninja token: user-context refresh is in its failure backoff, using client credentials");
+    } else {
+      try {
+        console.debug("ninja token refresh (user context)");
+        const data = await tokenRequest(env, { grant_type: "refresh_token", refresh_token: stored.refresh_token });
+        const next: StoredOAuth = { ...stored, access_token: data.access_token, expires_at: Date.now() + data.expires_in * 1000, refresh_token: data.refresh_token || stored.refresh_token, refreshed_at: Date.now(), last_error: undefined, last_error_at: undefined };
+        await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify(next));
+        cachedToken = { token: data.access_token, expires: next.expires_at!, minted: Date.now(), source: "user" };
+        return data.access_token;
+      } catch (err) {
+        const message = (err as Error).message;
+        // Refresh tokens can rotate: if another isolate won the race, the one
+        // just used is spent and this call fails. Use the winner's token, and
+        // never write a stale copy of the record back over it.
+        const latest = await readStored(env);
+        if (latest && latest.refresh_token && usable(latest)) {
+          cachedToken = { token: latest.access_token!, expires: latest.expires_at!, minted: latest.refreshed_at ?? latest.obtained_at, source: "user" };
+          console.debug("ninja token cache hit (kv, another isolate refreshed first)");
+          return latest.access_token!;
+        }
+        console.warn(`ninja token refresh failed (user context): ${message}`);
+        const status = (err as { status?: number }).status ?? 0;
+        const base = latest ?? stored;
+        if (status >= 400 && status < 500 && Date.now() - failedAt(base) >= FAIL_BACKOFF_MS) {
+          try { await env.NINJA_TOKENS!.put(KV_KEY, JSON.stringify({ ...base, last_error: `${new Date().toISOString()} ${message}`, last_error_at: Date.now() })); } catch { /* ignore */ }
+        }
+      }
     }
   }
+  console.debug("ninja token refresh (client credentials)");
   const data = await tokenRequest(env, { grant_type: "client_credentials", scope: CC_SCOPES });
-  cachedToken = { token: data.access_token, expires: Date.now() + (data.expires_in * 1000), source: "client_credentials" };
+  cachedToken = { token: data.access_token, expires: Date.now() + (data.expires_in * 1000), minted: Date.now(), source: "client_credentials" };
   return data.access_token;
 }
 
@@ -74,14 +137,22 @@ function redirectUri(env: Env, request: Request): string {
 
 async function oauthStatus(env: Env): Promise<Record<string, unknown>> {
   const stored = await readStored(env);
+  const hasRefresh = !!(stored && stored.refresh_token);
+  const accessValid = !!(stored?.expires_at && stored.expires_at > Date.now());
+  const refreshFailing = hasRefresh && !!stored?.last_error && !accessValid;
   return {
     kv_bound: !!env.NINJA_TOKENS,
-    user_context: !!(stored && stored.refresh_token),
+    user_context: hasRefresh,
+    user_context_working: hasRefresh && !refreshFailing,
     obtained_at: stored?.obtained_at ? new Date(stored.obtained_at).toISOString() : null,
     refreshed_at: stored?.refreshed_at ? new Date(stored.refreshed_at).toISOString() : null,
     access_token_expires_at: stored?.expires_at ? new Date(stored.expires_at).toISOString() : null,
     last_error: stored?.last_error ?? null,
-    note: stored && stored.refresh_token ? "Script runs use the signed-in user's context." : "No user-context token stored: script runs will be refused by NinjaOne (user_context_required). Sign in once at /oauth/start.",
+    note: !hasRefresh
+      ? "No user-context token stored: script runs will be refused by NinjaOne (user_context_required). Sign in once at /oauth/start."
+      : refreshFailing
+        ? "The stored refresh token is being rejected, so calls are using client credentials and script runs will be refused (user_context_required). Sign in again at /oauth/start."
+        : "Script runs use the signed-in user's context.",
   };
 }
 
@@ -144,20 +215,38 @@ async function fetchWithRetry(input: string, init: RequestInit, retryOn: Set<num
   }
   return res;
 }
-async function ninjaGet(env: Env, path: string, params?: Record<string, string>): Promise<unknown> {
+// Every API call goes through here. A 401 means the token was rejected: drop
+// it, refresh once, retry once - no loop. Skipped when the rejected token was
+// minted under a minute ago: that 401 isn't a stale token, and refreshing
+// again would only burn a KV write per request.
+async function authedFetch(env: Env, url: string, init: RequestInit, retryOn?: Set<number>): Promise<Response> {
+  const send = (token: string) => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    const req = { ...init, headers };
+    return retryOn ? fetchWithRetry(url, req, retryOn) : fetch(url, req);
+  };
   const token = await getToken(env);
+  const res = await send(token);
+  if (res.status !== 401) return res;
+  if (cachedToken?.token === token && Date.now() - cachedToken.minted < 60000) return res;
+  console.warn("ninja api 401: invalidating the cached token and refreshing once");
+  if (cachedToken?.token === token) cachedToken = null;
+  return send(await getToken(env, true, token));
+}
+
+async function ninjaGet(env: Env, path: string, params?: Record<string, string>): Promise<unknown> {
   const url = new URL(`${env.NINJA_BASE_URL}/v2${path}`);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetchWithRetry(url.toString(), { headers: { Authorization: `Bearer ${token}` } }, RETRY_GET);
+  const res = await authedFetch(env, url.toString(), {}, RETRY_GET);
   if (!res.ok) throw new Error(`GET /v2${path} failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
 
 async function ninjaPost(env: Env, path: string, body?: unknown): Promise<unknown> {
-  const token = await getToken(env);
-  const res = await fetchWithRetry(`${env.NINJA_BASE_URL}/v2${path}`, {
+  const res = await authedFetch(env, `${env.NINJA_BASE_URL}/v2${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   }, RETRY_POST);
   if (!res.ok) throw new Error(`POST /v2${path} failed (${res.status}): ${await res.text()}`);
@@ -165,10 +254,9 @@ async function ninjaPost(env: Env, path: string, body?: unknown): Promise<unknow
 }
 
 async function ninjaPut(env: Env, path: string, body?: unknown): Promise<unknown> {
-  const token = await getToken(env);
-  const res = await fetch(`${env.NINJA_BASE_URL}/v2${path}`, {
+  const res = await authedFetch(env, `${env.NINJA_BASE_URL}/v2${path}`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`PUT /v2${path} failed (${res.status}): ${await res.text()}`);
@@ -176,10 +264,9 @@ async function ninjaPut(env: Env, path: string, body?: unknown): Promise<unknown
 }
 
 async function ninjaPatch(env: Env, path: string, body?: unknown): Promise<unknown> {
-  const token = await getToken(env);
-  const res = await fetch(`${env.NINJA_BASE_URL}/v2${path}`, {
+  const res = await authedFetch(env, `${env.NINJA_BASE_URL}/v2${path}`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`PATCH /v2${path} failed (${res.status}): ${await res.text()}`);
@@ -187,11 +274,7 @@ async function ninjaPatch(env: Env, path: string, body?: unknown): Promise<unkno
 }
 
 async function ninjaDelete(env: Env, path: string): Promise<unknown> {
-  const token = await getToken(env);
-  const res = await fetch(`${env.NINJA_BASE_URL}/v2${path}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authedFetch(env, `${env.NINJA_BASE_URL}/v2${path}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`DELETE /v2${path} failed (${res.status}): ${await res.text()}`);
   return { success: true };
 }
