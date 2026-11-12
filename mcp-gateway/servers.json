@@ -365,15 +365,14 @@
       "roles": [
         "MCP.Pax8"
       ],
-      "notes": "Tool names are Pax8 hosted MCP names (pax8-mcp passes them through). Includes pricing, invoices and usage (billing) - gate with the MCP.Pax8 role. EXCLUDED: pax8-submit-order.",
+      "notes": "pax8-mcp implements these tools itself over the Pax8 REST API (since 2026-11-12; names kept from Pax8's hosted MCP). Includes pricing, invoices, usage (billing) and client contacts - gate with the MCP.Pax8 role. pax8-mcp has no ordering tool. EXCLUDED: pax8_api_get (raw escape hatch).",
       "readTools": [
-        "get-pax8-help-documents",
         "pax8-list-companies",
         "pax8-get-company-by-uuid",
+        "pax8-list-company-contacts",
         "pax8-list-products",
         "pax8-get-product-by-uuid",
         "pax8-lookup-product",
-        "pax8-semantic-search-product",
         "pax8-get-product-ordering-requirements",
         "pax8-get-product-pricing-by-uuid",
         "pax8-list-subscriptions",
@@ -384,10 +383,10 @@
         "pax8-get-quote-by-uuid",
         "pax8-list-invoices",
         "pax8-get-invoice-by-uuid",
+        "pax8-list-draft-invoice-items",
         "pax8-search-invoice-line-items",
         "pax8-get-usage-summary",
-        "pax8-get-detailed-usage-summary",
-        "pax8-get-hitl-result"
+        "pax8-get-detailed-usage-summary"
       ]
     },
     "m365": {
