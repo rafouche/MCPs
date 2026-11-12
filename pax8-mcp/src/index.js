@@ -1,15 +1,30 @@
 /**
  * pax8-mcp gateway
  *
- * Passthrough — proxies /mcp JSON-RPC to Pax8's real MCP endpoint,
- * injecting OAuth2 Bearer token auth from your stored secrets. Also
- * exposes /api/pax8/* as a raw REST passthrough for the wallboard.
+ * Passthrough: relays /mcp JSON-RPC to Pax8's hosted MCP server and exposes
+ * /api/pax8/* as a read-only raw REST passthrough for the wallboard. The two
+ * paths use DIFFERENT credentials, because Pax8's MCP server does not accept
+ * REST API tokens.
  *
  * SECRETS (wrangler secret put):
- *   PAX8_CLIENT_ID      — OAuth2 client ID from app.pax8.com > Partner Portal > Company > API
- *   PAX8_CLIENT_SECRET  — OAuth2 client secret from same location
+ *   PAX8_MCP_TOKEN      — /mcp. Pax8's MCP token, generated at
+ *                         app.pax8.com/integrations/mcp ("Pax8 token (legacy)"
+ *                         on devx.pax8.com/docs/mcp-server), sent as the
+ *                         x-pax8-mcp-token header. Nothing is minted for it.
+ *   PAX8_CLIENT_ID      — /api/pax8/*. OAuth2 client from app.pax8.com >
+ *   PAX8_CLIENT_SECRET    Partner Portal > Company > API.
  *
- * FIXED (round 3, 2026-11-11): Pax8 flagged this integration (client ID
+ * /mcp auth (2026-11-12): mcp.pax8.com/v1/mcp takes either the
+ * x-pax8-mcp-token header, or "Authorization: Bearer" with a token from its
+ * OWN OAuth server (issuer https://mcp.pax8.com/v1, grants authorization_code
+ * and refresh_token only, so a person has to sign in; see
+ * mcp.pax8.com/v1/.well-known/oauth-authorization-server). A client_credentials
+ * token from api.pax8.com/v1/token is refused with 401 "Invalid JWT:
+ * Unexpected 'iss' value"; that is what broke /mcp after the 2026-11-11 fix
+ * below. The unattended option is the MCP token header. Do not point /mcp
+ * back at a login.pax8.com token to "fix" it.
+ *
+ * REST token endpoint (2026-11-11): Pax8 flagged this integration (client ID
  * hrUIlCVE3KNaWwnoGaqbdq2CaJ7HtWpK) for minting ~770 tokens/day directly
  * against their identity provider at login.pax8.com/oauth/token. That
  * endpoint was never Pax8's documented one (devx.pax8.com/docs/authentication
@@ -23,9 +38,9 @@
  * since Pax8's docs say "you should not need to request a new access token
  * before every request" either way.
  *
- * Token endpoint: https://api.pax8.com/v1/token
- * MCP endpoint:   https://mcp.pax8.com/v1/mcp
- * REST API base:  https://api.pax8.com/v1/
+ * MCP endpoint:        https://mcp.pax8.com/v1/mcp
+ * REST token endpoint: https://api.pax8.com/v1/token
+ * REST API base:       https://api.pax8.com/v1/
  */
 
 const PAX8_MCP_URL = "https://mcp.pax8.com/v1/mcp";
@@ -173,24 +188,43 @@ async function handleMcp(request, env) {
 }
 
 async function callPax8Mcp(env, rpcBody) {
-  const token = await getToken(env);
+  if (!env.PAX8_MCP_TOKEN) {
+    throw new Error("PAX8_MCP_TOKEN secret is required for /mcp (generate it at app.pax8.com/integrations/mcp, then: wrangler secret put PAX8_MCP_TOKEN)");
+  }
   const res = await fetch(PAX8_MCP_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json, text/event-stream",
+      "x-pax8-mcp-token": env.PAX8_MCP_TOKEN,
     },
     body: JSON.stringify(rpcBody),
   });
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Pax8 MCP returned ${res.status}: ${text.substring(0, 200)}`);
+    throw new Error(`Pax8 MCP returned ${res.status}: ${text.substring(0, 300)}`);
   }
-  return res.json();
+  // A Streamable HTTP server may answer as an event stream: take the
+  // JSON-RPC response to this request out of its data: lines.
+  if ((res.headers.get("Content-Type") || "").includes("text/event-stream")) {
+    for (const block of text.split(/\r?\n\r?\n/)) {
+      const data = block.split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trimStart()).join("\n");
+      if (!data) continue;
+      try {
+        const msg = JSON.parse(data);
+        if (msg && msg.id === rpcBody.id && (msg.result !== undefined || msg.error !== undefined)) return msg;
+      } catch { /* not JSON; keep looking */ }
+    }
+    throw new Error(`Pax8 MCP sent an event stream with no response to this request: ${text.substring(0, 300)}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Pax8 MCP returned non-JSON (${res.status}): ${text.substring(0, 300)}`);
+  }
 }
 
-// ─── Raw REST passthrough (separate OAuth2 credentials) ───────────────────────
+// ─── Raw REST passthrough (OAuth2 client credentials, /api/pax8/* only) ──────
 
 async function proxyRest(request, env, url) {
   const subpath = url.pathname.replace("/api/pax8/", "");

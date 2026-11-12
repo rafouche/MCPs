@@ -1,40 +1,50 @@
 # pax8-mcp
 
 Passthrough gateway for Pax8. Proxies MCP JSON-RPC to `mcp.pax8.com/v1/mcp`
-and exposes a raw REST reverse-proxy at `/api/pax8/*`. Both paths use the
-same OAuth2 token from `api.pax8.com/v1/token`.
+and exposes a read-only raw REST reverse-proxy at `/api/pax8/*`. The two
+paths use **different credentials**:
+
+| Route | Credential | Sent as |
+|---|---|---|
+| `/mcp` | `PAX8_MCP_TOKEN` (Pax8 MCP token) | `x-pax8-mcp-token` header |
+| `/api/pax8/*` | `PAX8_CLIENT_ID`/`PAX8_CLIENT_SECRET` -> token from `api.pax8.com/v1/token` | `Authorization: Bearer` |
+
+Pax8's MCP server does not accept REST API tokens. A client_credentials token
+from `api.pax8.com/v1/token` gets 401 `Invalid JWT: Unexpected 'iss' value`.
+Its Bearer option only takes tokens from its own OAuth server
+(`mcp.pax8.com/v1`, authorization code + refresh token only, so a person
+signs in), which doesn't suit an unattended Worker. The MCP token header needs
+no token minting at all. Don't move `/mcp` back to `login.pax8.com` tokens:
+minting those once per Worker isolate is what Pax8 flagged on 2026-11-11.
 
 ## Secrets Required
 
 ```
+wrangler secret put PAX8_MCP_TOKEN      # From app.pax8.com/integrations/mcp (Settings > Integrations > MCP server)
 wrangler secret put PAX8_CLIENT_ID      # From app.pax8.com > Partner Portal > Company > API
 wrangler secret put PAX8_CLIENT_SECRET  # From same location
 ```
 
-> **Note:** `PAX8_MCP_TOKEN` is no longer needed — the worker now uses OAuth2
-> client credentials for both the MCP passthrough and the REST proxy.
+If `/mcp` starts answering 401 `Invalid x-pax8-mcp-token` (token revoked or
+regenerated in Pax8), generate a new MCP token and replace `PAX8_MCP_TOKEN`.
 
 ## Setup in Pax8
 
 1. Log into app.pax8.com
-2. Go to **Partner Portal → Company → API**
-3. Create a new API client — copy the **Client ID** and **Client Secret**
-4. Token endpoint: `https://api.pax8.com/v1/token`
+2. MCP token: **Settings → Integrations → MCP server** (app.pax8.com/integrations/mcp)
+3. REST client: **Partner Portal → Company → API**; create an API client and copy the **Client ID** and **Client Secret**
+4. REST token endpoint: `https://api.pax8.com/v1/token`
 5. MCP endpoint: `https://mcp.pax8.com/v1/mcp`
 
 ## Deploy
 
-```
-npm install
-wrangler secret put PAX8_CLIENT_ID
-wrangler secret put PAX8_CLIENT_SECRET
-wrangler deploy
-```
+Deploys go through GitHub: pushing a change in this folder to `main` runs
+`.github/workflows/deploy.yml`. Never `wrangler deploy` from a local checkout.
 
 ## Routes
 
 - `POST /mcp` — MCP JSON-RPC passthrough to Pax8
-- `GET /api/pax8/*` — Raw REST reverse-proxy to api.pax8.com/v2/
+- `GET /api/pax8/*` — Raw REST reverse-proxy to api.pax8.com/v1/ (GET/HEAD only)
 - `GET /health` — Health check
 
 ## Claude.ai Integration URL
