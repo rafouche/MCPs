@@ -188,21 +188,34 @@ async function handleMcp(request, env) {
 }
 
 async function callPax8Mcp(env, rpcBody) {
-  if (!env.PAX8_MCP_TOKEN) {
-    throw new Error("PAX8_MCP_TOKEN secret is required for /mcp (generate it at app.pax8.com/integrations/mcp, then: wrangler secret put PAX8_MCP_TOKEN)");
+  // Tolerate the usual paste mistakes: surrounding whitespace/quotes, a
+  // "Bearer " prefix, or the whole "x-pax8-mcp-token: ..." header line.
+  const mcpToken = (env.PAX8_MCP_TOKEN || "")
+    .trim()
+    .replace(/^x-pax8-mcp-token\s*:\s*/i, "")
+    .replace(/^Bearer\s+/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+  if (!mcpToken) {
+    throw new Error("PAX8_MCP_TOKEN secret is required for /mcp (generate it at app.pax8.com/integrations/mcp, then set it as a Worker secret)");
   }
   const res = await fetch(PAX8_MCP_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json, text/event-stream",
-      "x-pax8-mcp-token": env.PAX8_MCP_TOKEN,
+      "x-pax8-mcp-token": mcpToken,
     },
     body: JSON.stringify(rpcBody),
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Pax8 MCP returned ${res.status}: ${text.substring(0, 300)}`);
+    // On a 401, describe the stored token's shape (never its value) so a
+    // stale or wrong-type secret is obvious without reading it.
+    const shape = res.status === 401
+      ? ` [PAX8_MCP_TOKEN: ${mcpToken.length} chars, ${mcpToken.split(".").length - 1} dots, ${/\s/.test(mcpToken) ? "contains whitespace" : "no whitespace"}, ${/^[0-9a-f-]+$/i.test(mcpToken) ? "hex/uuid charset" : /^[A-Za-z0-9_\-.]+$/.test(mcpToken) ? "base64url charset" : "other characters"}; replace it from app.pax8.com/integrations/mcp if Pax8 rejects it]`
+      : "";
+    throw new Error(`Pax8 MCP returned ${res.status}: ${text.substring(0, 300)}${shape}`);
   }
   // A Streamable HTTP server may answer as an event stream: take the
   // JSON-RPC response to this request out of its data: lines.
