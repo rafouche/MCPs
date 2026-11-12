@@ -1,81 +1,96 @@
 # pax8-mcp
 
-Passthrough gateway for Pax8. Proxies MCP JSON-RPC to `mcp.pax8.com/v1/mcp`
-and exposes a read-only raw REST reverse-proxy at `/api/pax8/*`. The two
-paths use **different credentials**:
+MCP tools over the **Pax8 Partner REST API** (`api.pax8.com`), plus a
+read-only raw REST passthrough at `/api/pax8/*` for the wallboard. It does not
+use Pax8's own hosted MCP server: the REST API covers more than Pax8's MCP, and
+this Worker is built on it on purpose.
 
-| Route | Credential | Sent as |
-|---|---|---|
-| `/mcp` | `PAX8_MCP_TOKEN` (Pax8 MCP token) | `x-pax8-mcp-token` header |
-| `/api/pax8/*` | `PAX8_CLIENT_ID`/`PAX8_CLIENT_SECRET` -> token from `api.pax8.com/v1/token` | `Authorization: Bearer` |
+One credential for everything: an OAuth2 client-credentials token from
+`https://api.pax8.com/v1/token` (Pax8's documented endpoint). Pax8 caches that
+token server-side and hands every caller the same one until near its 24h
+expiry, so Worker isolates don't each mint their own. Never use
+`login.pax8.com/oauth/token`: minting a token there per isolate is what Pax8
+flagged on 2026-11-11 (~770 tokens/day).
 
-Pax8's MCP server does not accept REST API tokens. A client_credentials token
-from `api.pax8.com/v1/token` gets 401 `Invalid JWT: Unexpected 'iss' value`.
-Its Bearer option only takes tokens from its own OAuth server
-(`mcp.pax8.com/v1`, authorization code + refresh token only, so a person
-signs in), which doesn't suit an unattended Worker. The MCP token header needs
-no token minting at all. Don't move `/mcp` back to `login.pax8.com` tokens:
-minting those once per Worker isolate is what Pax8 flagged on 2026-11-11.
+## Secrets
 
-## Secrets Required
+| Secret | From |
+|---|---|
+| `PAX8_CLIENT_ID` | app.pax8.com > Partner Portal > Company > API (create an API client) |
+| `PAX8_CLIENT_SECRET` | same place |
+| `MCP_AUTH_TOKEN` | optional inbound bearer token, see below |
 
-```
-wrangler secret put PAX8_MCP_TOKEN      # From app.pax8.com/integrations/mcp (Settings > Integrations > MCP server)
-wrangler secret put PAX8_CLIENT_ID      # From app.pax8.com > Partner Portal > Company > API
-wrangler secret put PAX8_CLIENT_SECRET  # From same location
-```
+Roger sets secrets in the Cloudflare dashboard (Worker > Settings > Variables
+and Secrets, type Secret). `PAX8_MCP_TOKEN` is not used by anything and can be
+deleted from the Worker.
 
-If `/mcp` starts answering 401 `Invalid x-pax8-mcp-token` (token revoked or
-regenerated in Pax8), generate a new MCP token and replace `PAX8_MCP_TOKEN`.
+## Tools
 
-## Setup in Pax8
+Tool names and argument names match the ones Pax8's hosted MCP used, so
+mcp-gateway's allowlist and existing prompts keep working. Everything is
+read-only; nothing can order. Anywhere a tool takes `companyId`, a company
+**name** works too (partial match; it errors with the candidates if more than
+one company matches).
 
-1. Log into app.pax8.com
-2. MCP token: **Settings → Integrations → MCP server** (app.pax8.com/integrations/mcp)
-3. REST client: **Partner Portal → Company → API**; create an API client and copy the **Client ID** and **Client Secret**
-4. REST token endpoint: `https://api.pax8.com/v1/token`
-5. MCP endpoint: `https://mcp.pax8.com/v1/mcp`
+| Tool | Pax8 API |
+|---|---|
+| `pax8-list-companies` | `GET /v1/companies` (`company_name` is matched here, since Pax8 has no name search) |
+| `pax8-get-company-by-uuid` | `GET /v1/companies/{id}` (+ contacts with `include_contacts`) |
+| `pax8-list-company-contacts` | `GET /v1/companies/{id}/contacts` |
+| `pax8-list-products` | `GET /v1/products` (`search` matches name, vendor, SKU, ID) |
+| `pax8-lookup-product` | `GET /v1/products/{id}` or `GET /v1/products?search=` |
+| `pax8-get-product-by-uuid` | `GET /v1/products/{id}` |
+| `pax8-get-product-ordering-requirements` | `GET /v1/products/{id}/provision-details` + `/dependencies` |
+| `pax8-get-product-pricing-by-uuid` | `GET /v1/products/{id}/pricing` (optional `companyId`) |
+| `pax8-list-subscriptions` | `GET /v1/subscriptions` (status defaults to Active; `All` for every status) |
+| `pax8-get-subscription-by-uuid` | `GET /v1/subscriptions/{id}` (+ `/history` with `include_history`) |
+| `pax8-list-orders` | `GET /v1/orders` |
+| `pax8-get-order-by-uuid` | `GET /v1/orders/{id}` |
+| `pax8-list-quotes` | `GET /v2/quotes` (paged with `limit`, not `size`) |
+| `pax8-get-quote-by-uuid` | `GET /v2/quotes/{id}` (+ `/sections` with `include_sections`) |
+| `pax8-list-invoices` | `GET /v1/invoices` |
+| `pax8-get-invoice-by-uuid` | `GET /v1/invoices/{id}` (+ `/items` with `include_items`) |
+| `pax8-list-draft-invoice-items` | `GET /v1/invoices/draftItems` (upcoming invoice) |
+| `pax8-search-invoice-line-items` | `GET /v2/finance-reports/invoices` (needs `invoiceDate`, a date range or `invoiceNumber`) |
+| `pax8-get-usage-summary` | `GET /v1/subscriptions/{id}/usage-summaries` |
+| `pax8-get-detailed-usage-summary` | `GET /v1/usage-summaries/{id}/usage-lines` (one `usageDate` per call) |
+| `pax8_api_get` | any GET path; `/v1` unless the path starts with `/v1/` or `/v2/` |
+
+Gone compared with Pax8's hosted MCP, because they only exist there:
+`get-pax8-help-documents`, `pax8-semantic-search-product` (use
+`pax8-list-products` with `search`) and `pax8-get-hitl-result`.
+`pax8-submit-order` was never allowed.
+
+Endpoint reference: devx.pax8.com/reference. Lists are 0-based `page` and
+`size` (max 200). Every tool error carries Pax8's real HTTP status and body.
+
+## Routes
+
+- `POST /mcp` - MCP JSON-RPC (`initialize`, `tools/list`, `tools/call`, `ping`, batches)
+- `GET /mcp`, `DELETE /mcp` - 405 (no event stream)
+- `GET /api/pax8/*` - raw REST reverse-proxy to `api.pax8.com/v1/` (GET/HEAD only; the wallboard uses it)
+- `GET /health` - health check
 
 ## Deploy
 
 Deploys go through GitHub: pushing a change in this folder to `main` runs
 `.github/workflows/deploy.yml`. Never `wrangler deploy` from a local checkout.
 
-## Routes
+## Test commands (CMD)
 
-- `POST /mcp` — MCP JSON-RPC passthrough to Pax8
-- `GET /api/pax8/*` — Raw REST reverse-proxy to api.pax8.com/v1/ (GET/HEAD only)
-- `GET /health` — Health check
-
-## Claude.ai Integration URL
-
-`https://pax8-mcp.young-math-a33a.workers.dev/mcp`
-
-## Test Commands (CMD — verified working on Windows)
-
-Health check:
 ```cmd
 curl https://pax8-mcp.young-math-a33a.workers.dev/health
+curl -X POST https://pax8-mcp.young-math-a33a.workers.dev/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"pax8-list-companies\",\"arguments\":{\"size\":3}}}"
+curl "https://pax8-mcp.young-math-a33a.workers.dev/api/pax8/companies?size=2"
 ```
 
-List tools (confirms MCP is reachable and credentials work):
-```cmd
-curl -X POST https://pax8-mcp.young-math-a33a.workers.dev/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
-```
-
-NOC status endpoint:
-```cmd
-curl https://pax8-mcp.young-math-a33a.workers.dev/status
-```
-
-> **Note:** PowerShell quoting is unreliable for JSON bodies. Use CMD (cmd.exe) for curl test commands.
+PowerShell quoting is unreliable for JSON bodies; use cmd.exe.
 
 ## Inbound auth (MCP_AUTH_TOKEN)
-Follows the repo's standing rule (see `CLAUDE.md`, "STANDING RULE: inbound
-auth for every Worker"). Set `MCP_AUTH_TOKEN` as a Cloudflare **Secret**
-(Worker > Settings > Variables and Secrets, type Secret), never a plain-text
-variable; `wrangler.jsonc` has `"keep_vars": true` so a deploy never removes
-it. Once set, every request needs `Authorization: Bearer <token>` except
-`/health` and the read-only `/api/pax8/*` passthrough (GET/HEAD only; any other method gets 405), which the wallboard polls without a token. Until it's set the Worker
-accepts any caller. Add `-H "Authorization: Bearer <token>"` to the `/mcp`
-test commands above once the token is on.
+
+Follows the repo's standing rule (`CLAUDE.md`, "STANDING RULE: inbound auth
+for every Worker"). Set `MCP_AUTH_TOKEN` as a Cloudflare **Secret**;
+`wrangler.jsonc` has `"keep_vars": true` so a deploy never removes it. Once
+set, every request needs `Authorization: Bearer <token>` except `/health` and
+the read-only `/api/pax8/*` passthrough, which the wallboard polls without a
+token. Until it's set the Worker accepts any caller.
