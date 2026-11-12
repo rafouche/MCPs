@@ -1,0 +1,100 @@
+# Deploys Cloudflare Workers from GitHub, never from a local machine.
+#
+# Push to main: every top-level folder with a wrangler config that the push
+# changed is deployed with `wrangler deploy`. Folders the push did not touch
+# are left alone, so a push can never roll back a Worker it did not change.
+# Manual run (Actions > Deploy Workers > Run workflow): deploys one folder.
+#
+# One-time setup (repo Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN  Cloudflare API token from the "Edit Cloudflare Workers"
+#                         template, scoped to the Altec account (and the
+#                         altecusa.com zone, for mcp-gateway's custom domain).
+# Worker secrets are never set here: they stay in Cloudflare, and every
+# wrangler config has "keep_vars": true so a deploy does not delete them.
+
+name: Deploy Workers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: "Folder to deploy, e.g. mcp-gateway or halopsa-mcp"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-workers
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 77913d04ce44a8767e3736930eadc0c4
+  WRANGLER_VERSION: 4.94.0
+  # Retired Workers that must never be redeployed by a push.
+  SKIP_FOLDERS: "jumpcloud-mcp"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.pick.outputs.folders }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          BEFORE: ${{ github.event.before }}
+          INPUT: ${{ inputs.worker }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT:-}" ]; then
+            if ! [[ "$INPUT" =~ ^[A-Za-z0-9._-]+$ ]]; then echo "Bad folder name: $INPUT"; exit 1; fi
+            dirs="$INPUT"
+          elif [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            dirs=""
+          else
+            dirs=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep / | cut -d/ -f1 | sort -u || true)
+          fi
+          picked=()
+          for d in $dirs; do
+            if [[ " $SKIP_FOLDERS " == *" $d "* ]]; then echo "Skipping retired $d"; continue; fi
+            if [ -f "$d/wrangler.jsonc" ] || [ -f "$d/wrangler.json" ] || [ -f "$d/wrangler.toml" ]; then picked+=("$d"); fi
+          done
+          json=$(printf '%s\n' "${picked[@]:-}" | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "Deploying: $json"
+          echo "folders=$json" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.folders != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.plan.outputs.folders) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.folder }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund
+          elif [ -f package.json ]; then npm install --no-audit --no-fund
+          fi
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN repo secret is not set - nothing deployed"; exit 1
+          fi
+          npx --yes "wrangler@${WRANGLER_VERSION}" deploy

@@ -1,0 +1,43 @@
+{
+  // Altec MCP Gateway: one Entra-signed-in front door (OAuth 2.1) for third-party
+  // chatbots (claude.ai, ChatGPT, Grok) in front of the backend MCP Workers.
+  // Backends and their read-only tool allowlists live in servers.json.
+  "name": "mcp-gateway",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+
+  // Served only on the custom domain; the workers.dev URL is off.
+  "workers_dev": false,
+  "routes": [{ "pattern": "mcp-gateway.altecusa.com", "custom_domain": true }],
+
+  // OAuth grants, tokens, registered clients and consent records.
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "a91dd9920e87485abd5f9191d2ed2342" }],
+
+  // Daily purge of expired OAuth grants/tokens (scheduled() in src/index.js).
+  "triggers": { "crons": ["17 7 * * *"] },
+
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // Non-secret settings. Values match what was set in the dashboard on 2026-10-05.
+  "vars": {
+    "ISSUER": "https://mcp-gateway.altecusa.com",
+    "ENTRA_TENANT_ID": "fcf802e9-d661-40f4-83a4-38dc0433f9a3",
+    "ENTRA_CLIENT_ID": "b4b725f1-9327-45ec-b07d-45e3fc5e8a5a",
+    "ROLE_READ": "MCP.ReadOnly",
+    "ROLE_WRITE": "MCP.Admin",
+    "ALLOWED_REDIRECT_HOSTS": ["grok.com", "claude.ai", "chatgpt.com"],
+    "ACCESS_TOKEN_TTL": 3600,
+    "REFRESH_TOKEN_TTL": 604800
+  },
+
+  // Secrets (Cloudflare dashboard or `wrangler secret put`, never here):
+  //   ENTRA_CLIENT_SECRET   Entra app registration client secret
+  //   ADMIN_API_KEY         bearer for /admin/grants and /admin/revoke
+  //   CONSENT_SECRET        optional; remembers consent for 30 days when set
+  //   UPSTREAM_<X>_TOKEN    one per backend in servers.json that is not "noAuth":
+  //                         the backend Worker's own MCP_AUTH_TOKEN value
+
+  // A deploy keeps variables/secrets set in the dashboard instead of deleting them.
+  "keep_vars": true
+}
