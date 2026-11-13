@@ -1,0 +1,1493 @@
+[
+ {
+  "name": "get_account",
+  "description": "Get Account. Shows details of the top-level Huntress Account associated with your API credentials. GET /v1/account.",
+  "path": "/v1/account",
+  "pathParams": [],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "get_actor",
+  "description": "Get Actor. Shows details of the entities associated with the supplied API credentials. It will only return the fields relevant to the current credentials. Each of `reseller`, `account`, and `user` is returned only when the supplied credentials are associated with that entity, so do not rely on any particular key being present. When the credentials are associated with an entity but are not permitted to read it, the key is still returned with every field replaced by `` — for example, credentials belonging.. For an API key this shows only the account, whichever key it is; use list_identities to test identity access. GET /v1/actor.",
+  "path": "/v1/actor",
+  "pathParams": [],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "list_organizations",
+  "description": "List Organizations. Shows details of Organizations belonging to the account associated with your API credentials. Organizations are Huntress's clients. Filter by exact name or key. GET /v1/organizations.",
+  "path": "/v1/organizations",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "name": "name",
+   "key": "key"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at",
+      "name",
+      "key"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "name": {
+     "type": "string",
+     "description": "Filter by organization name."
+    },
+    "key": {
+     "type": "string",
+     "description": "Filter by organization key."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_organization",
+  "description": "Get Organization. Shows details on a single Organization associated with your account. GET /v1/organizations/{id}.",
+  "path": "/v1/organizations/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_agents",
+  "description": "List Agents. Shows Agents associated with your account. Endpoint agents (computers). hostname is an exact match. GET /v1/agents.",
+  "path": "/v1/agents",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "organization_id": "organization_id",
+   "platform": "platform",
+   "hostname": "hostname",
+   "os": "os",
+   "version": "version"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "windows",
+      "darwin",
+      "linux"
+     ],
+     "description": "Filter by platform. One of windows, darwin, linux"
+    },
+    "hostname": {
+     "type": "string",
+     "description": "Filter by hostname."
+    },
+    "os": {
+     "type": "string",
+     "description": "Filter by operating system."
+    },
+    "version": {
+     "type": "string",
+     "description": "Filter by agent version."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_agent",
+  "description": "Get Agent. Shows details on a single Agent associated with your account. GET /v1/agents/{id}.",
+  "path": "/v1/agents/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_incident_reports",
+  "description": "List Incident Reports. Shows Incident Reports associated with your account. Each report carries its full investigative summary in `body`, so keep limit small. GET /v1/incident_reports.",
+  "path": "/v1/incident_reports",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "indicator_type": "indicator_type",
+   "status": "status",
+   "severity": "severity",
+   "platform": "platform",
+   "organization_id": "organization_id",
+   "agent_id": "agent_id",
+   "psa_ticket_eid": "psa_ticket_eid"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "indicator_type": {
+     "type": "string",
+     "enum": [
+      "footholds",
+      "monitored_files",
+      "ransomware_canaries",
+      "antivirus_detections",
+      "process_detections",
+      "managed_identity",
+      "mde_detections",
+      "siem_detections",
+      "favicon_detections",
+      "behavioral_detections",
+      "email_security_detections",
+      "app_control",
+      "ai_misuse"
+     ],
+     "description": "Filter by indicator type. One of footholds, monitored_files, ransomware_canaries, antivirus_detections, process_detections, managed_identity, mde_detections, siem_detections, favicon_detections, behavioral_detections, email_security_detections, app_control, ai_misuse"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "sent",
+      "closed",
+      "dismissed",
+      "auto_remediating",
+      "deleting",
+      "partner_dismissed"
+     ],
+     "description": "Filter by status. One of sent, closed, dismissed, auto_remediating, deleting, partner_dismissed"
+    },
+    "severity": {
+     "type": "string",
+     "enum": [
+      "low",
+      "high",
+      "critical"
+     ],
+     "description": "Filter by severity. One of low, high, critical"
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "windows",
+      "darwin",
+      "microsoft_365",
+      "google",
+      "linux",
+      "email_security",
+      "other"
+     ],
+     "description": "Filter by platform. One of windows, darwin, microsoft_365, google, linux, email_security, other"
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    },
+    "agent_id": {
+     "type": "integer",
+     "description": "Filter by agent ID within Huntress account"
+    },
+    "psa_ticket_eid": {
+     "type": "string",
+     "description": "Filter by the external identifier (EID) of a ticket Huntress opened in your PSA — the identifier your PSA assigned to the ticket. Depending on the PSA, this may differ from the ticket number a technician sees. Matches the Incident Report the ticket was opened for. Tickets Huntress opened for anything other than an Incident Report, such as an escalation, will not match."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_incident_report",
+  "description": "Get Incident Report. Shows details on a single Incident Report associated with your account. Unlike the list endpoint, this includes Incident Reports that have been sent back to the Huntress SOC — for example after their remediation plan was rejected — which report a `status` of `draft`. GET /v1/incident_reports/{id}.",
+  "path": "/v1/incident_reports/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_incident_report_comments",
+  "description": "List Incident Report Comments. Shows the comments on a single Incident Report. GET /v1/incident_reports/{id}/comments.",
+  "path": "/v1/incident_reports/{id}/comments",
+  "pathParams": [
+   "id"
+  ],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    },
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_remediations",
+  "description": "List Remediations. Shows details of Remediations belonging to a single Incident Report. GET /v1/incident_reports/{incident_report_id}/remediations.",
+  "path": "/v1/incident_reports/{incident_report_id}/remediations",
+  "pathParams": [
+   "incident_report_id"
+  ],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "types": "types",
+   "statuses": "statuses"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "incident_report_id": {
+     "type": "integer",
+     "description": "incident report id"
+    },
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "types": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "assisted",
+       "manual",
+       "containment"
+      ]
+     },
+     "description": "Filter by type of remediation. Must be a comma-separated string containing the values: assisted, manual, containment"
+    },
+    "statuses": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "unapproved",
+       "approved",
+       "completed",
+       "failed",
+       "cancelled"
+      ]
+     },
+     "description": "Filter by status of remediation. Must be a comma-separated string containing the values: unapproved, approved, completed, failed, cancelled"
+    }
+   },
+   "required": [
+    "incident_report_id"
+   ]
+  }
+ },
+ {
+  "name": "get_remediation",
+  "description": "Get Remediation. Shows details for a single Remediation belonging to a single Incident Report GET /v1/incident_reports/{incident_report_id}/remediations/{remediation_id}.",
+  "path": "/v1/incident_reports/{incident_report_id}/remediations/{remediation_id}",
+  "pathParams": [
+   "incident_report_id",
+   "remediation_id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "incident_report_id": {
+     "type": "integer",
+     "description": "incident report id"
+    },
+    "remediation_id": {
+     "type": "integer",
+     "description": "remediation id"
+    }
+   },
+   "required": [
+    "incident_report_id",
+    "remediation_id"
+   ]
+  }
+ },
+ {
+  "name": "list_escalations",
+  "description": "List Escalations. Shows Escalations associated with your account. Additional details for a specific escalation can be obtained by using the **GET Escalation** endpoint. Escalations are used to notify Huntress account administrators that a situation requires their attention. Below are some common use cases: - Security Operation Centers (SOC) suspect that an application being flagged as malicious is a false positive, and we want to get your authorization to allow-list the application moving forward. - A potentia.. GET /v1/escalations.",
+  "path": "/v1/escalations",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "status": "status",
+   "severity": "severity",
+   "subtype": "subtype",
+   "organization_id": "organization_id",
+   "psa_ticket_eid": "psa_ticket_eid"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "severity",
+      "due_at",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "overdue",
+      "resolved"
+     ],
+     "description": "Filter by status."
+    },
+    "severity": {
+     "type": "string",
+     "enum": [
+      "low",
+      "high",
+      "critical"
+     ],
+     "description": "Filter by severity."
+    },
+    "subtype": {
+     "type": "string",
+     "description": "Filter by subtype."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID."
+    },
+    "psa_ticket_eid": {
+     "type": "string",
+     "description": "Filter by the external identifier (EID) of a ticket Huntress opened in your PSA — the identifier your PSA assigned to the ticket. Depending on the PSA, this may differ from the ticket number a technician sees. Matches the Escalation the ticket was opened for, whether Huntress opened a single ticket for the whole Escalation or a separate ticket for each entity attached to it. Tickets Huntress op..."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_escalation",
+  "description": "Get Escalation. Shows details on a single Escalation associated with your account. GET /v1/escalations/{id}.",
+  "path": "/v1/escalations/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_signals",
+  "description": "List Signals. Shows details of Signals belonging to the account associated with your API credentials. Signals are used to highlight interesting user or system behaviors that an analyst can reference during a cyber investigation. A detected Signal could be as broad and low fidelity as the detection of a command line user running whoami, or it could be as specific and high fidelity as detecting a known malware file. GET /v1/signals.",
+  "path": "/v1/signals",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "investigated_at_min": "investigated_at_min",
+   "investigated_at_max": "investigated_at_max",
+   "entity_type": "entity_type",
+   "entity_id": "entity_id",
+   "organization_id": "organization_id",
+   "types": "types",
+   "statuses": "statuses"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at",
+      "status"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "investigated_at_min": {
+     "type": "string",
+     "description": "Filter by an ISO-8601 formatted date string that represents the lower bound of the search range for the investigated_at date."
+    },
+    "investigated_at_max": {
+     "type": "string",
+     "description": "Filter by an ISO-8601 formatted date string that represents the upper bound of the search range for the investigated_at date."
+    },
+    "entity_type": {
+     "type": "string",
+     "enum": [
+      "user_entity",
+      "source",
+      "mailbox",
+      "service_principal",
+      "agent",
+      "identity"
+     ],
+     "description": "Filter by the entity type that the Signal originated from. This filter can be used without specifying entity_id."
+    },
+    "entity_id": {
+     "type": "string",
+     "description": "Filter by the entity ID that the Signal originated from. Must be used in tandem with entity_type parameter."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    },
+    "types": {
+     "type": "string",
+     "description": "Filter by the types of Signal, must be comma-separated string containing the values: `Antivirus, Process Insights, Managed ITDR, Footholds, MDE Detections, SIEM, Ransomware Canaries, Favicon Detections, Attack Disruptions, App Control`"
+    },
+    "statuses": {
+     "type": "string",
+     "description": "Filter by status. Must be comma-separated string containing the values: `reported`, `closed`"
+    }
+   }
+  }
+ },
+ {
+  "name": "get_signal",
+  "description": "Get Signal. Shows details of a single Signal belonging to the account associated with your API credentials. Signals are used to highlight interesting user or system behaviors that an analyst can reference during a cyber investigation. A detected Signal could be as broad and low fidelity as the detection of a command line user running whoami, or it could be as specific and high fidelity as detecting a known malware file. GET /v1/signals/{id}.",
+  "path": "/v1/signals/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_reports",
+  "description": "List Summary Reports. Shows Summary Reports associated with your account. GET /v1/reports.",
+  "path": "/v1/reports",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "period_min": "period_min",
+   "period_max": "period_max",
+   "organization_id": "organization_id",
+   "type": "type"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "period_min": {
+     "type": "string",
+     "description": "Filter by an ISO-8601 formatted date string that represents the lower bound of the search range for the period date."
+    },
+    "period_max": {
+     "type": "string",
+     "description": "Filter by an ISO-8601 formatted date string that represents the upper bound of the search range for the period date."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "monthly_summary",
+      "quarterly_summary",
+      "yearly_summary"
+     ],
+     "description": "Filter by report type. One of monthly_summary, quarterly_summary, yearly_summary"
+    }
+   }
+  }
+ },
+ {
+  "name": "get_report",
+  "description": "Get Summary Report. Shows details on a single Summary Report associated with your account. GET /v1/reports/{id}.",
+  "path": "/v1/reports/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_identities",
+  "description": "List Identities. Shows Identities associated with your account. Huntress ITDR identities (Microsoft 365 / Google Workspace users). GET /v1/identities.",
+  "path": "/v1/identities",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "organization_id": "organization_id",
+   "tenant_type": "tenant_type",
+   "billable": "billable",
+   "enabled": "enabled",
+   "external": "external",
+   "risk_level": "risk_level",
+   "mfa_enabled": "mfa_enabled",
+   "escalation_id": "escalation_id"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account."
+    },
+    "tenant_type": {
+     "type": "string",
+     "enum": [
+      "microsoft_365",
+      "google_workspace"
+     ],
+     "description": "Filter by identity provider type."
+    },
+    "billable": {
+     "type": "boolean",
+     "description": "Filter by billable status."
+    },
+    "enabled": {
+     "type": "boolean",
+     "description": "Filter by enabled status."
+    },
+    "external": {
+     "type": "boolean",
+     "description": "Filter by external/guest status."
+    },
+    "risk_level": {
+     "type": "string",
+     "enum": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "description": "Filter by risk level."
+    },
+    "mfa_enabled": {
+     "type": "boolean",
+     "description": "Filter by MFA enabled status."
+    },
+    "escalation_id": {
+     "type": "integer",
+     "description": "Filter by an escalation ID within Huntress account."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_identity",
+  "description": "Get Identity. Shows details on a single Identity associated with your account. GET /v1/identities/{id}.",
+  "path": "/v1/identities/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_external_ports",
+  "description": "List External Ports. Shows external port records from External Recon scans associated with your account. GET /v1/external_ports.",
+  "path": "/v1/external_ports",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "organization_id": "organization_id",
+   "protocol": "protocol",
+   "port": "port",
+   "risky_service": "risky_service",
+   "service": "service"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "port",
+      "protocol",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    },
+    "protocol": {
+     "type": "string",
+     "enum": [
+      "TCP",
+      "UDP"
+     ],
+     "description": "Filter by protocol."
+    },
+    "port": {
+     "type": "integer",
+     "description": "Filter by port number."
+    },
+    "risky_service": {
+     "type": "boolean",
+     "description": "Filter by whether the detected service is considered risky."
+    },
+    "service": {
+     "type": "string",
+     "description": "Filter by the detected service name (lowercase Shodan module name, e.g. 'ssh', 'http', 'rdp')."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_external_port",
+  "description": "Get External Port. Shows details on a single external port record associated with your account. GET /v1/external_ports/{id}.",
+  "path": "/v1/external_ports/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_platform_actions",
+  "description": "List Platform Actions. Shows Platform Actions associated with your account. Additional details for a specific platform action can be obtained by using the **GET Platform Action** endpoint. Platform Actions are operational issues that prevent Huntress from fully monitoring or protecting your environment. They notify account administrators of configuration or health problems that require their attention. Common examples include: - The Huntress security platform is unable to send incident reports to your PSA system an.. GET /v1/platform_actions.",
+  "path": "/v1/platform_actions",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "status": "status",
+   "severity": "severity",
+   "subtype": "subtype",
+   "organization_id": "organization_id"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "severity",
+      "due_at",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "overdue",
+      "resolved"
+     ],
+     "description": "Filter by status."
+    },
+    "severity": {
+     "type": "string",
+     "enum": [
+      "low",
+      "high",
+      "critical"
+     ],
+     "description": "Filter by severity."
+    },
+    "subtype": {
+     "type": "string",
+     "description": "Filter by subtype."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_platform_action",
+  "description": "Get Platform Action. Shows details on a single Platform Action associated with your account. GET /v1/platform_actions/{id}.",
+  "path": "/v1/platform_actions/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_unwanted_access_rules",
+  "description": "List Unwanted Access Rules. Shows Unwanted Access Rules associated with your account. Unwanted Access Rules govern how Huntress responds to identity access attempts matching specific attributes. Each rule targets a category (country, vpn, ip_address) and declares a determination — `expected` or `unauthorized` — at the account, organization, or identity scope. GET /v1/unwanted_access_rules.",
+  "path": "/v1/unwanted_access_rules",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "organization_id": "organization_id",
+   "identity_id": "identity_id",
+   "type": "type",
+   "status": "status",
+   "scope": "scope",
+   "category": "category",
+   "country_code": "country_code",
+   "vpn": "vpn",
+   "ip_address": "ip_address",
+   "logic": "logic"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account."
+    },
+    "identity_id": {
+     "type": "integer",
+     "description": "Filter results to rules attached directly to this identity."
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "expected",
+      "unauthorized"
+     ],
+     "description": "Filter by rule type."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "scheduled",
+      "expired"
+     ],
+     "description": "Filter by rule status as shown in the Portal UI."
+    },
+    "scope": {
+     "type": "string",
+     "enum": [
+      "account",
+      "organization",
+      "identity"
+     ],
+     "description": "Filter by the level the rule is attached to."
+    },
+    "category": {
+     "type": "string",
+     "enum": [
+      "country",
+      "vpn",
+      "ip_address"
+     ],
+     "description": "Limit results to a single rule category."
+    },
+    "country_code": {
+     "type": "string",
+     "description": "Filter by country code value (ISO 3166-1 alpha-2). Implies `category=country`."
+    },
+    "vpn": {
+     "type": "string",
+     "description": "Filter by VPN (tunnel operator) value. Implies `category=vpn`."
+    },
+    "ip_address": {
+     "type": "string",
+     "description": "Filter by IP Address value. Implies `category=ip_address`."
+    },
+    "logic": {
+     "type": "string",
+     "enum": [
+      "standard",
+      "catchall",
+      "catchall_exception"
+     ],
+     "description": "Filter by rule logic. `standard` returns rules with explicit values, `catchall` returns rules matching all values in a category, and `catchall_exception` returns rules that exclude specifically set values from an existing catchall rule. Omit this parameter to include all three."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_unwanted_access_rule",
+  "description": "Get Unwanted Access Rule. Shows details on a single Unwanted Access Rule associated with your account. GET /v1/unwanted_access_rules/{id}.",
+  "path": "/v1/unwanted_access_rules/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_known_vpns",
+  "description": "List Known VPNs and Proxies. Returns the list of VPN and proxy operators recognized by Huntress. Use any value from this list as the `vpn` parameter when creating an Unwanted Access Rule. Values accepted by the `vpn` filter of list_unwanted_access_rules. GET /v1/known_vpns.",
+  "path": "/v1/known_vpns",
+  "pathParams": [],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "list_memberships",
+  "description": "List Memberships. Shows a list of memberships. By default, this endpoint returns both account and organization memberships, but if an organization ID is supplied, it will return only organization memberships, instead. The example return value shows both an organization and an account, but a given membership will only have one or the other. GET /v1/memberships.",
+  "path": "/v1/memberships",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "organization_id": "organization_id",
+   "user_id": "user_id",
+   "permissions": "permissions"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "user_id",
+      "created_at",
+      "updated_at"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID to return only memberships for that organization."
+    },
+    "user_id": {
+     "type": "integer",
+     "description": "Filter by user ID to return only memberships for that user."
+    },
+    "permissions": {
+     "type": "string",
+     "enum": [
+      "Admin",
+      "Security Engineer",
+      "User",
+      "Read-only",
+      "Finance",
+      "Marketing",
+      "Provisioner"
+     ],
+     "description": "Filter by permission label."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_membership",
+  "description": "Get Membership. Shows details on a single Membership associated with your account or organization. GET /v1/memberships/{id}.",
+  "path": "/v1/memberships/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_remote_access_connections",
+  "description": "List Remote Access Connections. This endpoint provides informational data only pertaining to when Huntress observes a given remote access tool running on a given host. Please note: results returned are capped at 500 total in descending order by last_seen_at, and pagination is not supported. GET /v1/remote_access/connections.",
+  "path": "/v1/remote_access/connections",
+  "pathParams": [],
+  "query": {
+   "last_seen_at_min": "last_seen_at_min",
+   "organization_id": "organization_id"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "last_seen_at_min": {
+     "type": "string",
+     "description": "The earliest time Huntress observed the remote access tool running on a monitored host."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account"
+    }
+   }
+  }
+ },
+ {
+  "name": "list_siem_log_sources",
+  "description": "List SIEM Log Sources. Shows the SIEM log sources associated with an account. This endpoint requires a user-based API key with the appropriate permissions to access this endpoint. GET /v1/siem/log_sources.",
+  "path": "/v1/siem/log_sources",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "only_for_account": "only_for_account",
+   "organization_id": "organization_id",
+   "type_code": "type_code"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "only_for_account": {
+     "type": "boolean",
+     "description": "Filter by Log Sources that are only configured for an account and not configured for any organizations."
+    },
+    "organization_id": {
+     "type": "integer",
+     "description": "Filter by organization ID within Huntress account."
+    },
+    "type_code": {
+     "type": "string",
+     "description": "Filter by Log Sources of a specific type using its machine-readable code."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_siem_log_source",
+  "description": "Get Log Source. Shows details on a single Log Source associated with your account. GET /v1/siem/log_sources/{id}.",
+  "path": "/v1/siem/log_sources/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "list_invoices",
+  "description": "List Account Invoices. Shows Invoices associated with your account. GET /v1/invoices.",
+  "path": "/v1/invoices",
+  "pathParams": [],
+  "query": {
+   "limit": "limit",
+   "page_token": "page_token",
+   "sort_field": "sort_field",
+   "sort_direction": "sort_direction",
+   "status": "status",
+   "has_usage": "has_usage"
+  },
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 500,
+     "description": "Max number of resources returned in a paged collection. Defaults to 10, with a minimum of 1 and maximum 500."
+    },
+    "page_token": {
+     "type": "string",
+     "description": "Token used to request the next page in paginated results. Defaults to 'null'"
+    },
+    "sort_field": {
+     "type": "string",
+     "enum": [
+      "id",
+      "created_at",
+      "updated_at",
+      "status"
+     ],
+     "description": "Field to sort by. Defaults to 'id'."
+    },
+    "sort_direction": {
+     "type": "string",
+     "enum": [
+      "asc",
+      "desc"
+     ],
+     "description": "Sort direction. Defaults to 'desc'."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "processing",
+      "open",
+      "paid",
+      "voided",
+      "failed",
+      "partial_refund",
+      "full_refund"
+     ],
+     "description": "Filter by status. One of processing, open, paid, voided, failed, partial_refund, full_refund"
+    },
+    "has_usage": {
+     "type": "boolean",
+     "description": "When true, returns only invoices with usage (subscription-cycle invoices). When false, returns only invoices without usage (manually-created invoices)."
+    }
+   }
+  }
+ },
+ {
+  "name": "get_invoice",
+  "description": "Get Account Invoice. Shows details on a single Invoice associated with your account. GET /v1/invoices/{id}.",
+  "path": "/v1/invoices/{id}",
+  "pathParams": [
+   "id"
+  ],
+  "query": {},
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ }
+]

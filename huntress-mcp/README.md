@@ -1,17 +1,61 @@
 # huntress-mcp
 
-Passthrough gateway for Huntress only. Independent of pax8-mcp — deploying
-or breaking this one has zero effect on Pax8, or on any future vendor
-gateway you add later.
+Read-only MCP tools over the Huntress REST API (`api.huntress.io/v1`), plus a
+read-only REST passthrough at `/api/huntress/*` for the wallboard. One
+credential: the API key and secret, sent as HTTP Basic on every request.
+
+## Why it no longer relays Huntress's MCP (2026-11-12)
+
+Until 2026-11-12 `/mcp` relayed tools/list and tools/call to Huntress's own
+hosted MCP server (`https://api.huntress.io/v1/mcp`) with the API key as Basic
+auth. Huntress changed that server to accept only a signed-in user's OAuth
+token: its metadata (`/.well-known/oauth-authorization-server`) lists only
+`authorization_code` with PKCE, scope `act_as_user`, no client-credentials
+grant and no refresh token. Every tool call then failed with:
+
+```
+Huntress MCP returned 401: {"jsonrpc":"2.0","error":{"code":-32001,"message":"A valid OAuth bearer token is required."},"id":1}
+```
+
+The REST API still takes the API key, so the Worker now runs the tools itself.
+
+## Tools
+
+All tools are GETs. Nothing here isolates or uninstalls an agent, resolves an
+incident or escalation, approves a remediation or edits a rule.
+
+- The named tools are generated from Huntress's own API spec into
+  `src/tools.json`: names kept from Huntress's MCP (`get_account`,
+  `get_actor`, `list_/get_organization(s)`, `agents`, `incident_reports`,
+  `remediations`, `escalations`, `signals`, `reports`, `identities`,
+  `external_ports`, `platform_actions`, `unwanted_access_rules`,
+  `list_known_vpns`, `memberships`, `invoices`), plus
+  `list_incident_report_comments`, `list_remote_access_connections`,
+  `list_siem_log_sources` and `get_siem_log_source`. Filters, enums and
+  descriptions come straight from the spec.
+- `huntress_api_get` GETs any v1 path (`path` relative to `/v1`, query in
+  `params`; no `..` or `?` in the path). Responses are capped at 60,000
+  characters.
+- Lists are paged: `limit` (1-500, Huntress's default is 10) and `page_token`
+  from the previous response's `pagination.next_page_token`.
+- The spec is wrong about `list_remediations`' filters: it names them
+  `types[]` / `statuses[]`, which Huntress rejects; `types=manual,containment`
+  works. The generator sends the plain names, and arrays go comma-separated.
+
+To pick up new endpoints or filters:
+
+```bash
+curl -L https://api.huntress.io/docs -o spec/swagger_doc.json
+npm run tools
+```
+
+`scripts/build-tools.mjs` holds the tool name to path table.
 
 ## Deploy
 
-```bash
-cd huntress-mcp
-wrangler secret put HUNTRESS_API_KEY
-wrangler secret put HUNTRESS_API_SECRET
-wrangler deploy
-```
+Pushing to `main` deploys it through GitHub Actions (see the repo's
+`CLAUDE.md`). Secrets are set on the Worker in the Cloudflare dashboard:
+`HUNTRESS_API_KEY`, `HUNTRESS_API_SECRET`, and `MCP_AUTH_TOKEN`.
 
 Deploys to `https://huntress-mcp.young-math-a33a.workers.dev`.
 
@@ -35,41 +79,19 @@ Deploys to `https://huntress-mcp.young-math-a33a.workers.dev`.
 curl https://huntress-mcp.young-math-a33a.workers.dev/api/huntress/identities?limit=1
 ```
 
-## Test
-
-```bash
-curl -X POST https://huntress-mcp.young-math-a33a.workers.dev/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-Should return Huntress's real tool list, unprefixed, exactly as their own
-MCP server would return it — this is a straight relay, not a rename.
-
-## Swapping into Claude's connector settings
-
-Point the Huntress connector at `https://huntress-mcp.young-math-a33a.workers.dev/mcp`
-once you've confirmed it works. Consider keeping the official one active
-alongside it at first as a fallback.
-
-## Test Commands (CMD — verified working on Windows)
+## Test (CMD - PowerShell quoting breaks JSON bodies)
 
 Health check:
 ```cmd
 curl https://huntress-mcp.young-math-a33a.workers.dev/health
 ```
 
-List tools (confirms MCP is reachable and credentials work):
+List tools, then call one (proves the API key works). Add
+`-H "Authorization: Bearer <MCP_AUTH_TOKEN>"` while the token is set:
 ```cmd
 curl -X POST https://huntress-mcp.young-math-a33a.workers.dev/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
+curl -X POST https://huntress-mcp.young-math-a33a.workers.dev/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_organizations\",\"arguments\":{\"limit\":1}}}"
 ```
-
-NOC status endpoint:
-```cmd
-curl https://huntress-mcp.young-math-a33a.workers.dev/status
-```
-
-> **Note:** PowerShell quoting is unreliable for JSON bodies. Use CMD (cmd.exe) for curl test commands.
 
 ## Inbound auth (MCP_AUTH_TOKEN)
 Follows the repo's standing rule (see `CLAUDE.md`, "STANDING RULE: inbound
