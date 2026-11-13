@@ -1651,8 +1651,8 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 // /status is built at most once every 5 minutes per isolate (2026-10-29). Building it costs 10-100 ms of
-// CPU, over the free plan's 10 ms per request, and the wallboard polls it every minute: 197 refreshes on
-// cipp-mcp and halopsa-mcp were cut off in two days once the TV page was back on. The Cache API does
+// CPU, over the free plan's 10 ms per request, and the wallboard polls it every minute: 68 refreshes here
+// were cut off in two days once the TV page was back on. The Cache API does
 // nothing on a workers.dev address, so the last answer is kept in memory instead; a cold isolate builds it
 // again. A build already in progress is shared, so two polls at once don't both pay for it. A failed
 // build isn't kept, so the next poll tries again.
@@ -1750,7 +1750,7 @@ export default {
     }
     // Streamable HTTP (MCP 2025-03-26): a server with no event stream of its own answers GET and DELETE on
     // /mcp with 405. The 200 text reply this route used to give was read by the AllieService client as a
-    // stream that kept closing, retried 3-6 times every cycle (cipp-mcp log, 2026-10-26).
+    // stream that kept closing, and it retried 3-6 times every cycle (2026-10-26).
     if (url.pathname === "/mcp" && (request.method === "GET" || request.method === "DELETE")) return new Response(null, { status: 405, headers: { Allow: "POST" } });
     if (url.pathname === "/mcp" && request.method === "POST") {
       let body: unknown;
