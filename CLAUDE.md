@@ -517,3 +517,11 @@ Roger, done by moving the three pre-existing On-call shifts (22403/22405/
 keeps an old tool list; use a fresh session/connector refresh to see the new
 tools. Deploying needs `CLOUDFLARE_ACCOUNT_ID=77913d04ce44a8767e3736930eadc0c4`
 (wrangler now sees several accounts and can't pick one non-interactively).
+
+## cipp-mcp: list_message_trace (2026-11-13, #24585)
+CIPP's ListMessageTrace reads tenantFilter, days, sender and recipient from the request BODY (sender/recipient as
+arrays). Called as a GET with query parameters it ignored the tenant and traced the partner tenant, so Altec's own
+mail came back for a client. The tool now POSTs the body (verified live against a client tenant: right mail, both
+filters honoured), returns a trimmed list of up to 100 rows (`full: true` for raw), refuses a result whose rows do
+not match the sender/recipient asked for, and `cipp_api_get` refuses ListMessageTrace. It is a read, although it
+is sent as a POST. With no sender or recipient there is nothing to check the rows against.

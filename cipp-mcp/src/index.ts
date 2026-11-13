@@ -129,7 +129,7 @@ const TOOLS = [
   { name: "list_mailbox_permissions", description: "List mailbox permissions (full access, send-as) for a tenant or specific mailbox", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, userId: { type: "string", description: "Optional: filter to specific mailbox UPN or ID" } }, required: ["tenantFilter"] } },
   { name: "set_mailbox_ooo", description: "Set Out of Office / auto-reply for a mailbox", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, userId: { type: "string" }, AutoReplyState: { type: "string", description: "Enabled, Disabled, or Scheduled" }, InternalMessage: { type: "string" }, ExternalMessage: { type: "string" } }, required: ["tenantFilter", "userId", "AutoReplyState"] } },
   { name: "convert_mailbox", description: "Convert a mailbox between types (e.g. regular to shared)", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, userId: { type: "string" }, MailboxType: { type: "string", description: "Shared or Regular" } }, required: ["tenantFilter", "userId", "MailboxType"] } },
-  { name: "list_message_trace", description: "Search Exchange Online message trace to see whether mail actually left the tenant, bounced, or was filtered - the authoritative check before treating anything else (a disabled account, a full mailbox, a blocked sender) as the cause of a reported mail-delivery problem. `sender`/`recipient` must be exact full addresses - CIPP's message trace does NOT support wildcards there, unlike some other CIPP list endpoints.", inputSchema: { type: "object", properties: { tenantFilter: { type: "string", description: "Tenant domain" }, days: { type: "number", description: "Lookback window in days, 1-10 (Exchange Online message trace itself caps a single query at 10 days). Always sent - omitting the day window server-side does not mean 'search everything,' it produces an unfiltered/wrong result, which is exactly the bug this dedicated tool exists to prevent." }, sender: { type: "string", description: "Exact sender email address (optional, no wildcards)" }, recipient: { type: "string", description: "Exact recipient email address (optional, no wildcards)" } }, required: ["tenantFilter"] } },
+  { name: "list_message_trace", description: "Search Exchange Online message trace to see whether mail actually left the tenant, bounced, or was filtered - the authoritative check before treating anything else (a disabled account, a full mailbox, a blocked sender) as the cause of a reported mail-delivery problem. `sender`/`recipient` must be exact full addresses - CIPP's message trace does NOT support wildcards there, unlike some other CIPP list endpoints.", inputSchema: { type: "object", properties: { tenantFilter: { type: "string", description: "Tenant domain" }, days: { type: "number", description: "Lookback window in days, 1-10 (Exchange Online message trace itself caps a single query at 10 days). Always sent - omitting the day window server-side does not mean 'search everything,' it produces an unfiltered/wrong result, which is exactly the bug this dedicated tool exists to prevent." }, sender: { type: "string", description: "Exact sender email address (optional, no wildcards)" }, recipient: { type: "string", description: "Exact recipient email address (optional, no wildcards)" }, full: { type: "boolean", description: "Return CIPP's raw rows (sizes, IPs) instead of the trimmed list of up to 100" } }, required: ["tenantFilter"] } },
 
   // MFA / Security
   { name: "list_mfa_users", description: "List MFA status for all users in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
@@ -158,7 +158,7 @@ const TOOLS = [
   // conditional access templates, GDAP, transport rules, etc.) that doesn't have a
   // named tool above. Endpoint names match CIPP's own API docs (docs.cipp.app/api-documentation)
   // and its PowerShell module cmdlet names 1:1 (e.g. ListMessageTrace, ExecGDAPTrace).
-  { name: "cipp_api_get", description: "Call any CIPP read (GET) API endpoint by name, for functionality with no dedicated tool above — e.g. ListMessageTrace, ListMailQuarantine, ListConditionalAccessPolicies, ListExchangeConnectors. Look up exact endpoint names and query params at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ListMessageTrace" }, params: { type: "object", description: "Query string parameters as key/value pairs, e.g. { tenantFilter: 'client.com' }", additionalProperties: { type: "string" } } }, required: ["endpoint"] } },
+  { name: "cipp_api_get", description: "Call any CIPP read (GET) API endpoint by name, for functionality with no dedicated tool above — e.g. ListMailQuarantine, ListConditionalAccessPolicies, ListExchangeConnectors. Look up exact endpoint names and query params at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ListMessageTrace" }, params: { type: "object", description: "Query string parameters as key/value pairs, e.g. { tenantFilter: 'client.com' }", additionalProperties: { type: "string" } } }, required: ["endpoint"] } },
   { name: "cipp_api_post", description: "Call any CIPP write (POST) API endpoint by name, for functionality with no dedicated tool above — e.g. ExecMailTest, ExecGDAPTrace, ExecTransportRule. Look up exact endpoint names and body shape at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ExecGDAPTrace" }, body: { type: "object", description: "JSON request body for the endpoint" } }, required: ["endpoint"] } },
 ];
 
@@ -215,10 +215,25 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "set_mailbox_ooo": return JSON.stringify(await cippPost(env, "ExecSetOoO", { tenantFilter: t, userId: args.userId, AutoReplyState: args.AutoReplyState, InternalMessage: args.InternalMessage ?? "", ExternalMessage: args.ExternalMessage ?? "" }), null, 2);
     case "convert_mailbox": return JSON.stringify(await cippPost(env, "ExecConvertMailbox", { tenantFilter: t, userId: args.userId, MailboxType: args.MailboxType }), null, 2);
     case "list_message_trace": {
-      const p: Record<string, string> = { tenantFilter: t!, days: String(args.days ?? 10) };
-      if (args.sender) p.sender = args.sender as string;
-      if (args.recipient) p.recipient = args.recipient as string;
-      return JSON.stringify(await cippGet(env, "ListMessageTrace", p), null, 2);
+      // 2026-11-13 (#24585): CIPP reads this endpoint's filters from the request BODY. Sent as a GET with query
+      // parameters, the tenant was ignored and the trace ran against the partner tenant: Altec's own mail came
+      // back for a client. Verified live: a POST with this body returns the client's mail and honours both filters.
+      const days = Math.min(10, Math.max(1, Number(args.days ?? 10) || 10));
+      const body: Record<string, unknown> = { tenantFilter: t!, days };
+      const sender = typeof args.sender === "string" ? args.sender.trim() : "";
+      const recipient = typeof args.recipient === "string" ? args.recipient.trim() : "";
+      if (sender) body.sender = [sender];
+      if (recipient) body.recipient = [recipient];
+      const raw: any = await cippPost(env, "ListMessageTrace", body);
+      if (args.full === true) return JSON.stringify(raw, null, 2);
+      const rows: any[] = Array.isArray(raw) ? raw : Array.isArray(raw?.Results) ? raw.Results : [];
+      const same = (x: unknown, y: string) => String(x ?? "").toLowerCase() === y.toLowerCase();
+      // A row that matches neither filter means the filters were not applied: refuse it instead of handing over
+      // another tenant's mail as if it were this one's.
+      const stray = rows.find((r) => (sender && !same(r.SenderAddress, sender)) || (recipient && !same(r.RecipientAddress, recipient)));
+      if (stray) throw new Error(`ListMessageTrace returned mail that does not match the sender/recipient asked for (e.g. ${stray.SenderAddress} -> ${stray.RecipientAddress}); the trace for ${t} is not usable.`);
+      const shown = rows.slice(0, 100).map((r) => ({ Received: r.Received, Status: r.Status, SenderAddress: r.SenderAddress, RecipientAddress: r.RecipientAddress, Subject: r.Subject, MessageId: r.MessageId, MessageTraceId: r.MessageTraceId }));
+      return JSON.stringify({ tenant: t, days, sender: sender || null, recipient: recipient || null, returned: rows.length, shown: shown.length, source: raw?.Metadata?.Source ?? null, results: shown });
     }
 
     // MFA / Security
@@ -257,7 +272,11 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     }
 
     // Generic passthrough
-    case "cipp_api_get": return JSON.stringify(await cippGet(env, args.endpoint as string, args.params as Record<string, string> | undefined), null, 2);
+    case "cipp_api_get": {
+      // ListMessageTrace ignores query parameters and would trace the partner tenant (#24585).
+      if (String(args.endpoint ?? "").toLowerCase() === "listmessagetrace") throw new Error("Use the list_message_trace tool: ListMessageTrace reads its tenant and filters from a request body, not from query parameters.");
+      return JSON.stringify(await cippGet(env, args.endpoint as string, args.params as Record<string, string> | undefined), null, 2);
+    }
     case "cipp_api_post": return JSON.stringify(await cippPost(env, args.endpoint as string, args.body ?? {}), null, 2);
 
     default: throw new Error(`Unknown tool: ${name}`);
