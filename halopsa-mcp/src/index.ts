@@ -262,6 +262,25 @@ async function listAttachments(env: Env, ticketId: number): Promise<Array<Record
   const data = (await haloGet(env, "/Attachment", { ticket_id: String(ticketId) })) as any;
   return (data.attachments || []).map((a: any) => ({ id: a.id, name: a.desc || a.filename, size_kb: Math.round(Number(a.filesize ?? 0) / 1024), is_image: a.isimage === true, added: a.datecreated }));
 }
+// What a write returns to the caller (2026-11-13). Halo answers POST /Tickets
+// and POST /Actions with the whole record, about 55,000 characters for a
+// ticket: Allie's logs for 2026-11-05..12 showed update_ticket_draft_only
+// alone put 9.9 million characters into her conversations (175 calls), and
+// more than half of her API bill was tool text like this. The caller only
+// needs to know what landed, so the echo is cut down to the fields a write
+// can set plus the ids; `verified` is unchanged. get_ticket / get_ticket_brief
+// / get_ticket_history remain the way to read a ticket.
+function slimTicketWrite(r: unknown): Record<string, unknown> | null {
+  const t: any = Array.isArray(r) ? r[0] : r;
+  if (!t || typeof t !== "object") return null;
+  return { id: t.id ?? null, status_id: t.status_id ?? null, agent_id: t.agent_id ?? null, team_id: t.team_id ?? null, priority_id: t.priority_id ?? null, client_id: t.client_id ?? null, site_id: t.site_id ?? null, user_id: t.user_id ?? null, category_1: t.category_1 ?? null, emailtolist: t.emailtolist ?? null, saved: true };
+}
+function slimActionWrite(r: unknown): Record<string, unknown> | null {
+  const a: any = Array.isArray(r) ? r[0] : r;
+  if (!a || typeof a !== "object") return null;
+  return { id: a.id ?? null, ticket_id: a.ticket_id ?? null, outcome: a.outcome ?? null, outcome_id: a.outcome_id ?? null, hiddenfromuser: a.hiddenfromuser ?? null, datetime: a.datetime ?? null, email_status: a.email_status ?? null, dateemailed: a.dateemailed ?? null, emailto: a.emailto ?? null, note_chars: typeof a.note === "string" ? a.note.length : null, saved: true };
+}
+
 function trimTicket(t: any, maxDetailsChars: number): Record<string, unknown> {
   const details = truncateText(t.details, maxDetailsChars);
   return {
@@ -574,7 +593,7 @@ async function statusIdByName(env: Env, name: string): Promise<number | null> {
 const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to HaloPSA and verify credentials are working", inputSchema: { type: "object", properties: {}, required: [] } },
   { name: "list_tickets", description: "List tickets from HaloPSA with optional filters. Without agent_id/team_id, this is an account-wide list capped at `count` (default 20) - large counts return full ticket bodies per row and can exceed the caller's own response-size limit well before reaching the true end of the open-ticket backlog, so a ticket with no recent activity can silently fall outside the window even though it's genuinely open. Pass agent_id (e.g. the real Halo 'Unassigned' agent, or a specific agent) and/or team_id to filter server-side instead of relying on count/recency - a real incident found an unassigned-tickets query with no team_id fetched every team's tickets account-wide (82 full ticket bodies in one case) just to manually discard everything outside the one team actually wanted, at real per-cycle cost. If even one agent's ticket count is still too large for one response, use pageinate/page_no/page_size (HaloPSA's own paging - page_size max 100 per HaloPSA's docs, but this MCP server's own response-size limit will likely force something smaller in practice) instead of `count` to walk through them in bounded pages - the response's own record_count field is the true total match count regardless of how many rows this particular page returned, so it tells you when you've reached the end.", inputSchema: { type: "object", properties: { count: { type: "number" }, open_only: { type: "boolean" }, client_id: { type: "number" }, agent_id: { type: "number", description: "Filter to tickets currently assigned to this single agent ID (HaloPSA's own /Tickets agent_id filter) - use this instead of a large count to reliably find a specific agent's tickets regardless of how recently they were touched." }, team_id: { type: "number", description: "Filter to tickets currently on this single team (HaloPSA's own /Tickets team_id filter) - combine with agent_id (e.g. team_id + agent_id:1 for a specific team's unassigned tickets) to avoid ever fetching another team's tickets at all." }, status_id: { type: "number", description: "Filter to tickets currently in this single status (HaloPSA's own /Tickets status_id filter) - combine with team_id to find every ticket in a specific status regardless of who it's assigned to, e.g. an explicit human hand-back status, without pulling the whole team's ticket list to filter client-side." }, pageinate: { type: "boolean", description: "Enable HaloPSA's own pagination instead of the plain count cutoff - use together with page_no/page_size." }, page_no: { type: "number", description: "Page number to return (1-based) when pageinate is true." }, page_size: { type: "number", description: "Rows per page when pageinate is true. HaloPSA caps this at 100, but this MCP server's response-size limit will often force a smaller value in practice - start small (e.g. 15-20) and only raise it if the response doesn't get truncated." }, search: { type: "string" } } } },
-  { name: "get_ticket", description: "Get full details of a single HaloPSA ticket by ID", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
+  { name: "get_ticket", description: "Get a single HaloPSA ticket by ID: every field that matters for working it (summary, body up to 12,000 characters, status/type/priority IDs, client/site/contact IDs and names, emailtolist, team/agent, category, key dates, closed state, device hints from the body, and the list of attachments). Pass full: true only when you need a field this view leaves out - the raw Halo record is about 58,000 characters.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, full: { type: "boolean", description: "Return Halo's raw record instead of the trimmed view (large)." }, max_details_chars: { type: "number", description: "Cap on the body text in the trimmed view (default 12000)." } }, required: ["ticket_id"] } },
   { name: "get_ticket_brief", description: "Trimmed view of a single ticket - the same fields as get_ticket that actually matter for working it (summary, body/details, status/type/priority/impact IDs, client/site/contact IDs and names, emailtolist, team/agent, category, key dates) at a fraction of the size, plus `device_hints` parsed from the body when a NinjaOne-style device block is present (hostname, ninja_device_id, private/public IPs, OS, username). Prefer this over get_ticket unless you specifically need a field it omits.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, max_details_chars: { type: "number", description: "Cap on the body/details text (default 6000); longer bodies are truncated with a marker and details_truncated: true." } }, required: ["ticket_id"] } },
   { name: "list_ticket_attachments", description: "List a ticket's attachments (screenshots, photos, logs, documents a client or tech attached, on the ticket or any of its emails): id, name, size in KB, whether it's an image, when it was added. Read-only. Clients often put the actual error in a screenshot rather than in the text - check this whenever get_ticket_brief shows attachments, then open each relevant one with get_ticket_attachment.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" } }, required: ["ticket_id"] } },
   { name: "get_ticket_attachment", description: "Open one attachment from list_ticket_attachments. An image (png, jpg, gif, webp) is returned as an image you can see - read any error text, dialog, URL or code in it. A text file (txt, log, csv, json, xml, html, eml) is returned as text (first 50,000 characters). Anything else returns its details only. Read-only. Images over 3.5 MB are not returned.", inputSchema: { type: "object", properties: { ticket_id: { type: "number" }, attachment_id: { type: "number", description: "id from list_ticket_attachments" } }, required: ["ticket_id", "attachment_id"] } },
@@ -633,7 +652,13 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
   switch (name) {
     case "healthcheck": { const token = await getToken(env); return `Connected OK to ${env.HALO_BASE_URL} tenant:${env.HALO_TENANT} token:${token.substring(0, 20)}`; }
     case "list_tickets": { const p: Record<string, string> = { count: String(args.count ?? 20) }; if (args.open_only !== false) p.open_only = "true"; if (args.client_id) p.client_id = String(args.client_id); if (args.agent_id) p.agent_id = String(args.agent_id); if (args.team_id) p.team_id = String(args.team_id); if (args.status_id) p.status_id = String(args.status_id); if (args.pageinate) p.pageinate = "true"; if (args.page_no) p.page_no = String(args.page_no); if (args.page_size) p.page_size = String(args.page_size); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Tickets", p), null, 2); }
-    case "get_ticket": return JSON.stringify(await haloGet(env, `/Tickets/${args.ticket_id}`), null, 2);
+    case "get_ticket":
+      // The raw record is about 58,000 characters, most of it fields nobody reads (107 calls put 6.2 million
+      // characters into Allie's conversations in a week, each one cut off at her 60,000-character limit anyway).
+      // Unless full: true is passed, get_ticket answers like get_ticket_brief with a longer body.
+      if (args.full === true) return JSON.stringify(await haloGet(env, `/Tickets/${args.ticket_id}`), null, 2);
+      args = { ...args, max_details_chars: args.max_details_chars ?? 12000 };
+    // falls through
     case "get_ticket_brief": {
       const t = (await haloGet(env, `/Tickets/${args.ticket_id}`)) as any;
       const brief = trimTicket(t, Number(args.max_details_chars ?? 6000));
@@ -713,7 +738,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // name; verify: true (update_ticket) or this tool's own always-on
       // verify is the way to confirm this specific field actually lands.
       if (args.emailto) { fieldPayload.emailtolist = args.emailto; hasFieldChange = true; }
-      if (hasFieldChange) results.ticket = await haloPost(env, "/Tickets", [fieldPayload]);
+      if (hasFieldChange) results.ticket = slimTicketWrite(await haloPost(env, "/Tickets", [fieldPayload]));
       // Notes are a separate resource in HaloPSA (POST /Actions) — nesting an
       // "actions" array inside a POST /Tickets payload is silently ignored by
       // the API (no error, no action created), so this must be a second call.
@@ -764,7 +789,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         // application to a different Halo agent in Halo's own admin
         // settings, or rename that bound agent's account - both are human
         // decisions, not something this tool can do.
-        results.action = await haloPost(env, "/Actions", [actionPayload]);
+        results.action = slimActionWrite(await haloPost(env, "/Actions", [actionPayload]));
       }
       // Opt-in only (verify: true) - existing callers of this tool that
       // don't pass it see byte-for-byte the same response shape/timing as
@@ -826,7 +851,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // name; verify: true (update_ticket) or this tool's own always-on
       // verify is the way to confirm this specific field actually lands.
       if (args.emailto) { fieldPayload.emailtolist = args.emailto; hasFieldChange = true; }
-      if (hasFieldChange) results.ticket = await haloPost(env, "/Tickets", [fieldPayload]);
+      if (hasFieldChange) results.ticket = slimTicketWrite(await haloPost(env, "/Tickets", [fieldPayload]));
       if (args.note) {
         // REAL INCIDENT, ticket #22231: FLOW A's approval send came out with
         // every paragraph break stripped to nothing - not just missing <br>,
@@ -850,7 +875,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         // (the actual client email still needs it, and reads fresh,
         // uncorrupted text at that point).
         const actionPayload: Record<string, unknown> = { ticket_id: args.ticket_id, note: args.note, hiddenfromuser: true, outcome_id: 7 };
-        results.action = await haloPost(env, "/Actions", [actionPayload]);
+        results.action = slimActionWrite(await haloPost(env, "/Actions", [actionPayload]));
       }
       // Always verified (unlike update_ticket's opt-in) - this tool exists
       // solely for HelpDeskAgent's approval-hold flow, which specifically
@@ -892,7 +917,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         const retryResult = await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: retryAck, note_html: noteToHtml(retryAck), hiddenfromuser: false, outcome_id: 16 }]);
         const resentNote = `[EMERGENCY ACK RESENT] ${new Date().toISOString()} - the client acknowledgment that failed on the first call is now emailed to ${ticket.emailtolist ?? "(no address on ticket)"}, saying ${wasPaged ? "our on-call engineer has been notified" : "our team has been alerted"}. On-call was not paged again.`;
         await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: resentNote, note_html: noteToHtml(resentNote), hiddenfromuser: true, outcome_id: 7 }]);
-        return JSON.stringify({ ack_only_retry: true, acknowledgment_sent_to: ticket.emailtolist ?? null, acknowledgment: retryAck, ack_action: retryResult, on_call_alert: { sent: wasPaged, note: "from the first call - not paged again" } }, null, 2);
+        return JSON.stringify({ ack_only_retry: true, acknowledgment_sent_to: ticket.emailtolist ?? null, acknowledgment: retryAck, ack_action: slimActionWrite(retryResult), on_call_alert: { sent: wasPaged, note: "from the first call - not paged again" } }, null, 2);
       }
       const clientName = isPageTest ? "TEST" : String(args.client_name ?? ticket.client_name ?? "Unknown client").trim();
       const details = args.details_for_on_call ? String(args.details_for_on_call).slice(0, 1500) : "";
@@ -933,7 +958,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         : `on-call NOT paged - ${page.error}. Ticket set to Critical and ${env.FOLLOW_UP_STATUS_NAME || "Follow Up Needed"}${updateError ? ` (that update FAILED: ${updateError})` : ""}; a second alert goes to the fallback list on the next run`;
       const audit = `[EMERGENCY ACK SENT] ${new Date().toISOString()} page=${page.sent ? page.list : "none"} - ${pageLine}. Client acknowledgment ${ackError ? `FAILED (${ackError})` : `emailed to ${ticket.emailtolist ?? "(no address on ticket)"}, saying ${page.sent ? "our on-call engineer has been notified" : "our team has been alerted"}`}. Summary: ${summary}`;
       await haloPost(env, "/Actions", [{ ticket_id: ticketId, note: audit, note_html: noteToHtml(audit), hiddenfromuser: true, outcome_id: 7 }]);
-      return JSON.stringify({ order: "paged first, then acknowledged", on_call_alert: onCall, acknowledgment_sent_to: ackError ? null : ticket.emailtolist ?? null, acknowledgment: ack, ack_action: ackResult, ack_error: ackError, ack_retry: ackError ? "The client was NOT emailed. Fix the ticket's contact/send-to address (update_ticket_draft_only: user_id, emailto), then call escalate_emergency again with the same arguments: it sends only the client acknowledgment, no second page." : null, critical_set: !page.sent && !updateError, ticket_update: ticketUpdate, ticket_update_error: updateError, follow_up: page.sent ? "re-page at 30 min and fallback list at 60 min if nobody acts (emergency_follow_up)" : "second alert to the fallback list on the next run (emergency_follow_up)" }, null, 2);
+      return JSON.stringify({ order: "paged first, then acknowledged", on_call_alert: onCall, acknowledgment_sent_to: ackError ? null : ticket.emailtolist ?? null, acknowledgment: ack, ack_action: slimActionWrite(ackResult), ack_error: ackError, ack_retry: ackError ? "The client was NOT emailed. Fix the ticket's contact/send-to address (update_ticket_draft_only: user_id, emailto), then call escalate_emergency again with the same arguments: it sends only the client acknowledgment, no second page." : null, critical_set: !page.sent && !updateError, ticket_update: slimTicketWrite(ticketUpdate), ticket_update_error: updateError, follow_up: page.sent ? "re-page at 30 min and fallback list at 60 min if nobody acts (emergency_follow_up)" : "second alert to the fallback list on the next run (emergency_follow_up)" }, null, 2);
     }
     case "emergency_follow_up": {
       const ticketId = Number(args.ticket_id);
@@ -1040,7 +1065,7 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         catch (err) { deleteErrors.push(`${n.id}: ${(err as Error).message}`); }
       }
       result.pipeline_notes_deleted = deleted; if (deleteErrors.length) result.pipeline_note_delete_errors = deleteErrors;
-      if (hasField) result.ticket_update = await haloPost(env, "/Tickets", [fieldPayload]);
+      if (hasField) result.ticket_update = slimTicketWrite(await haloPost(env, "/Tickets", [fieldPayload]));
       result.verified = await verifyWrite(env, { ticket_id: ticketId, status_id: args.status_id, agent_id: args.agent_id, team_id: args.team_id, note: replyText }, hasField, true);
       return JSON.stringify(result, null, 2);
     }

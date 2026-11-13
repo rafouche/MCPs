@@ -130,6 +130,19 @@ ticket trimmed (`trimTicket`, now including `dateclosed` /
 `recent_human_touch` over that window. The exclusion rules live in the
 PowerShell caller, not here; this route only gathers. Read-only.
 
+## Tool results are kept small on purpose (2026-11-13)
+Allie's logs for 2026-11-05..12 (126 ticket runs, $43.64): 52% of the bill was tool text written into her
+conversations, and three Halo tools made up about 80% of that text. Rules since then:
+- A WRITE never echoes Halo's record. `update_ticket`, `update_ticket_draft_only`, `send_approved_draft` and
+  `escalate_emergency` return `slimTicketWrite` / `slimActionWrite` (ids + the fields a write can set + `saved`)
+  and `verified` as before. The raw POST /Tickets answer was ~55,000 characters per call.
+- halopsa `get_ticket` answers like `get_ticket_brief` (body up to 12,000 chars) unless `full: true`.
+- cipp `list_tenants`: displayName, defaultDomainName, initialDomainName, customerId, LastGraphError when set;
+  `full: true` for raw rows. ninjarmm `get_device_software`: name/version/publisher/installDate, optional
+  `name_contains`; `list_automation_scripts`: id/name/language/OS/short description, optional `name_contains`
+  (the raw list was over the caller's 60,000-character cap, so its end was being cut off). Both take `full: true`.
+- New tools: return what the caller needs to act, compact JSON for long lists, and a `full` switch for the rest.
+
 ## Emergency path: halopsa-mcp `escalate_emergency`
 The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).
 `escalate_emergency` emails the ticket's contact a FIXED template (caller

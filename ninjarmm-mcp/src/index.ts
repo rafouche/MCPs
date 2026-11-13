@@ -303,7 +303,7 @@ const TOOLS = [
   { name: "get_device_os_info", description: "Get OS details and last logged-on user for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_disks", description: "Get disk/storage information for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_network_interfaces", description: "Get network interface and IP address information for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
-  { name: "get_device_software", description: "Get installed software inventory for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
+  { name: "get_device_software", description: "Installed software on a device: name, version, publisher and install date for every program. Pass name_contains (e.g. \"wrike\") to get only matching programs. Pass full: true for NinjaOne's raw rows (install location, size, product code).", inputSchema: { type: "object", properties: { device_id: { type: "number" }, name_contains: { type: "string", description: "Only programs whose name contains this text (case-insensitive)" }, full: { type: "boolean" } }, required: ["device_id"] } },
   { name: "get_device_processors", description: "Get CPU/processor details for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_volumes", description: "Get disk volume and free space details for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
   { name: "get_device_windows_services", description: "Get Windows services and their status for a device", inputSchema: { type: "object", properties: { device_id: { type: "number" } }, required: ["device_id"] } },
@@ -343,7 +343,7 @@ const TOOLS = [
   { name: "list_policies", description: "List all policies in NinjaOne", inputSchema: { type: "object", properties: {} } },
 
   // Automation Scripts
-  { name: "list_automation_scripts", description: "List all available automation scripts", inputSchema: { type: "object", properties: {} } },
+  { name: "list_automation_scripts", description: "List the automation scripts available in NinjaOne: id, name, language, operating systems and a short description for each. Pass name_contains to narrow it (e.g. \"VPN Configuration\"). Pass full: true for NinjaOne's raw rows (parameters, variables).", inputSchema: { type: "object", properties: { name_contains: { type: "string" }, full: { type: "boolean" } } } },
   { name: "ninja_api_get", description: "Read-only escape hatch: GET any NinjaOne API v2 path (e.g. '/automation/scripts', '/device/671/activities') with optional query params, for data no dedicated tool covers. GET only - it cannot change anything. Not part of the Help Desk agent's allowlist; for humans and discovery.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path under /v2, starting with '/'" }, params: { type: "object", additionalProperties: { type: "string" }, description: "Query string parameters" } }, required: ["path"] } },
 
   // Users
@@ -413,7 +413,17 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "get_device_os_info": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/os`), null, 2);
     case "get_device_disks": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/disks`), null, 2);
     case "get_device_network_interfaces": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/network-interfaces`), null, 2);
-    case "get_device_software": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/software`), null, 2);
+    case "get_device_software": {
+      // 2026-11-13: about 51,000 characters per device, usually read to answer "is X installed, which version".
+      // Trimmed to name/version/publisher/install date, optionally only names containing name_contains;
+      // full: true returns NinjaOne's raw rows.
+      const raw = await ninjaGet(env, `/device/${args.device_id}/software`);
+      if (args.full === true || !Array.isArray(raw) || !raw.some((x: any) => x && typeof x.name === "string")) return JSON.stringify(raw, null, 2);
+      const want = String(args.name_contains ?? "").trim().toLowerCase();
+      const rows = raw.filter((x: any) => !want || String(x?.name ?? "").toLowerCase().includes(want))
+        .map((x: any) => ({ name: x.name ?? null, version: x.version ?? null, publisher: x.publisher ?? null, installDate: x.installDate ?? null }));
+      return JSON.stringify({ device_id: args.device_id, installed_count: raw.length, returned: rows.length, name_contains: want || null, software: rows });
+    }
     case "get_device_processors": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/processors`), null, 2);
     case "get_device_volumes": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/volumes`), null, 2);
     case "get_device_windows_services": return JSON.stringify(await ninjaGet(env, `/device/${args.device_id}/windows-services`), null, 2);
@@ -488,7 +498,21 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     // Policies / Scripts / Users / Groups
     case "list_policies": return JSON.stringify(await ninjaGet(env, "/policies"), null, 2);
-    case "list_automation_scripts": return JSON.stringify(await ninjaGet(env, "/automation/scripts"), null, 2);
+    case "list_automation_scripts": {
+      // 2026-11-13: the raw list was over the caller's 60,000-character limit, so its end was cut off and a script
+      // near the end could not be found by name. Trimmed to what is needed to pick and run one; full: true is raw.
+      const raw = await ninjaGet(env, "/automation/scripts");
+      if (args.full === true || !Array.isArray(raw) || !raw.some((x: any) => x && typeof x.name === "string")) return JSON.stringify(raw, null, 2);
+      const want = String(args.name_contains ?? "").trim().toLowerCase();
+      return JSON.stringify(raw.filter((x: any) => !want || String(x?.name ?? "").toLowerCase().includes(want)).map((x: any) => {
+        const row: Record<string, unknown> = { id: x.id ?? null, name: x.name ?? null };
+        if (x.language) row.language = x.language;
+        if (x.operatingSystems) row.operatingSystems = x.operatingSystems;
+        if (x.active === false) row.active = false;
+        if (typeof x.description === "string" && x.description.trim()) row.description = x.description.trim().slice(0, 160);
+        return row;
+      }));
+    }
     case "ninja_api_get": {
       const path = String(args.path ?? "");
       if (!path.startsWith("/") || path.includes("..")) throw new Error("ninja_api_get: path must start with '/' and contain no '..'.");

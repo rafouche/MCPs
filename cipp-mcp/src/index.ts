@@ -102,7 +102,7 @@ const TOOLS = [
   { name: "healthcheck", description: "Test connectivity to CIPP and verify credentials", inputSchema: { type: "object", properties: {}, required: [] } },
 
   // Tenants
-  { name: "list_tenants", description: "List all M365 tenants managed by CIPP", inputSchema: { type: "object", properties: {} } },
+  { name: "list_tenants", description: "List all M365 tenants managed by CIPP: displayName, defaultDomainName (use it as tenantFilter), initialDomainName, customerId, and LastGraphError when CIPP has no access to that tenant. Pass full: true for CIPP's raw rows (GDAP relationship dates, refresh times).", inputSchema: { type: "object", properties: { full: { type: "boolean" } } } },
 
   // Users
   { name: "list_users", description: "List users in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string", description: "Tenant domain e.g. client.onmicrosoft.com" } }, required: ["tenantFilter"] } },
@@ -168,7 +168,19 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
     case "healthcheck": { const data = await cippGet(env, "ListTenants"); return `Connected OK to ${env.CIPP_URL} - ${JSON.stringify(data).substring(0, 120)}`; }
 
     // Tenants
-    case "list_tenants": return JSON.stringify(await cippGet(env, "ListTenants"), null, 2);
+    case "list_tenants": {
+      // 2026-11-13: the raw list is about 31,500 characters (table bookkeeping, GDAP dates, URLs) and Allie reads it
+      // on most Microsoft 365 tickets just to find a tenant's domain. Trimmed to what identifies a tenant, plus its
+      // access error when it has one; full: true returns CIPP's raw rows.
+      const raw = await cippGet(env, "ListTenants");
+      if (args.full === true || !Array.isArray(raw)) return JSON.stringify(raw, null, 2);
+      return JSON.stringify(raw.map((x: any) => {
+        const row: Record<string, unknown> = { displayName: x.displayName ?? null, defaultDomainName: x.defaultDomainName ?? null, initialDomainName: x.initialDomainName ?? null, customerId: x.customerId ?? null };
+        if (x.LastGraphError) row.LastGraphError = String(x.LastGraphError).slice(0, 300);
+        if (x.Excluded === true) row.Excluded = true;
+        return row;
+      }));
+    }
 
     // Users
     case "list_users": return JSON.stringify(await cippGet(env, "ListUsers", { tenantFilter: t! }), null, 2);
