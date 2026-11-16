@@ -1,0 +1,2508 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Endpoint Detection and Response (EDR) API",
+    "version": "1.0"
+  },
+  "paths": {
+    "/incidents": {
+      "get": {
+        "description": "Returns a list of incidents.\nThe endpoint is  is designed for use by MDR vendors to retrieve incidents for their customers and store them on their backend for future use.\nIt is not intended for building UIs or for direct user interaction.\nUsage is quota-limited based on the size of the result set.\n",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "description": "A filter by customer IDs (specific customer tenant ID(s) or customer IDs of specified partner tenant ID).\nIf not specified, the tenant ID provided in the token will be used.\n\nIf the user is authenticated in the scope of the partner tenant or above, this parameter is required.\nThe HTTP error 400 Bad Request will be returned if the parameter is missing or non-compliant.\n\nSupported operators:\n  * `= value`: filters by the specified value; Only customer level tenant ID is allowed.\n  * `or(value1, value2, ...)`: filters by any value in the specified set; Only customer level tenant IDs are allowed.\n  * `direct_children(partner_id)`: includes all customers that are direct children of the specified partner tenant ID.\n  * `descendants(partner_id)`: includes all customers that are descendant of the specified partner tenant ID.\n",
+            "in": "query",
+            "schema": {
+              "description": "A filter by customer IDs (specific customer tenant ID(s) or customer IDs of specified partner tenant ID).\nIf not specified, the tenant ID provided in the token will be used.\n\nIf the user is authenticated in the scope of the partner tenant or above, this parameter is required.\nThe HTTP error 400 Bad Request will be returned if the parameter is missing or non-compliant.\n\nSupported operators:\n  * `= value`: filters by the specified value; Only customer level tenant ID is allowed.\n  * `or(value1, value2, ...)`: filters by any value in the specified set; Only customer level tenant IDs are allowed.\n  * `direct_children(partner_id)`: includes all customers that are direct children of the specified partner tenant ID.\n  * `descendants(partner_id)`: includes all customers that are descendant of the specified partner tenant ID.\n",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UUID"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "incident_id",
+            "description": "List of incident IDs.\nCan only be used for single customer,\neither specified in customer_id parameter or\nextracted from the authentication token.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "List of incident IDs.\nCan only be used for single customer,\neither specified in customer_id parameter or\nextracted from the authentication token.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/IncidentID"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "with_multi_workload",
+            "description": "Include multi-workload incidents in the response.\nIf true, for multi-workload incidents the \"workloads\" field will be present\nand root level WorkloadInfo fields will be omitted.\n",
+            "in": "query",
+            "schema": {
+              "description": "Include multi-workload incidents in the response.\nIf true, for multi-workload incidents the \"workloads\" field will be present\nand root level WorkloadInfo fields will be omitted.\n",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "with_transferred",
+            "description": "Include incidents that were transferred to another incident.",
+            "in": "query",
+            "schema": {
+              "description": "Include incidents that were transferred to another incident.",
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "order",
+            "description": "Sort order of the returned items.\n\nSupported operators:\n  * `asc(customer_id), asc(created_at)`: ascending order of customer and then created_at.\n",
+            "in": "query",
+            "schema": {
+              "description": "Sort order of the returned items.\n\nSupported operators:\n  * `asc(customer_id), asc(created_at)`: ascending order of customer and then created_at.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "The cursor that points to the next batch of records returned from the previous request.\nAll other filtering and sorting parameters MUST remain exactly the same between requests.\n",
+            "in": "query",
+            "schema": {
+              "description": "The cursor that points to the next batch of records returned from the previous request.\nAll other filtering and sorting parameters MUST remain exactly the same between requests.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Maximum number of items to return.",
+            "in": "query",
+            "schema": {
+              "description": "Maximum number of items to return.",
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "created_at",
+            "description": "Filters by incident creation time range.\n\nSupported operators:\n  * `range(date_from, date_to)`: filters by the specified inclusive date range;\n  * `ge(date_from)`: filters by the specified date and later;\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by incident creation time range.\n\nSupported operators:\n  * `range(date_from, date_to)`: filters by the specified inclusive date range;\n  * `ge(date_from)`: filters by the specified date and later;\n",
+              "example": "range(2021-01-01T00:00:00Z, 2021-01-31T23:59:59Z)",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "updated_at",
+            "description": "Filters by incident update time range.\n\nSupported operators:\n  * `range(date_from, date_to)`: filters by the specified inclusive date range;\n  * `ge(date_from)`: filters by the specified date and later;\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by incident update time range.\n\nSupported operators:\n  * `range(date_from, date_to)`: filters by the specified inclusive date range;\n  * `ge(date_from)`: filters by the specified date and later;\n",
+              "example": "ge(2021-01-01T00:00:00Z)",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "is_mitigated",
+            "description": "Filters by threat status (mitigation status).",
+            "in": "query",
+            "schema": {
+              "description": "Filters by threat status (mitigation status).",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "mitigation_state",
+            "description": "Filters by mitigation state.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by mitigation state.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "example": "MITIGATED",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MitigationState"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "description": "Filters by investigation state.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by investigation state.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "example": "or(INVESTIGATING, NOT_STARTED)",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InvestigationState"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "severity",
+            "description": "Filters by incident severity.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by incident severity.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "example": "HIGH",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Severity"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "positivity",
+            "description": "Filters by positivity.\n\nSupported operators:\n  * `range(min_value, max_value)`: filters by the specified inclusive range;\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by positivity.\n\nSupported operators:\n  * `range(min_value, max_value)`: filters by the specified inclusive range;\n",
+              "example": "range(5, 7.5)",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PositivityLevel"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "verdict",
+            "description": "Filters by verdict.",
+            "in": "query",
+            "schema": {
+              "description": "Filters by verdict.",
+              "enum": [
+                "SUSPICIOUS",
+                "MALICIOUS"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "incident_category",
+            "description": "Filters by Incident category.\n\n Supported operators:\n   * `= value`: filters by the specified value;\n   * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by Incident category.\n\n Supported operators:\n   * `= value`: filters by the specified value;\n   * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "example": "or(MALWARE_DETECTED, URL_BLOCKED)",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ThreatCategory"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "workload_id",
+            "description": "Filters by workload IDs.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+            "in": "query",
+            "schema": {
+              "description": "Filters by workload IDs.\n\nSupported operators:\n  * `= value`: filters by the specified value;\n  * `or(value1, value2, ...)`: filters by any value in the specified set.\n",
+              "example": "or(WORKLOAD_ID_1, WORKLOAD_ID_2)",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WorkloadID"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of incidents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentBrief"
+                      }
+                    },
+                    "cursor": {
+                      "description": "This is the cursor that points to the next batch of records.\nAbsent if there are no more records to return.\n",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "* Invalid input data.\n* Assignee is not valid user.\n* Workload ID is not valid or missing.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Results quota exceeded.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::incidents_viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/incidents/investigation_state": {
+      "post": {
+        "description": "Post update for an investigation state accompanied with comment or post a new comment for multiple incidents by MDR vendor.",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+            "in": "query",
+            "schema": {
+              "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "customer_id",
+            "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+            "in": "query",
+            "schema": {
+              "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+            "in": "header",
+            "schema": {
+              "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "update"
+                ],
+                "properties": {
+                  "incident_ids": {
+                    "description": "Array of incident IDs.\nMay only be used when the customer_id matches tenant_id provided in the authentication token.\n",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/IncidentID"
+                    }
+                  },
+                  "customer_incident_ids": {
+                    "description": "Array of customer and incident id pairs.\n",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "customer_id",
+                        "incident_id"
+                      ],
+                      "properties": {
+                        "customer_id": {
+                          "$ref": "#/components/schemas/UUID"
+                        },
+                        "incident_id": {
+                          "$ref": "#/components/schemas/IncidentID"
+                        }
+                      }
+                    }
+                  },
+                  "update": {
+                    "$ref": "#/components/schemas/UpdateInvestigationState"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invocation with the same Idempotency-Key has been already processed and resulted in 201 status.\nResponse body is the same as for the original request.\n",
+            "content": {}
+          },
+          "207": {
+            "description": "Incident investigation state success per incident.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The response contains a list of incident ids along with their status.\nOnly incidents that were not succesfully update are included.\n",
+                  "example": {
+                    "total_items": 3,
+                    "success_items": 2,
+                    "failure_items": 1,
+                    "items": [
+                      {
+                        "item": {
+                          "incident_id": "UUID_OF_MISSING_INCIDENT"
+                        },
+                        "status": 404
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "failure_items",
+                    "success_items",
+                    "total_items",
+                    "items"
+                  ],
+                  "properties": {
+                    "failure_items": {
+                      "type": "integer"
+                    },
+                    "success_items": {
+                      "type": "integer"
+                    },
+                    "total_items": {
+                      "description": "total items processed by service",
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "item",
+                          "status"
+                        ],
+                        "properties": {
+                          "item": {
+                            "description": "domain model or href to the resource",
+                            "type": "object"
+                          },
+                          "status": {
+                            "description": "should be HTTP status code applicable for the item",
+                            "example": 404,
+                            "type": "integer"
+                          },
+                          "error": {
+                            "description": "optional error object providing details",
+                            "type": "object",
+                            "required": [
+                              "code",
+                              "domain"
+                            ],
+                            "properties": {
+                              "reason": {
+                                "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+                                "type": "string"
+                              },
+                              "context": {
+                                "description": "Error context dictionary",
+                                "type": "object"
+                              },
+                              "code": {
+                                "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+                                "type": "string"
+                              },
+                              "domain": {
+                                "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+                                "type": "string"
+                              },
+                              "debug": {
+                                "$ref": "#/components/schemas/debugInfo"
+                              },
+                              "kb_link": {
+                                "$ref": "#/components/schemas/kbLinkInfo"
+                              },
+                              "message": {
+                                "description": "human-readable message, describing the error.",
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request that failed initial validation would not to be stored for the future Idempotency checks.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from the same IP.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::security_analyst",
+              "edr_mgmtsvc::automation"
+            ]
+          }
+        ]
+      }
+    },
+    "/incidents/{incident_id}": {
+      "get": {
+        "description": "Returns incident detailed info.",
+        "parameters": [
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+            "in": "query",
+            "schema": {
+              "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "with_incident_actions",
+            "description": "Include response actions in the response.",
+            "in": "query",
+            "schema": {
+              "description": "Include response actions in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "with_detection_per_type_limit",
+            "description": "Limit the number of detections per detection type in the response.\nIf not provided, all detections are returned.\n\nNote: for internal use only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Limit the number of detections per detection type in the response.\nIf not provided, all detections are returned.\n\nNote: for internal use only.\n",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "with_detections",
+            "description": "Include detections in the response.",
+            "in": "query",
+            "schema": {
+              "description": "Include detections in the response.",
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "updated_since",
+            "description": "Hint that permits skipping parts of the response (including detections and activities items)\nthat were NOT updated since supplied value.\n",
+            "in": "query",
+            "schema": {
+              "description": "Hint that permits skipping parts of the response (including detections and activities items)\nthat were NOT updated since supplied value.\n",
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "with_activities",
+            "description": "Include activities in the response.",
+            "in": "query",
+            "schema": {
+              "description": "Include activities in the response.",
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "incident_id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/IncidentID"
+            }
+          },
+          {
+            "name": "If-Modified-Since",
+            "in": "header",
+            "schema": {
+              "example": "Sun, 28 Feb 2016 16:41:41 GMT",
+              "type": "string",
+              "format": "rfc2616"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Incident data.",
+            "headers": {
+              "Last-Modified": {
+                "description": "Timestamp of the last modification of the incident.\n",
+                "required": true,
+                "schema": {
+                  "description": "Timestamp of the last modification of the incident.\n",
+                  "example": "Sun, 28 Feb 2016 16:41:41 GMT",
+                  "type": "string",
+                  "format": "rfc2616"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Incident"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Incident has not been modified since the If-Modified-Since header.",
+            "content": {}
+          },
+          "400": {
+            "description": "* Invalid input data.\n* Assignee is not valid user.\n* Workload ID is not valid or missing.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "* Incident is not found.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "* Incident is obsolete, for example the affected workload was removed.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from the same IP.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::incidents_viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/incidents/{incident_id}/investigation_state": {
+      "post": {
+        "description": "Post update for an investigation state accompanied with comment or post a new comment for an incident by MDR vendor.",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+            "in": "query",
+            "schema": {
+              "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "customer_id",
+            "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+            "in": "query",
+            "schema": {
+              "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "incident_id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/IncidentID"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+            "in": "header",
+            "schema": {
+              "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInvestigationState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invocation with the same Idempotency-Key has been already processed and resulted in 201 status.\nResponse body is the same as for the original request.\n",
+            "content": {}
+          },
+          "201": {
+            "description": "Incident investigation state appended successfully.",
+            "content": {}
+          },
+          "400": {
+            "description": "Request that failed initial validation would not to be stored for the future Idempotency checks.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "* Incident is not found.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from the same IP.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::security_analyst",
+              "edr_mgmtsvc::automation"
+            ]
+          }
+        ]
+      }
+    },
+    "/incidents/{incident_id}/response_action": {
+      "post": {
+        "description": "Perform a response action listed in Get IncidentDetails reply.",
+        "parameters": [
+          {
+            "name": "forensic_running_processes_snapshot",
+            "description": "Whether forensic backup should be done by snapshotting the running processes.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Whether forensic backup should be done by snapshotting the running processes.",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "forensic_dump_mode",
+            "description": "Forensic backup memory dump type.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Forensic backup memory dump type.",
+              "enum": [
+                "RAW",
+                "KERNEL"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "delay",
+            "description": "Delay in minutes before action is performed.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Delay in minutes before action is performed.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            }
+          },
+          {
+            "name": "workload_id",
+            "description": "Workload ID where the action should be performed.\nIf not provided, the action is performed on the workload associated with the incident.\nRequired for multi-workload incidents.\n",
+            "in": "query",
+            "schema": {
+              "description": "Workload ID where the action should be performed.\nIf not provided, the action is performed on the workload associated with the incident.\nRequired for multi-workload incidents.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "policy_id",
+            "description": "Protection policy ID.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Protection policy ID.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+            "in": "query",
+            "schema": {
+              "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "urls",
+            "description": "List of URL IDs to add to allow/block list.",
+            "in": "query",
+            "schema": {
+              "description": "List of URL IDs to add to allow/block list.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/EntityID"
+              }
+            }
+          },
+          {
+            "name": "backup_location",
+            "description": "Backup location.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Backup location.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "files",
+            "description": "List of file IDs to add to allow/block list.",
+            "in": "query",
+            "schema": {
+              "description": "List of file IDs to add to allow/block list.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/EntityID"
+              }
+            }
+          },
+          {
+            "name": "archive_name",
+            "description": "Backup archive name.",
+            "in": "query",
+            "schema": {
+              "description": "Backup archive name.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "processes",
+            "description": "List of process image file IDs to add to allow/block list.",
+            "in": "query",
+            "schema": {
+              "description": "List of process image file IDs to add to allow/block list.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/EntityID"
+              }
+            }
+          },
+          {
+            "name": "exclusion_description",
+            "description": "Description of the exclusion.",
+            "in": "query",
+            "schema": {
+              "description": "Description of the exclusion.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "credentials_id",
+            "description": "Credential object unique identifier. It will be omitted if backup it is not encrypted.",
+            "in": "query",
+            "schema": {
+              "description": "Credential object unique identifier. It will be omitted if backup it is not encrypted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "restore_point_name",
+            "description": "Human-readable string to display.",
+            "in": "query",
+            "schema": {
+              "description": "Human-readable string to display.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "comment",
+            "description": "Optional comment related to the the action.",
+            "in": "query",
+            "schema": {
+              "description": "Optional comment related to the the action.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "workflow_id",
+            "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+            "in": "query",
+            "schema": {
+              "description": "Workflow ID in case if executed by workflow.\nRequires \"edr_mgmtsvc automation\" scope.\nHeaders `X-Apigw-Session-User-Id`, `X-Apigw-Session-Login?` might be omitted.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "patch_id",
+            "description": "Patch unique identifier.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Patch unique identifier.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "description": "Action, e.g., \"WORKLOAD_ISOLATE\", see ResponseAction.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Action, e.g., \"WORKLOAD_ISOLATE\", see ResponseAction.",
+              "enum": [
+                "WORKLOAD_ISOLATE",
+                "WORKLOAD_DEISOLATE",
+                "ADD_ALL_PROCESS_FILE_URL_TO_ALLOW_LIST",
+                "ADD_ALL_PROCESS_FILE_URL_TO_BLOCK_LIST",
+                "PROCESS_STOP_TREE",
+                "PROCESS_STOP",
+                "PROCESS_FILE_QUARANTINE",
+                "PROCESS_FILE_DELETE",
+                "WORKLOAD_RESTART",
+                "WORKLOAD_SHUTDOWN",
+                "ADD_TO_BLOCK",
+                "ADD_TO_ALLOW",
+                "WORKLOAD_PATCH",
+                "ACQUIRE_FORENSIC_BACKUP",
+                "WORKLOAD_ROLLBACK"
+              ],
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponseActionPredefined"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "incident_id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/IncidentID"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+            "in": "header",
+            "schema": {
+              "description": "Idempotent APIs enable clients to safely retry operations without worrying about the side-effects that the operation can cause.\nFor example, a client can safely **retry** an idempotent request in the event of a network connection error.\nMore information as defined in RFC 7231 can be found [here](https://tools.ietf.org/html/rfc7231#section-4.2.2).\n\nTo make a request idempotent, the client adds the header `Idempotency-Key` with unique data. It is RECOMMENDED to use `UUID v4` data.\nThe service is supposed to keep a cache of all the `Idempotency-Key` it has received in past requests to detect a duplicate requests from clients.\nThe cache can be cleared periodically and is at the discretion of the service but should be preserved for at least 3 hours.\n\nIf the server receives a request with the same Idempotency-Key, it returns the same response as for the original request.\nIf the original request is still being processed, the server waits for its completion before responding.\nThe server does not store the request if it fails initial validation.\n",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invocation with the same Idempotency-Key has been already processed and resulted in 201 status.\nResponse body is the same as for the original request.\n",
+            "content": {}
+          },
+          "201": {
+            "description": "Response Action was successfully initiated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "activity_id"
+                  ],
+                  "properties": {
+                    "activity_id": {
+                      "description": "Activity ID corresponding to the initiated response action.",
+                      "type": "string",
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request that failed initial validation would not to be stored for the future Idempotency checks.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "* Incident is not found.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from the same IP.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::security_analyst",
+              "edr_mgmtsvc::automation"
+            ]
+          }
+        ]
+      },
+      "get": {
+        "description": "Get Detailed status of initiated action.",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "description": "Activity ID corresponding to the initiated response action.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Activity ID corresponding to the initiated response action.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "customer_id",
+            "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+            "in": "query",
+            "schema": {
+              "description": "Customer ID, if it isn't provided tenant_id from the authentication token is used.\nMust be specified if the request is not authenticated with customer scoped token, i.e. partner level or root level.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "analytics_source",
+            "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+            "in": "query",
+            "schema": {
+              "description": "Name of a component that use the API or a vendor name, used for API usage analytics only.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "incident_id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/IncidentID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response Action status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseActionDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "* Invalid input data.\n* Assignee is not valid user.\n* Workload ID is not valid or missing.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied due to insufficient permissions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "* Incident is not found.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from the same IP.",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds after which the client can retry the request.\n",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds after which the client can retry the request.\n",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Unexpected server error.\nError can be raised by network infrastructure (for example, by Nginx).\nIn this case, the response can contain any body.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "security_schemes.oauth2": [
+              "edr_mgmtsvc::incidents_viewer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UUID": {
+        "description": "Universally Unique Identifier.",
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "IncidentID": {
+        "description": "Incident ID.",
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "MitigationState": {
+        "description": "Determines whether the threat was mitigated.",
+        "enum": [
+          "NOT_MITIGATED",
+          "MITIGATED",
+          "AUTO_MITIGATED"
+        ],
+        "type": "string"
+      },
+      "InvestigationState": {
+        "description": "Incident investigation state.",
+        "enum": [
+          "NOT_STARTED",
+          "INVESTIGATING",
+          "TRIAGED",
+          "FALSE_POSITIVE",
+          "CLOSED"
+        ],
+        "type": "string"
+      },
+      "Severity": {
+        "description": "Incident severity.",
+        "enum": [
+          "LOW",
+          "MEDIUM",
+          "HIGH",
+          "CRITICAL"
+        ],
+        "type": "string"
+      },
+      "PositivityLevel": {
+        "description": "Positivity level.",
+        "type": "number",
+        "format": "float",
+        "minimum": 0,
+        "maximum": 10
+      },
+      "ThreatCategory": {
+        "description": "threat category.",
+        "enum": [
+          "MALWARE_DETECTED",
+          "PROCESS_DETECTED",
+          "MBR_ACTIVITY_BLOCKED",
+          "URL_BLOCKED",
+          "WEBSITE_URL_BLOCKED",
+          "MS_DEFENDER",
+          "THIRD_PARTY_OTHER",
+          "UNKNOWN_CATEGORY"
+        ],
+        "type": "string"
+      },
+      "WorkloadID": {
+        "description": "Workload ID.",
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "IncidentBrief": {
+        "description": "Incident information.",
+        "type": "object",
+        "required": [
+          "incident_time",
+          "state",
+          "verdict",
+          "created_at",
+          "updated_at",
+          "positivity",
+          "incident_id",
+          "mitigation_state",
+          "severity"
+        ],
+        "properties": {
+          "incident_time": {
+            "description": "Deprecated - use created_at.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "transferred_to_incident_id": {
+            "description": "An ID of the incident in case of this incident was transferred into another incident,\npotentially multi-workload.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "workloads": {
+            "description": "List of associated workloads information for multi-workload incidents.\n\"workloads\" array is present only if incident involves multiple workloads,\nin that case WorkloadInfo fields at the root level are omitted.\n",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/WorkloadInfo"
+            }
+          },
+          "state": {
+            "description": "Current state of the investigation in the EDR system.\n",
+            "enum": [
+              "NOT_STARTED",
+              "INVESTIGATING",
+              "TRIAGED",
+              "FALSE_POSITIVE",
+              "CLOSED"
+            ],
+            "type": "string"
+          },
+          "ticket_subject": {
+            "description": "External ticket subject.",
+            "type": "string"
+          },
+          "verdict": {
+            "description": "Is the incident considered malicious activity.",
+            "enum": [
+              "SUSPICIOUS",
+              "MALICIOUS"
+            ],
+            "type": "string"
+          },
+          "created_at": {
+            "description": "UTC timestamp of the incident creation.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "host_name": {
+            "description": "Hostname of the source endpoint of the incident.",
+            "type": "string"
+          },
+          "mdr_state": {
+            "description": "Last updated state of the investigation received from an MDR system, may include MDR specific states.\n",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvestigationState"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_at": {
+            "description": "UTC timestamp of the last incident update.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "assignee": {
+            "description": "Name of an external agent assigned to the ticket.",
+            "type": "string"
+          },
+          "assignee_id": {
+            "description": "User ID of agent assigned to the ticket.\nMust contain an UUID of a registered user with access rights to the incident.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "resource_id": {
+            "description": "Unique identifier of the endpoint associated with this event, referencing the corresponding records in the event search system.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "positivity": {
+            "description": "Positivity score of the incident.",
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "ticket_id": {
+            "description": "External ticket ID associated with the incident.",
+            "type": "string"
+          },
+          "incident_id": {
+            "description": "ID of the incident object.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "agent_version": {
+            "description": "Version of the running agent.",
+            "type": "string"
+          },
+          "incident_short_id": {
+            "description": "Short ID of the incident object in the context of a customer.",
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          },
+          "incident_link": {
+            "description": "Link to the incident investigation page.",
+            "example": "https://dev-cloud.acronis.com/ui/#/endpoint-detection/incidents/7ef161ef-0561-4f6f-88d1-8d8ebe49684b/investigation",
+            "type": "string"
+          },
+          "mitigation_state": {
+            "$ref": "#/components/schemas/MitigationState"
+          },
+          "severity": {
+            "description": "Severity level of the incident.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "type": "string"
+          },
+          "incident_categories": {
+            "description": "Incident categories.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "description": "Incident threat category.",
+              "enum": [
+                "MALWARE_DETECTED",
+                "PROCESS_DETECTED",
+                "MBR_ACTIVITY_BLOCKED",
+                "URL_BLOCKED",
+                "WEBSITE_URL_BLOCKED",
+                "MS_DEFENDER",
+                "THIRD_PARTY_OTHER",
+                "UNKNOWN_CATEGORY"
+              ],
+              "type": "string"
+            }
+          },
+          "customer_id": {
+            "description": "ID of the customer.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "host_domain": {
+            "description": "Domain or workgroup the host is part of.",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority assigned to the ticket.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "type": "string"
+          },
+          "host_address": {
+            "description": "IP (v4/v6) address assigned to the communicating network interface.",
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "description": "Describes an error.",
+        "type": "object",
+        "required": [
+          "domain",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "domain": {
+            "description": "Error type.",
+            "type": "string"
+          },
+          "code": {
+            "description": "Error code.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Error message.",
+            "type": "string"
+          }
+        }
+      },
+      "UpdateInvestigationState": {
+        "description": "The investigation state update by a MDR vendor.\n",
+        "type": "object",
+        "properties": {
+          "comment": {
+            "description": "Optional comment related to the incident update.",
+            "type": "string"
+          },
+          "state": {
+            "description": "Updated state of the investigation in an MDR system, may include MDR specific states.\nIt is up to the MDR application logic to apply MDR status to EDR.\n",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvestigationState"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "ticket_subject": {
+            "description": "External ticket subject.",
+            "type": "string"
+          },
+          "assignee": {
+            "description": "Name of an external agent assigned to the ticket.",
+            "type": "string"
+          },
+          "assignee_id": {
+            "description": "User ID of agent assigned to the ticket.\nMust contain an UUID of a registered user with access rights to the incident.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "ticket_id": {
+            "description": "External ticket ID associated with the incident.",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority assigned to the ticket.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "debugInfo": {
+        "description": "Error debug information (map type)",
+        "type": "object"
+      },
+      "kbLinkInfo": {
+        "description": "Components for kblink",
+        "type": "object",
+        "required": [
+          "line_tag",
+          "ser_code",
+          "version",
+          "build",
+          "product",
+          "os"
+        ],
+        "properties": {
+          "line_tag": {
+            "type": "string"
+          },
+          "ser_code": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "build": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          }
+        }
+      },
+      "Incident": {
+        "description": "Complete Incident object.",
+        "type": "object",
+        "required": [
+          "incident_time",
+          "state",
+          "verdict",
+          "created_at",
+          "updated_at",
+          "positivity",
+          "incident_id",
+          "mitigation_state",
+          "severity"
+        ],
+        "properties": {
+          "incident_time": {
+            "description": "Deprecated - use created_at.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "transferred_to_incident_id": {
+            "description": "An ID of the incident in case of this incident was transferred into another incident,\npotentially multi-workload.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "state": {
+            "description": "Current state of the investigation in the EDR system.\n",
+            "enum": [
+              "NOT_STARTED",
+              "INVESTIGATING",
+              "TRIAGED",
+              "FALSE_POSITIVE",
+              "CLOSED"
+            ],
+            "type": "string"
+          },
+          "workloads": {
+            "description": "List of associated workloads information for multi-workload incidents.\n\"workloads\" array is present only if incident involves multiple workloads,\nin that case WorkloadInfo fields at the root level are omitted.\n",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/WorkloadInfo"
+            }
+          },
+          "ticket_subject": {
+            "description": "External ticket subject.",
+            "type": "string"
+          },
+          "verdict": {
+            "description": "Is the incident considered malicious activity.",
+            "enum": [
+              "SUSPICIOUS",
+              "MALICIOUS"
+            ],
+            "type": "string"
+          },
+          "created_at": {
+            "description": "UTC timestamp of the incident creation.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "host_name": {
+            "description": "Hostname of the source endpoint of the incident.",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "UTC timestamp of the last incident update.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "mdr_state": {
+            "description": "Last updated state of the investigation received from an MDR system, may include MDR specific states.\n",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvestigationState"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "assignee": {
+            "description": "Name of an external agent assigned to the ticket.",
+            "type": "string"
+          },
+          "detections": {
+            "description": "Array of detection objects, ordered by event_time ascending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Detection"
+            }
+          },
+          "incident_actions": {
+            "description": "Array of available incident level response actions to be performed by MDR.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseAction"
+            }
+          },
+          "assignee_id": {
+            "description": "User ID of agent assigned to the ticket.\nMust contain an UUID of a registered user with access rights to the incident.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "resource_id": {
+            "description": "Unique identifier of the endpoint associated with this event, referencing the corresponding records in the event search system.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "positivity": {
+            "description": "Positivity score of the incident.",
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "ticket_id": {
+            "description": "External ticket ID associated with the incident.",
+            "type": "string"
+          },
+          "incident_id": {
+            "description": "ID of the incident object.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "agent_version": {
+            "description": "Version of the running agent.",
+            "type": "string"
+          },
+          "incident_short_id": {
+            "description": "Short ID of the incident object in the context of a customer.",
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          },
+          "incident_link": {
+            "description": "Link to the incident investigation page.",
+            "example": "https://dev-cloud.acronis.com/ui/#/endpoint-detection/incidents/7ef161ef-0561-4f6f-88d1-8d8ebe49684b/investigation",
+            "type": "string"
+          },
+          "mitigation_state": {
+            "$ref": "#/components/schemas/MitigationState"
+          },
+          "severity": {
+            "description": "Severity level of the incident.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "type": "string"
+          },
+          "incident_categories": {
+            "description": "Incident categories.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "description": "Incident threat category.",
+              "enum": [
+                "MALWARE_DETECTED",
+                "PROCESS_DETECTED",
+                "MBR_ACTIVITY_BLOCKED",
+                "URL_BLOCKED",
+                "WEBSITE_URL_BLOCKED",
+                "MS_DEFENDER",
+                "THIRD_PARTY_OTHER",
+                "UNKNOWN_CATEGORY"
+              ],
+              "type": "string"
+            }
+          },
+          "customer_id": {
+            "description": "ID of the customer.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "activities": {
+            "description": "Array of activities, ordered by created time descending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          },
+          "host_domain": {
+            "description": "Domain or workgroup the host is part of.",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority assigned to the ticket.",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "type": "string"
+          },
+          "host_address": {
+            "description": "IP (v4/v6) address assigned to the communicating network interface.",
+            "type": "string"
+          }
+        }
+      },
+      "EntityID": {
+        "description": "Unique identifier of an entity in the EDR system.",
+        "type": "string",
+        "maxLength": 128
+      },
+      "ResponseActionPredefined": {
+        "description": "Predefined Response Action type.",
+        "enum": [
+          "WORKLOAD_ISOLATE",
+          "WORKLOAD_DEISOLATE",
+          "WORKLOAD_RESTART",
+          "WORKLOAD_SHUTDOWN",
+          "ADD_ALL_PROCESS_FILE_URL_TO_ALLOW_LIST",
+          "ADD_ALL_PROCESS_FILE_URL_TO_BLOCK_LIST",
+          "PROCESS_STOP_TREE",
+          "PROCESS_STOP",
+          "PROCESS_FILE_QUARANTINE",
+          "PROCESS_FILE_DELETE",
+          "ADD_TO_BLOCK",
+          "ADD_TO_ALLOW",
+          "ACQUIRE_FORENSIC_BACKUP",
+          "WORKLOAD_ROLLBACK",
+          "WORKLOAD_PATCH"
+        ],
+        "type": "string"
+      },
+      "ResponseActionDetails": {
+        "description": "Detailed status of initiated action.",
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "activity_id": {
+            "description": "Activity ID corresponding to the initiated response action.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "action": {
+            "description": "Action, e.g., \"WORKLOAD_ISOLATE\".",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseActionPredefined"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "result_details": {
+            "description": "Free form object describing the result of the action.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Optional Activity status for the response action if it was already invoked.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InProgressState"
+              },
+              {
+                "$ref": "#/components/schemas/CompletionStatus"
+              }
+            ]
+          }
+        }
+      },
+      "WorkloadInfo": {
+        "description": "Workload specific information.\nAll fields are optional and can be omitted for host-less incident.\n",
+        "type": "object",
+        "properties": {
+          "host_name": {
+            "description": "Hostname of the source endpoint of the incident.",
+            "type": "string"
+          },
+          "host_domain": {
+            "description": "Domain or workgroup the host is part of.",
+            "type": "string"
+          },
+          "host_address": {
+            "description": "IP (v4/v6) address assigned to the communicating network interface.",
+            "type": "string"
+          },
+          "agent_version": {
+            "description": "Version of the running agent.",
+            "type": "string"
+          },
+          "resource_id": {
+            "description": "Unique identifier of the endpoint associated with this event, referencing the corresponding records in the event search system.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        }
+      },
+      "Detection": {
+        "type": "object",
+        "discriminator": {
+          "propertyName": "engine"
+        },
+        "required": [
+          "engine",
+          "event_id",
+          "event_time",
+          "description"
+        ],
+        "properties": {
+          "workload_id": {
+            "description": "Unique ID of the workload where the detection occurred.\nMay be omitted for host-less and single workload incidents.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "engine": {
+            "description": "Type of detection engine.",
+            "enum": [
+              "FILE",
+              "URLF",
+              "BEHAVIORAL",
+              "PROCESS"
+            ],
+            "type": "string"
+          },
+          "event_id": {
+            "description": "Identifier of the event associated with this detection, referencing the corresponding record in event search.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "event_time": {
+            "description": "UTC Timestamp of the activity taking place on the endpoint.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "description": "Description of the object, such as rule description or attack stage.",
+            "type": "string"
+          },
+          "threat_name": {
+            "description": "Threat name.",
+            "type": "string"
+          },
+          "verdict": {
+            "description": "Detection malice verdict.",
+            "enum": [
+              "SUSPICIOUS",
+              "MALICIOUS"
+            ],
+            "type": "string"
+          },
+          "is_trigger": {
+            "description": "Was detection a trigger for an incident.",
+            "type": "boolean"
+          }
+        }
+      },
+      "ResponseAction": {
+        "description": "Definition of available Response Action and its status if it's already initiated.",
+        "example": {
+          "action": "WORKLOAD_RESTART",
+          "description": "Restart Workload in X minutes",
+          "display_name": "Restart Workload",
+          "uri": "https://.../<id>/response_action?action=WORKLOAD_RESTART",
+          "query_parameters": {
+            "delay": {
+              "type": "number",
+              "description": "Delay in minutes before restart",
+              "minimum": 0,
+              "maximum": 60
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "activity_id": {
+            "description": "Activity ID corresponding to the initiated response action.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "workload_id": {
+            "description": "Workload ID where the action should be performed.  Provided for (potentially) multi-workload incidents.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "action": {
+            "description": "Action, e.g., \"WORKLOAD_ISOLATE\".",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseActionPredefined"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "query_parameters": {
+            "$ref": "#/components/schemas/QueryParameters"
+          },
+          "uri": {
+            "description": "Post URI for triggering of the response action. Ommited for completed or in-progress actions.",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "description": "Optional Activity status for the response action if it was already invoked.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InProgressState"
+              },
+              {
+                "$ref": "#/components/schemas/CompletionStatus"
+              }
+            ]
+          }
+        }
+      },
+      "Activity": {
+        "description": "Activity (includes comments, response actions and user incident actions).",
+        "type": "object",
+        "required": [
+          "activity_id",
+          "type",
+          "entity_type",
+          "origin",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "activity_id": {
+            "$ref": "#/components/schemas/ActivityID"
+          },
+          "type": {
+            "description": "Activity type.",
+            "nullable": true,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentActivityType"
+              },
+              {
+                "$ref": "#/components/schemas/ResponseActionType"
+              }
+            ]
+          },
+          "entity_type": {
+            "description": "Type of the entity the action is applied to.",
+            "enum": [
+              "INCIDENT",
+              "WORKLOAD",
+              "PROCESS",
+              "FILE",
+              "REGISTRY",
+              "NETWORK",
+              "SCHEDULED_TASK",
+              "EXTERNAL"
+            ],
+            "type": "string"
+          },
+          "entity_name": {
+            "description": "Short name (caption) of the entity (filename, workload name etc).\nOmitted for entity_type = \"INCIDENT\" or when target contains more than 1 item.\n",
+            "type": "string"
+          },
+          "workload_id": {
+            "description": "Unique ID of the workload for the activity.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ActivityOrigin"
+          },
+          "user": {
+            "description": "User who initiated the action (for origin = \"USER\")",
+            "type": "object",
+            "required": [
+              "name",
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "description": "Person name.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Person ID.",
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            }
+          },
+          "created_at": {
+            "description": "UTC Timestamp when activity was created (for response actions - queued).",
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "description": "UTC Timestamp when action status was updated.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "description": "UTC Timestamp when activity started execution.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "description": "UTC Timestamp when action was finished.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          },
+          "comment": {
+            "description": "User comment.",
+            "type": "string"
+          },
+          "err_message": {
+            "description": "Error or warning text.",
+            "type": "string"
+          },
+          "additional_info": {
+            "description": "Activity type-specific details. Selector is 'type' field. Provided by UI.\nFor user activities (comment, set assignee, etc) is generated by DB.\n",
+            "type": "object"
+          },
+          "execution_state": {
+            "description": "Activity execution state (outcome). Content schema depends on 'type'.\nProvided by response action execution layer.\nOmitted for user activity.\nFor XDR actions XDRProcessingResultCollection result would be added here.\n",
+            "type": "object"
+          }
+        }
+      },
+      "InProgressState": {
+        "description": "State of the activity that is in progress.",
+        "enum": [
+          "QUEUED",
+          "DEPENDENT",
+          "STARTED"
+        ],
+        "type": "string"
+      },
+      "CompletionStatus": {
+        "description": "Execution state of the activity.",
+        "enum": [
+          "SUCCEEDED",
+          "SUCCEEDED_WITH_WARNINGS",
+          "FAILED",
+          "SKIPPED",
+          "TIMED_OUT",
+          "CANCELLED"
+        ],
+        "type": "string"
+      },
+      "QueryParameters": {
+        "description": "Query Parameters definition modeled after RAML spec.",
+        "type": "object",
+        "patternProperties": {
+          "^.*$": {
+            "$ref": "#/components/schemas/ParameterProperty"
+          }
+        }
+      },
+      "ActivityID": {
+        "description": "Activity ID.",
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "ActivityOrigin": {
+        "description": "The origin of the activity.",
+        "enum": [
+          "USER",
+          "SYSTEM",
+          "AGENT",
+          "THREAT_FEED",
+          "WORKFLOW"
+        ],
+        "type": "string"
+      },
+      "ActivityStatus": {
+        "description": "Activity status.",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InProgressState"
+          },
+          {
+            "$ref": "#/components/schemas/CompletionStatus"
+          }
+        ]
+      },
+      "IncidentActivityType": {
+        "description": "Incident activity type.",
+        "enum": [
+          "ADD_COMMENT",
+          "SET_ASSIGNEE",
+          "CHANGE_INVESTIGATION_STATE",
+          "CHANGE_THREAT_STATUS"
+        ],
+        "type": "string"
+      },
+      "ResponseActionType": {
+        "description": "Response action type.",
+        "enum": [
+          "FIND_ROLLBACK_ITEMS",
+          "SMART_REMEDIATION_TRUE_POSITIVE",
+          "SMART_REMEDIATION_FALSE_POSITIVE",
+          "WORKLOAD_MANAGE_ISOLATION",
+          "WORKLOAD_ISOLATE",
+          "WORKLOAD_MANAGE_DEISOLATION",
+          "WORKLOAD_DEISOLATE",
+          "WORKLOAD_PATCH",
+          "WORKLOAD_BACKUP",
+          "WORKLOAD_FORENSIC_BACKUP",
+          "WORKLOAD_RECOVERY_FROM_BACKUP",
+          "WORKLOAD_DR_FAILOVER",
+          "WORKLOAD_RESTART",
+          "WORKLOAD_SHUTDOWN",
+          "WORKLOAD_ISOLATE_EXCLUSIONS_ADD",
+          "PROCESS_STOP",
+          "PROCESS_STOP_TREE",
+          "PROCESS_QUARANTINE",
+          "PROCESS_DELETE_IMAGE",
+          "PROCESS_ADD_TO_ALLOW_LIST",
+          "PROCESS_ADD_TO_BLOCK_LIST",
+          "PROCESS_REMOVE_FROM_ALLOW_LIST",
+          "PROCESS_REMOVE_FROM_BLOCK_LIST",
+          "PROCESS_MANAGE_ROLLBACK",
+          "PROCESS_FLUSH_EVENTS",
+          "PROCESS_ROLLBACK_CHANGES",
+          "FILE_DELETE",
+          "FILE_QUARANTINE",
+          "FILE_ADD_TO_ALLOW_LIST",
+          "FILE_ADD_TO_BLOCK_LIST",
+          "FILE_REMOVE_FROM_ALLOW_LIST",
+          "FILE_REMOVE_FROM_BLOCK_LIST",
+          "REGISTRY_DELETE",
+          "NETACCESS_ADD_TO_ALLOW_LIST",
+          "NETACCESS_ADD_TO_BLOCK_LIST",
+          "NETACCESS_REMOVE_FROM_ALLOW_LIST",
+          "NETACCESS_REMOVE_FROM_BLOCK_LIST",
+          "XDR_RESPONSE_ACTION",
+          "WORKLOAD_REMOTE_DESKTOP",
+          "WORKLOAD_CYBERSCRIPTING"
+        ],
+        "type": "string"
+      },
+      "ParameterProperty": {
+        "description": "Parameter definition modeled after RAML spec.",
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "integer",
+              "number",
+              "string"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "maximum": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "security_schemes.oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "authorizationUrl": "https://dev-cloud.acronis.com/api/2/idp/authorize",
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token",
+            "scopes": {
+              "edr_mgmtsvc::admin": "null",
+              "edr_mgmtsvc::automation": "null",
+              "edr_mgmtsvc::event_searcher": "null",
+              "edr_mgmtsvc::incident_change_notifier": "null",
+              "edr_mgmtsvc::incident_commenter": "null",
+              "edr_mgmtsvc::incident_graph_writer": "null",
+              "edr_mgmtsvc::incidents_viewer": "null",
+              "edr_mgmtsvc::reports_viewer": "null",
+              "edr_mgmtsvc::response_executor": "null",
+              "edr_mgmtsvc::security_analyst": "null",
+              "edr_mgmtsvc::threat_feed_settings_viewer": "null",
+              "edr_mgmtsvc::threat_feed_data_viewer": "null",
+              "edr_mgmtsvc::threat_feed_admin": "null",
+              "edr_mgmtsvc::viewer": "null"
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/mdr/v1",
+      "variables": {}
+    }
+  ]
+}

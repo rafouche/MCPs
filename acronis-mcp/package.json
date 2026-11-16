@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "catalog": "node scripts/build-catalog.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.2",

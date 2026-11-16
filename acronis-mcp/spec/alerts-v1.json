@@ -1,0 +1,3621 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Alert Manager API",
+    "version": "1.0"
+  },
+  "paths": {
+    "/alerts": {
+      "post": {
+        "operationId": "Create an alert",
+        "description": "Creates and activates an alert.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Alert payload",
+                "example": {
+                  "_source": "DC4A6F3B-479B-4D42-B7DD-132C56E9C76B",
+                  "_sourceTimeStamp": 344168,
+                  "context": {
+                    "planId": "00000000-0000-0000-0000-000000000000",
+                    "resourceId": "00000000-0000-0000-0000-000000000001"
+                  },
+                  "createdAt": "2019-09-05T16:24:35.000Z",
+                  "details": {
+                    "daysPassed": 32,
+                    "errorMessage": {
+                      "kbLink": {
+                        "serCode": "NoBackupForXDays"
+                      }
+                    },
+                    "planId": "796c399a-a230-46c1-b705-31d590b9ef07",
+                    "planName": "Acme SQL to Cloud storage",
+                    "resourceId": "E10FC321-7900-63B3-3797-8969AB0756B1",
+                    "resourceName": "mssql://acme/khlon_afcab63a_3cf7_4b68_81ac_f71461a58b28_bureau_company7@2fe55c7d-ff5c-4477-98e8-d41c06443e46"
+                  },
+                  "id": "1BE7BE26-C68F-0863-2F55-DACC93A799F9",
+                  "type": "NoBackupForXDays"
+                },
+                "anyOf": [
+                  {
+                    "description": "An alert that is raised if GreatHorn email security has detected a malicious email message.",
+                    "type": "object",
+                    "required": [
+                      "details",
+                      "type"
+                    ],
+                    "properties": {
+                      "_sourceTimeStamp": {
+                        "type": "integer",
+                        "format": "int64"
+                      },
+                      "_source": {
+                        "description": "Identifier of the alert producer.",
+                        "type": "string"
+                      },
+                      "context": {
+                        "$ref": "#/components/schemas/Context"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "id": {
+                        "$ref": "#/components/schemas/uuid"
+                      },
+                      "details": {
+                        "description": "Alert type specific payload",
+                        "type": "object",
+                        "required": [
+                          "resource",
+                          "emailSubject",
+                          "scanResult",
+                          "emailFrom",
+                          "detectionCategory"
+                        ],
+                        "properties": {
+                          "resource": {
+                            "description": "Mailbox name",
+                            "type": "string"
+                          },
+                          "emailSubject": {
+                            "type": "string"
+                          },
+                          "scanResult": {
+                            "type": "string"
+                          },
+                          "emailFrom": {
+                            "type": "string"
+                          },
+                          "detectionCategory": {
+                            "description": "Phishing, spam, malware, BEC, etc.",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "tenantID": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "description": "Alert severity level.",
+                        "enum": [
+                          "ok",
+                          "information",
+                          "warning",
+                          "error",
+                          "critical"
+                        ],
+                        "type": "string"
+                      },
+                      "type": {
+                        "description": "Alert type",
+                        "enum": [
+                          "MaliciousEmailDetectedGreatHorn"
+                        ],
+                        "type": "string"
+                      },
+                      "affinity": {
+                        "description": "Alert synchronization affinity (e.g., agent ID).",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "description": "An alert that is raised if Perception Point email security has detected a potential threat in an email message.",
+                        "type": "object",
+                        "required": [
+                          "details",
+                          "type"
+                        ],
+                        "properties": {
+                          "_sourceTimeStamp": {
+                            "type": "integer",
+                            "format": "int64"
+                          },
+                          "_source": {
+                            "description": "Identifier of the alert producer.",
+                            "type": "string"
+                          },
+                          "context": {
+                            "$ref": "#/components/schemas/Context"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "id": {
+                            "$ref": "#/components/schemas/uuid"
+                          },
+                          "details": {
+                            "description": "Alert type specific payload",
+                            "type": "object",
+                            "required": [
+                              "resource",
+                              "emailSubject",
+                              "scanResult",
+                              "emailFrom",
+                              "detectionCategory"
+                            ],
+                            "properties": {
+                              "resource": {
+                                "description": "Mailbox name",
+                                "type": "string"
+                              },
+                              "emailSubject": {
+                                "type": "string"
+                              },
+                              "scanResult": {
+                                "type": "string"
+                              },
+                              "emailFrom": {
+                                "type": "string"
+                              },
+                              "detectionCategory": {
+                                "description": "Phishing, spam, malware, BEC, etc.",
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "tenantID": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "description": "Alert severity level.",
+                            "enum": [
+                              "ok",
+                              "information",
+                              "warning",
+                              "error",
+                              "critical"
+                            ],
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Alert type",
+                            "enum": [
+                              "MaliciousEmailDetectedPerceptionPointError"
+                            ],
+                            "type": "string"
+                          },
+                          "affinity": {
+                            "description": "Alert synchronization affinity (e.g., agent ID).",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "description": "An alert that is raised if Perception Point email security has detected a suspicious email message.",
+                        "type": "object",
+                        "required": [
+                          "details",
+                          "type"
+                        ],
+                        "properties": {
+                          "_sourceTimeStamp": {
+                            "type": "integer",
+                            "format": "int64"
+                          },
+                          "_source": {
+                            "description": "Identifier of the alert producer.",
+                            "type": "string"
+                          },
+                          "context": {
+                            "$ref": "#/components/schemas/Context"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "id": {
+                            "$ref": "#/components/schemas/uuid"
+                          },
+                          "details": {
+                            "description": "Alert type specific payload",
+                            "type": "object",
+                            "required": [
+                              "resource",
+                              "emailSubject",
+                              "scanResult",
+                              "emailFrom",
+                              "detectionCategory"
+                            ],
+                            "properties": {
+                              "resource": {
+                                "description": "Mailbox name",
+                                "type": "string"
+                              },
+                              "emailSubject": {
+                                "type": "string"
+                              },
+                              "scanResult": {
+                                "type": "string"
+                              },
+                              "emailFrom": {
+                                "type": "string"
+                              },
+                              "detectionCategory": {
+                                "description": "Phishing, spam, malware, BEC, etc.",
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "tenantID": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "description": "Alert severity level.",
+                            "enum": [
+                              "ok",
+                              "information",
+                              "warning",
+                              "error",
+                              "critical"
+                            ],
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Alert type",
+                            "enum": [
+                              "MaliciousEmailDetectedPerceptionPointWarning"
+                            ],
+                            "type": "string"
+                          },
+                          "affinity": {
+                            "description": "Alert synchronization affinity (e.g., agent ID).",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "description": "No backup for X days.\n",
+                    "type": "object",
+                    "required": [
+                      "details",
+                      "type"
+                    ],
+                    "properties": {
+                      "_sourceTimeStamp": {
+                        "type": "integer",
+                        "format": "int64"
+                      },
+                      "_source": {
+                        "description": "Identifier of the alert producer.",
+                        "type": "string"
+                      },
+                      "context": {
+                        "$ref": "#/components/schemas/Context"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "id": {
+                        "$ref": "#/components/schemas/uuid"
+                      },
+                      "details": {
+                        "description": "Alert type specific payload",
+                        "type": "object",
+                        "required": [
+                          "resourceId",
+                          "planId",
+                          "daysPassed"
+                        ],
+                        "properties": {
+                          "planName": {
+                            "type": "string"
+                          },
+                          "errorMessage": {
+                            "type": "object"
+                          },
+                          "resourceId": {
+                            "type": "string"
+                          },
+                          "resourceName": {
+                            "type": "string"
+                          },
+                          "planId": {
+                            "type": "string"
+                          },
+                          "daysPassed": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "tenantID": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "description": "Alert severity level.",
+                        "enum": [
+                          "ok",
+                          "information",
+                          "warning",
+                          "error",
+                          "critical"
+                        ],
+                        "type": "string"
+                      },
+                      "type": {
+                        "description": "Alert type",
+                        "enum": [
+                          "NoBackupForXDays"
+                        ],
+                        "type": "string"
+                      },
+                      "affinity": {
+                        "description": "Alert synchronization affinity (e.g., agent ID).",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "description": "Generic alert with arbitrary payload",
+                    "type": "object",
+                    "required": [
+                      "details",
+                      "type"
+                    ],
+                    "properties": {
+                      "_sourceTimeStamp": {
+                        "type": "integer",
+                        "format": "int64"
+                      },
+                      "_source": {
+                        "description": "Identifier of the alert producer.",
+                        "type": "string"
+                      },
+                      "context": {
+                        "$ref": "#/components/schemas/Context"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "id": {
+                        "$ref": "#/components/schemas/uuid"
+                      },
+                      "details": {
+                        "description": "Alert type specific payload",
+                        "type": "object"
+                      },
+                      "tenantID": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "description": "Alert severity level.",
+                        "enum": [
+                          "ok",
+                          "information",
+                          "warning",
+                          "error",
+                          "critical"
+                        ],
+                        "type": "string"
+                      },
+                      "type": {
+                        "description": "Alert type",
+                        "type": "string"
+                      },
+                      "affinity": {
+                        "description": "Alert synchronization affinity (e.g., agent ID).",
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ID of the created alert.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertID"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Alert is invalid, e.g. incompatible with the alert type definition.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch all alerts",
+        "description": "Fetches all alerts by optional filtering parameters.",
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "A limit on number of objects to be returned.",
+            "in": "query",
+            "schema": {
+              "description": "A limit on number of objects to be returned.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "skip",
+            "description": "IDs of the alerts to exclude from the response.",
+            "in": "query",
+            "schema": {
+              "description": "IDs of the alerts to exclude from the response.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/uuid"
+              }
+            }
+          },
+          {
+            "name": "deleted_at",
+            "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "id",
+            "description": "Case-insensitive IDs of the alerts to return in the results.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive IDs of the alerts to return in the results.",
+              "example": [
+                "c106fd7b-338b-4635-8e61-31f6255482d5",
+                "f71fdcdb-fc43-4b2f-9830-c53fb213de7b"
+              ],
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/uuid"
+              }
+            }
+          },
+          {
+            "name": "query",
+            "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "severity",
+            "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+              "enum": [
+                "ok",
+                "information",
+                "warning",
+                "error",
+                "critical"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "show_deleted",
+            "description": "If true, dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "show_deleted_only",
+            "description": "If true, only dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, only dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "source",
+            "description": "A filter by the alert producer.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert producer.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source_time_stamp",
+            "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "updated_at",
+            "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "created_at",
+            "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "category",
+            "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planId",
+            "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planName",
+            "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "tenant",
+            "description": "A filter by the alert tenant ID.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert tenant ID.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "order",
+            "description": "An ordering filter that orders the results by parameter value.\nIf no operator provided, the results will be ordered in ascending order.\n\nFollowing parameters can be used:\n\n* `created_at`\n* `type`\n* `severity`\n* `source`\n* `source_time_stamp`\n* `updated_at`\n* `deleted_at`\n* `category`\n* `planId`\n* `planName`\n* `resourceId`\n* `resourceName`\n\nAvailable operators:\n\n* `asc` - ascending\n* `desc` - descending\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "An ordering filter that orders the results by parameter value.\nIf no operator provided, the results will be ordered in ascending order.\n\nFollowing parameters can be used:\n\n* `created_at`\n* `type`\n* `severity`\n* `source`\n* `source_time_stamp`\n* `updated_at`\n* `deleted_at`\n* `category`\n* `planId`\n* `planName`\n* `resourceId`\n* `resourceName`\n\nAvailable operators:\n\n* `asc` - ascending\n* `desc` - descending\n",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of alerts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "id": "01C2D69A-112B-4DE1-98AE-8688223C5F4B",
+                        "type": "BackupFailed",
+                        "details": {
+                          "activity": {
+                            "id": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+                          },
+                          "activityId": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+                        },
+                        "createdAt": "2021-04-05T20:41:41Z",
+                        "_source": "6852F263-2B5E-48BF-B78B-486182D9BDBE",
+                        "_sourceTimeStamp": 3246,
+                        "severity": "critical",
+                        "receivedAt": "2021-04-01T22:16:19.71025511Z",
+                        "updatedAt": "2021-04-05T20:41:42.352636392Z",
+                        "tenant": {
+                          "id": "56",
+                          "locator": "/1/50/53/56/"
+                        },
+                        "category": "Backup"
+                      },
+                      {
+                        "id": "BACA9625-A993-4722-B03F-F2807C85E76F",
+                        "type": "DrInternetTrafficUnblocked",
+                        "details": {},
+                        "createdAt": "2021-04-05T23:41:55.089638934Z",
+                        "severity": "warning",
+                        "receivedAt": "2021-04-05T23:41:55.089638324Z",
+                        "updatedAt": "2021-04-05T23:41:55.089638934Z",
+                        "tenant": {
+                          "id": "1",
+                          "locator": "/1/"
+                        },
+                        "category": "Disaster recovery"
+                      },
+                      {
+                        "id": "CBE8B43A-70C9-4343-B942-82D56E34FDF0",
+                        "type": "DrInternetTrafficUnblocked",
+                        "details": {},
+                        "createdAt": "2021-04-01T14:19:32.202462769Z",
+                        "severity": "warning",
+                        "receivedAt": "2021-04-01T14:19:32.202461826Z",
+                        "updatedAt": "2021-04-01T14:19:32.202462769Z",
+                        "tenant": {
+                          "id": "1",
+                          "locator": "/1/"
+                        },
+                        "category": "Disaster recovery"
+                      }
+                    ],
+                    "paging": {
+                      "cursors": {}
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AlertView"
+                      }
+                    },
+                    "paging": {
+                      "$ref": "#/components/schemas/paging"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Dismiss the alerts by filter",
+        "description": "Dismisses the alerts by optional filtering parameters. Alerts will be dismissed even if they have the `orphaned` flag.\nNote that if no filter is provided all alerts within the tenant scope will be dismissed.\n",
+        "parameters": [
+          {
+            "name": "deleted_at",
+            "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "id",
+            "description": "Case-insensitive IDs of the alerts to return in the results.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive IDs of the alerts to return in the results.",
+              "example": [
+                "c106fd7b-338b-4635-8e61-31f6255482d5",
+                "f71fdcdb-fc43-4b2f-9830-c53fb213de7b"
+              ],
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/uuid"
+              }
+            }
+          },
+          {
+            "name": "query",
+            "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "severity",
+            "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+              "enum": [
+                "ok",
+                "information",
+                "warning",
+                "error",
+                "critical"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "show_deleted",
+            "description": "If true, dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "show_deleted_only",
+            "description": "If true, only dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, only dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "source",
+            "description": "A filter by the alert producer.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert producer.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source_time_stamp",
+            "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "updated_at",
+            "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "created_at",
+            "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "category",
+            "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planId",
+            "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planName",
+            "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alerts were successfully dismissed.",
+            "content": {}
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/alerts/{id}": {
+      "get": {
+        "operationId": "Fetch an alert by ID",
+        "description": "Fetches the information about the alert by ID.",
+        "parameters": [
+          {
+            "name": "show_deleted",
+            "description": "If true, dismissed alerts will be included in the response.",
+            "in": "query",
+            "schema": {
+              "description": "If true, dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "id",
+            "description": "ID of an alert.",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "ID of an alert.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert has been fetched successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Dismiss an alert by ID",
+        "description": "Dismisses an alert by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "ID of an alert.",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "ID of an alert.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alert was successfully dismissed.",
+            "content": {}
+          },
+          "400": {
+            "description": "Invalid UUID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/categories": {
+      "get": {
+        "operationId": "Fetch categories",
+        "description": "Fetches a list of enabled categories.",
+        "parameters": [
+          {
+            "name": "include_disabled",
+            "description": "If true, both enabled and disabled categories are returned.",
+            "in": "query",
+            "schema": {
+              "description": "If true, both enabled and disabled categories are returned.",
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of categories.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "name": "Backup"
+                      },
+                      {
+                        "name": "cti.a.p.am.alert.category.v1.0~a.test.category.v1.0",
+                        "alias": "test category"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/count": {
+      "get": {
+        "operationId": "Fetch alert counters",
+        "description": "Fetches the alert counters that may be grouped by optional parameters.",
+        "parameters": [
+          {
+            "name": "embed_tenants",
+            "description": "If true, alert counters will be grouped by tenants.",
+            "in": "query",
+            "schema": {
+              "description": "If true, alert counters will be grouped by tenants.",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "embed_types",
+            "description": "If true, alert counters will be grouped by alert types. When combined with `embed_severities` alert counters will be grouped first by severities and then by types. This parameter is mutually exclusive with the `embed_categories` parameter.\n",
+            "in": "query",
+            "schema": {
+              "description": "If true, alert counters will be grouped by alert types. When combined with `embed_severities` alert counters will be grouped first by severities and then by types. This parameter is mutually exclusive with the `embed_categories` parameter.\n",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "embed_severities",
+            "description": "If true, alert counters will be grouped by alert severities. When combined with `embed_types` alert counters will be grouped first by severities and then by types. This parameter is mutually exclusive with the `embed_categories` parameter.\n",
+            "in": "query",
+            "schema": {
+              "description": "If true, alert counters will be grouped by alert severities. When combined with `embed_types` alert counters will be grouped first by severities and then by types. This parameter is mutually exclusive with the `embed_categories` parameter.\n",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "embed_categories",
+            "description": "If true, alert counters will be grouped by alert categories. This parameter is mutually exclusive with the `embed_types` and `embed_severities` parameters.\n",
+            "in": "query",
+            "schema": {
+              "description": "If true, alert counters will be grouped by alert categories. This parameter is mutually exclusive with the `embed_types` and `embed_severities` parameters.\n",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live statistics for current alerts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "Fetch alerts grouped by scope",
+        "description": "Returns the last of the most critical alerts grouped by selected scope.",
+        "parameters": [
+          {
+            "name": "scope_key",
+            "description": "Groups the results by the context key or searchable details.\nSee registered alert types for available context keys and searchable details.\n",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Groups the results by the context key or searchable details.\nSee registered alert types for available context keys and searchable details.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope_value",
+            "description": "Scope values to filter alerts by.\nIf omitted, the response will contain the last most critical status among available alerts.\n\nClient may group statuses for multiple scope values by using the `or()` operator:\n* Example: `scope_key=KEY&scope_value=VAL1&scope_value=VAL2` - looks for two statuses\n* Example: `scope_key=KEY&scope_value=or(VAL1,VAL2)` - looks for single status\n* Example: `scope_key=KEY&scope_value=or(VAL1,VAL2)&scope_value=VAL3` - looks for two statuses\n\nClient should explicitly url-encode values breaking URL syntax.\nFor example, to find a status of the resource with the `stepName` key containing `step 01` or `step 02`: `scope_key=stepName&scope_value=or(step%201,step%202)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Scope values to filter alerts by.\nIf omitted, the response will contain the last most critical status among available alerts.\n\nClient may group statuses for multiple scope values by using the `or()` operator:\n* Example: `scope_key=KEY&scope_value=VAL1&scope_value=VAL2` - looks for two statuses\n* Example: `scope_key=KEY&scope_value=or(VAL1,VAL2)` - looks for single status\n* Example: `scope_key=KEY&scope_value=or(VAL1,VAL2)&scope_value=VAL3` - looks for two statuses\n\nClient should explicitly url-encode values breaking URL syntax.\nFor example, to find a status of the resource with the `stepName` key containing `step 01` or `step 02`: `scope_key=stepName&scope_value=or(step%201,step%202)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert list grouped by scopes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "scope": {
+                          "resourceId": "0A0E639A-4E27-4C61-AFFF-7BE314C30A33"
+                        },
+                        "status": {
+                          "id": "01C2D69A-112B-4DE1-98AE-8688223C5F4B",
+                          "type": "BackupFailed",
+                          "severity": "critical",
+                          "details": {
+                            "activity": {
+                              "id": "1F80FCFF-B72F-492E-8A9D-C01457FF505A",
+                              "type": "8F01AC13-F59E-4851-9204-DE1FD77E36B4"
+                            },
+                            "activityId": "1F80FCFF-B72F-492E-8A9D-C01457FF505A",
+                            "resourceId": "0A0E639A-4E27-4C61-AFFF-7BE314C30A33",
+                            "resourceName": "DESKTOP-GCNCFC8"
+                          },
+                          "createdAt": "2021-04-01T22:16:19Z"
+                        }
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ScopeStatus"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Too many scope values.\nFor cloud deployment there is no practical limitation.\nFor on-premise deployment known limits imposed by database engine are 32766 for SQLite and more than 32768 for MS SQL Server.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/types": {
+      "get": {
+        "operationId": "Fetch all alert types",
+        "description": "Fetches all registered alert types.",
+        "parameters": [
+          {
+            "name": "category",
+            "description": "A filter by list of type categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of type categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "os_type",
+            "description": "A filter by the list of operating systems supported by the alert types.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the list of operating systems supported by the alert types.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/OSType"
+              }
+            }
+          },
+          {
+            "name": "order",
+            "description": "An ordering filter that orders the results by column name.\nIf no operator provided, the column will be ordered in ascending order.\n\nFollowing columns can be used:\n\n* `id`\n* `severity`\n* `category`\n\nAvailable operators:\n\n* `asc` - ascending\n* `desc` - descending\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "An ordering filter that orders the results by column name.\nIf no operator provided, the column will be ordered in ascending order.\n\nFollowing columns can be used:\n\n* `id`\n* `severity`\n* `category`\n\nAvailable operators:\n\n* `asc` - ascending\n* `desc` - descending\n",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of registered alerts types.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "id": "BackupFailed",
+                        "severity": "critical",
+                        "enabled": true,
+                        "contextKeys": [
+                          "planId",
+                          "resourceId"
+                        ],
+                        "searchableDetails": [
+                          "planName",
+                          "resourceName"
+                        ],
+                        "supportedOS": [
+                          "ios",
+                          "linux",
+                          "macos",
+                          "windows"
+                        ],
+                        "category": "Backup",
+                        "cti_name": "cti.a.p.am.alerts.v1.0~a.backup.failed.v1.0"
+                      },
+                      {
+                        "id": "cti.a.p.am.alert.v1.0~a.test.type.v1.0",
+                        "severity": "error",
+                        "enabled": true,
+                        "contextKeys": [],
+                        "searchableDetails": [],
+                        "supportedOS": [
+                          "ios",
+                          "linux",
+                          "macos",
+                          "windows"
+                        ],
+                        "category": "cti.a.p.am.alert.category.v1.0~a.test.category.v1.0",
+                        "cti_name": "cti.a.p.am.alert.v1.0~a.test.type.v1.0",
+                        "alias": "test type"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Type"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "operationId": "Register new alert type",
+        "description": "Registers a new alert type.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "A list of types to register.",
+                "example": {
+                  "items": [
+                    {
+                      "id": "BackupFailed",
+                      "severity": "critical",
+                      "enabled": true,
+                      "contextKeys": [
+                        "planId",
+                        "resourceId"
+                      ],
+                      "searchableDetails": [
+                        "planName",
+                        "resourceName"
+                      ],
+                      "exportable": [
+                        {
+                          "name": "planId",
+                          "acep_name": "plan_id"
+                        },
+                        {
+                          "name": "resourceId",
+                          "acep_name": "resource_id"
+                        },
+                        {
+                          "name": "errorMessage",
+                          "acep_name": "error_reason",
+                          "acep_path": "reason"
+                        },
+                        {
+                          "name": "planName",
+                          "acep_name": "plan_name"
+                        },
+                        {
+                          "name": "taskType",
+                          "acep_name": "task_type"
+                        }
+                      ],
+                      "supportedOS": [
+                        "ios",
+                        "linux",
+                        "macos",
+                        "windows"
+                      ],
+                      "category": "Backup",
+                      "cti_name": "cti.a.p.am.alerts.v1.0~a.backup.failed.v1.0"
+                    }
+                  ]
+                },
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Type"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alert types were successfully registered.",
+            "content": {}
+          },
+          "400": {
+            "description": "Input parameters error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/types/{id}": {
+      "get": {
+        "operationId": "Fetch an alert type by ID",
+        "description": "Fetch registered alert type by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "ID of an alert type.",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "ID of an alert type.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert type was successfully fetched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Type"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert type was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Unregister an alert type by ID",
+        "description": "Unregisters the alert type. All alerts of this type will be disabled.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "ID of an alert type.",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "ID of an alert type.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alert type was successfully unregistered.",
+            "content": {}
+          },
+          "404": {
+            "description": "Alert type was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/resource_status": {
+      "get": {
+        "operationId": "Fetch resources containing the highest severity alerts",
+        "description": "Fetches the resources' statuses that contain the alerts with the highest severity found for the resources. \nResource with ID that was not found in `resourceId` parameter of any active alert considered to have the \"ok\" severity.\n\nThis endpoint may return multiple records for the same resource if it has multiple alerts with the same severity and the same creation time.\n",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "IDs of the resources; if omitted, the response will contain statuses for all resources that have alerts.\n\nFor resources with multiple IDs, the client must specify resource's IDs by using the `or()` operator:\n\n* Example: `id=or(ID3,ID4,ID5)` - looks for status of a single resource\n\n* Example: `id=ID1&id=or(ID3,ID4,ID5)&id=or(ID6,ID7)&id=ID8` - looks for status of four resources\n",
+            "in": "query",
+            "schema": {
+              "description": "IDs of the resources; if omitted, the response will contain statuses for all resources that have alerts.\n\nFor resources with multiple IDs, the client must specify resource's IDs by using the `or()` operator:\n\n* Example: `id=or(ID3,ID4,ID5)` - looks for status of a single resource\n\n* Example: `id=ID1&id=or(ID3,ID4,ID5)&id=or(ID6,ID7)&id=ID8` - looks for status of four resources\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "embed_alert",
+            "description": "If true, the entire alert object will be included in the response.",
+            "in": "query",
+            "schema": {
+              "description": "If true, the entire alert object will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of alert grouping by resource IDs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "id": "0A0E639A-4E27-4C61-AFFF-7BE314C30A33",
+                        "severity": "critical",
+                        "alert": {
+                          "id": "01C2D69A-112B-4DE1-98AE-8688223C5F4B",
+                          "type": "BackupFailed",
+                          "createdAt": "2021-04-02T22:16:16Z",
+                          "severity": "critical",
+                          "receivedAt": "2021-04-01T22:16:19.71025511Z",
+                          "updatedAt": "2021-04-02T22:16:16.426961168Z",
+                          "tenant": {
+                            "id": "56",
+                            "locator": "/1/10/20/30/"
+                          },
+                          "details": {
+                            "activity": {
+                              "id": "9C3DE32F-DCB3-4106-9988-56BFF5A64D98",
+                              "type": "8F01AC13-F59E-4851-9204-DE1FD77E36B4"
+                            }
+                          },
+                          "category": "Backup"
+                        }
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ResourceStatus"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Too many resource IDs.\nFor cloud deployment there is no limitation.\nFor on-premise deployment known limits imposed by database engine are 32766 for SQLite and 2100 for MS SQL Server.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/customer_alerts_count": {
+      "get": {
+        "operationId": "Fetch partner's customer alerts count",
+        "description": "Fetches count of alerts per customer. \nThis API uses extended barrier mode by default.\nResponse does not include customers with no alerts.\n",
+        "parameters": [
+          {
+            "name": "deleted_at",
+            "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "id",
+            "description": "Case-insensitive IDs of the alerts to return in the results.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive IDs of the alerts to return in the results.",
+              "example": [
+                "c106fd7b-338b-4635-8e61-31f6255482d5",
+                "f71fdcdb-fc43-4b2f-9830-c53fb213de7b"
+              ],
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/uuid"
+              }
+            }
+          },
+          {
+            "name": "query",
+            "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "severity",
+            "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+              "enum": [
+                "ok",
+                "information",
+                "warning",
+                "error",
+                "critical"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "show_deleted",
+            "description": "If true, dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "show_deleted_only",
+            "description": "If true, only dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, only dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "source",
+            "description": "A filter by the alert producer.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert producer.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source_time_stamp",
+            "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "updated_at",
+            "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "created_at",
+            "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "category",
+            "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planId",
+            "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planName",
+            "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of customer alerts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "customer_id": "14",
+                        "customer_name": "John Dow and Sons",
+                        "parents": [
+                          "Backup Solutions Inc",
+                          "London",
+                          "John Dow and Sons"
+                        ],
+                        "alerts_count": 2
+                      },
+                      {
+                        "customer_id": "22",
+                        "customer_name": "Jane Smith",
+                        "parents": [
+                          "Backup Solutions Inc",
+                          "Manchester",
+                          "Jane Smith"
+                        ],
+                        "alerts_count": 1
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CustomerAlertCount"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/customer_alerts": {
+      "get": {
+        "operationId": "Fetch alerts grouped per customer",
+        "description": "Fetches alerts of the specified customers.\nThis API uses extended barrier mode by default.\n",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "description": "IDs of the customers whose alerts must be returned.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "IDs of the customers whose alerts must be returned.",
+              "example": [
+                "14",
+                "22"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "deleted_at",
+            "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "id",
+            "description": "Case-insensitive IDs of the alerts to return in the results.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive IDs of the alerts to return in the results.",
+              "example": [
+                "c106fd7b-338b-4635-8e61-31f6255482d5",
+                "f71fdcdb-fc43-4b2f-9830-c53fb213de7b"
+              ],
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/uuid"
+              }
+            }
+          },
+          {
+            "name": "query",
+            "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A text to search for within `planName` or `resourceName` fields of the alerts. The search is case-insensitive.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "severity",
+            "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert severity.\n\nAvailable operators:\n\n* `eq` - equals to the specified value: eq(warning)\n* `or` - equals to one of the specified values: or(warning,critical)\n* `lt` - less than the specified value: lt(warning)\n* `gt` - greater than the specified value: gt(warning)\n* `le` - less than or equals to the specified value: le(warning)\n* `ge` - greater than or equals to the specified value: ge(warning)\n",
+              "enum": [
+                "ok",
+                "information",
+                "warning",
+                "error",
+                "critical"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "show_deleted",
+            "description": "If true, dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "show_deleted_only",
+            "description": "If true, only dismissed alerts will be included in the response.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, only dismissed alerts will be included in the response.",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "source",
+            "description": "A filter by the alert producer.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by the alert producer.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source_time_stamp",
+            "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by timestamp that was provided by an alert producer.\nThe timestamp may be an arbitrary integer value.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert types. A list of registered types can be obtained by sending a GET request to the `/types` endpoint.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "updated_at",
+            "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created or dismissed. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "created_at",
+            "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by date when the alert was created. Must be a Unix timestamp in nanoseconds.\n\nAvailable operators:\n\n* `eq` - equals\n* `lt` - less than\n* `gt` - greater than\n* `le` - less than or equals\n* `ge` - greater than or equals\n",
+              "type": "string",
+              "pattern": "^([0-9]+)|(eq\\([0-9]+\\))$|(le\\([0-9]+\\))|(lt\\([0-9]+\\))|(gt\\([0-9]+\\))|(ge\\([0-9]+\\))$"
+            }
+          },
+          {
+            "name": "category",
+            "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "A filter by list of alert categories. A list of registered categories can be obtained by sending a GET request to the `/categories` endpoint.\n\n* Example: `category=Backup&category=Monitoring`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planId",
+            "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan IDs.\n\nThe following rules are applied:\n* planId=BackupPlan01 - matches the exact `BackupPlan01` string in the corresponding parameter\n* planId=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planId=A1111&planId=B2222`\n          `planId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource IDs.\n\nThe following rules are applied:\n* resourceId=FileResource01 - matches the exact `FileResource01` string in the corresponding parameter\n* resourceId=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceId=A1111&resourceId=B2222`\n          `resourceId=or(A1111,B2222)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "planName",
+            "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified plan names.\n\nThe following rules are applied:\n* planName=Plan01 - matches the substring `Plan01` in the corresponding parameter\n* planName=eq(BackupPlan01) - matches the exact `BackupPlan01` string in the corresponding parameter\n* planName=or(BackupPlan01,BackupPlan02) - matches the exact `BackupPlan01` or `BackupPlan02` strings in the corresponding parameter\n\nExamples: `planName=Plan1&planName=eq(BackupPlan2)`\n          `planName=Plan1&planName=or(BackupPlan2,BackupPlan3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Case-insensitive filter for alerts with the specified resource names.\n\nThe following rules are applied:\n* resourceName=Resource01 - matches the substring `Resource01` in the corresponding parameter\n* resourceName=eq(FileResource01) - matches the exact `FileResource01` string in the corresponding parameter\n* resourceName=or(FileResource01,FileResource02) - matches the exact `FileResource01` or `FileResource02` strings in the corresponding parameter\n\nExamples: `resourceName=Resource1&resourceName=eq(FileResource2)`\n          `resourceName=Resource1&resourceName=or(FileResource2,FileResource3)`\n",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of customer alerts grouped per customer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "items": [
+                      {
+                        "customer_id": "14",
+                        "alerts": [
+                          {
+                            "id": "01C2D69A-112B-4DE1-98AE-8688223C5F4B",
+                            "type": "BackupFailed",
+                            "details": {
+                              "activity": {
+                                "id": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+                              },
+                              "activityId": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+                            },
+                            "createdAt": "2021-04-05T20:41:41Z",
+                            "_source": "6852F263-2B5E-48BF-B78B-486182D9BDBE",
+                            "_sourceTimeStamp": 3246,
+                            "severity": "critical",
+                            "receivedAt": "2021-04-01T22:16:19.71025511Z",
+                            "updatedAt": "2021-04-05T20:41:42.352636392Z",
+                            "tenant": {
+                              "id": "56",
+                              "locator": "/1/3/14/56/"
+                            },
+                            "category": "Backup"
+                          }
+                        ]
+                      },
+                      {
+                        "customer_id": "22",
+                        "alerts": [
+                          {
+                            "id": "BACA9625-A993-4722-B03F-F2807C85E76F",
+                            "type": "DrInternetTrafficUnblocked",
+                            "details": {},
+                            "createdAt": "2021-04-05T23:41:55.089638934Z",
+                            "severity": "warning",
+                            "receivedAt": "2021-04-05T23:41:55.089638324Z",
+                            "updatedAt": "2021-04-05T23:41:55.089638934Z",
+                            "tenant": {
+                              "id": "88",
+                              "locator": "/1/3/22/88"
+                            },
+                            "category": "Disaster recovery"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CustomerAlerts"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/stats": {
+      "get": {
+        "operationId": "Get count of active alerts and last modification time",
+        "description": "Returns count of active alerts and last modification time.\n",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Statistics"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/alerts/{id}/false_positive": {
+      "patch": {
+        "operationId": "Mark alert as false positive",
+        "description": "Marks or unmarks alert as false positive.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "ID of an alert.",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "ID of an alert.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "payload",
+                "example": {
+                  "falsePositive": true
+                },
+                "type": "object",
+                "required": [
+                  "falsePositive"
+                ],
+                "properties": {
+                  "falsePositive": {
+                    "description": "a false positive flag value for the specified alert",
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "alert successfully marked",
+            "content": {}
+          },
+          "400": {
+            "description": "Alert id or request body is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request is refused because authentication parameters are invalid.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "example": "<html>\n  <head>\n    <title>401 Authorization Required</title>\n  </head>\n  <body>\n    <center>\n      <h1>401 Authorization Required</h1>\n    </center>\n    <hr>\n    <center>nginx</center>\n  </body>\n</html>\n"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A security error due to an issue with tenant security claim: invalid tenant in the access token, tenant resolution failed and etc.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": [
+              "urn:acronis.com::alert_manager::admin"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "x-roles": [
+    {
+      "name": "public",
+      "id": "1",
+      "description": "public role",
+      "x-tags": [
+        "public"
+      ]
+    },
+    {
+      "name": "private",
+      "id": "2",
+      "description": "private role",
+      "x-tags": [
+        "private"
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Context": {
+        "description": "**Deprecated.** Value of unique key for alerts with current type.\nParameters of object can be only strings.\nVariable structure of context is specified with custom types.\n",
+        "type": "object"
+      },
+      "uuid": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "AlertID": {
+        "example": {
+          "id": "BACA9625-A993-4722-B03F-F2807C85E76F"
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          }
+        }
+      },
+      "Error": {
+        "description": "Base error object",
+        "type": "object",
+        "required": [
+          "domain",
+          "code"
+        ],
+        "properties": {
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "type": "string"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "kbLink": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          }
+        }
+      },
+      "paging": {
+        "description": "Paging format.",
+        "type": "object",
+        "required": [
+          "cursors"
+        ],
+        "properties": {
+          "cursors": {
+            "$ref": "#/components/schemas/cursors"
+          }
+        }
+      },
+      "AlertView": {
+        "description": "View of alert in responses.",
+        "example": {
+          "id": "01C2D69A-112B-4DE1-98AE-8688223C5F4B",
+          "type": "BackupFailed",
+          "details": {
+            "activity": {
+              "id": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+            },
+            "activityId": "D028B06E-36D6-43FF-9242-35E8A9917E3A"
+          },
+          "createdAt": "2021-04-05T20:41:41Z",
+          "_source": "6852F263-2B5E-48BF-B78B-486182D9BDBE",
+          "_sourceTimeStamp": 3246,
+          "severity": "critical",
+          "receivedAt": "2021-04-01T22:16:19.71025511Z",
+          "updatedAt": "2021-04-05T20:41:42.352636392Z",
+          "tenant": {
+            "id": "56",
+            "locator": "/1/50/53/56/"
+          },
+          "category": "Backup"
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "createdAt",
+          "details",
+          "receivedAt",
+          "tenant",
+          "updatedAt",
+          "category"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "severity": {
+            "description": "Alert severity level.",
+            "enum": [
+              "ok",
+              "information",
+              "warning",
+              "error",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "affinity": {
+            "description": "Alert synchronization affinity (e.g., agent ID).",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "A client-side date and time when alert was created. Equals to the `receivedAt` field if not set by client.",
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+          },
+          "deletedAt": {
+            "description": "A date and time when the alert was dismissed.",
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+          },
+          "details": {
+            "description": "Copy of context is merged to details.\nNull if details and context are empty.\n",
+            "type": "object"
+          },
+          "receivedAt": {
+            "description": "A server-side date and time when the alert was received.",
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+          },
+          "_source": {
+            "description": "An identifier of the alert producer.",
+            "type": "string"
+          },
+          "_sourceTimeStamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant": {
+            "type": "object",
+            "required": [
+              "id",
+              "locator"
+            ],
+            "properties": {
+              "id": {
+                "description": "An identifier of the alert owner.",
+                "type": "string"
+              },
+              "locator": {
+                "description": "Ascending hierarchy of tenant IDs separated by '/'.",
+                "example": "/1/2/3/",
+                "type": "string"
+              }
+            }
+          },
+          "updatedAt": {
+            "description": "A date and time when the alert has been activated, deleted or dismissed.",
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+          },
+          "category": {
+            "description": "Alert category.",
+            "type": "string"
+          },
+          "falsePositive": {
+            "description": "Specifies whether alert is false positive or not.",
+            "type": "boolean"
+          }
+        }
+      },
+      "Category": {
+        "description": "An information about the alert category or alert type category.",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "alias": {
+            "description": "Alert category name alias.",
+            "type": "string"
+          }
+        }
+      },
+      "Report": {
+        "description": "Count report.",
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "severitiesAndTypes": {
+            "$ref": "#/components/schemas/SeveritiesAndTypesEmbed"
+          },
+          "severities": {
+            "$ref": "#/components/schemas/SeveritiesEmbed"
+          },
+          "categories": {
+            "$ref": "#/components/schemas/CategoriesEmbed"
+          },
+          "types": {
+            "$ref": "#/components/schemas/TypesEmbed"
+          },
+          "tenants": {
+            "description": "A list of alert counters per tenant.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenantCountResult"
+            }
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "ScopeStatus": {
+        "description": "Status of the selected scope.",
+        "type": "object",
+        "required": [
+          "scope",
+          "status"
+        ],
+        "properties": {
+          "scope": {
+            "description": "Value of scope. Contains values of context or searchable details.\n",
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        }
+      },
+      "OSType": {
+        "enum": [
+          "ios",
+          "linux",
+          "macos",
+          "windows"
+        ],
+        "type": "string"
+      },
+      "Type": {
+        "description": "An information about the alert type.",
+        "example": {
+          "id": "BackupFailed",
+          "severity": "critical",
+          "enabled": true,
+          "contextKeys": [
+            "planId",
+            "resourceId"
+          ],
+          "searchableDetails": [
+            "planName",
+            "resourceName"
+          ],
+          "exportable": [
+            {
+              "name": "planId",
+              "acep_name": "plan_id"
+            },
+            {
+              "name": "resourceId",
+              "acep_name": "resource_id"
+            },
+            {
+              "name": "errorMessage",
+              "acep_name": "error_reason",
+              "acep_path": "reason"
+            },
+            {
+              "name": "planName",
+              "acep_name": "plan_name"
+            },
+            {
+              "name": "taskType",
+              "acep_name": "task_type"
+            }
+          ],
+          "supportedOS": [
+            "ios",
+            "linux",
+            "macos",
+            "windows"
+          ],
+          "category": "Backup",
+          "cti_name": "cti.a.p.am.alerts.v1.0~a.backup.failed.v1.0"
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "enabled",
+          "severity",
+          "contextKeys",
+          "searchableDetails",
+          "supportedOS",
+          "category"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Alerts of disabled types are treated as non-existent for any GET request until type is enabled again.",
+            "default": true,
+            "type": "boolean"
+          },
+          "severity": {
+            "description": "Alert severity level.",
+            "enum": [
+              "ok",
+              "information",
+              "warning",
+              "error",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "contextKeys": {
+            "description": "**Deprecated.** A list of context keys that are used for validation of completeness and\ncorrectness of alert context object.\n",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "searchableDetails": {
+            "description": "A list of keys by which the alert type could be found and filtered.\n",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exportable": {
+            "description": "Mapping between `contextKeys` and `acep` field names to allow exporting of the required fields to ACEP.\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ACEPKeyValue"
+            }
+          },
+          "supportedOS": {
+            "description": "A list of operating systems that are supported by the alert type.",
+            "default": [
+              "ios",
+              "linux",
+              "macos",
+              "windows"
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OSType"
+            }
+          },
+          "notificationType": {
+            "description": "If specified, a notification of the specified type will be triggered on alert creation.",
+            "type": "string"
+          },
+          "notificationExtraRecipients": {
+            "description": "A list of additional notification targets that will receive notifications for alerts of this type.\nBy default notification is sent to the alert's tenant and its children.\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationRecipient"
+            }
+          },
+          "category": {
+            "description": "Alert type category.",
+            "type": "string"
+          },
+          "cti_name": {
+            "description": "A cti-name used as an event subject type while sending events to event manager.",
+            "type": "string"
+          },
+          "alias": {
+            "description": "Alert type name alias.",
+            "type": "string"
+          }
+        }
+      },
+      "ResourceStatus": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity"
+        ],
+        "properties": {
+          "id": {
+            "description": "ID of the resource.",
+            "type": "string"
+          },
+          "severity": {
+            "description": "The highest severity of the alert for the resource.",
+            "enum": [
+              "ok",
+              "information",
+              "warning",
+              "error",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "alert": {
+            "description": "The information about the most recent alert with the highest severity.",
+            "type": "object",
+            "required": [
+              "tenant",
+              "id",
+              "createdAt",
+              "updatedAt",
+              "details",
+              "category",
+              "severity",
+              "receivedAt",
+              "type"
+            ],
+            "properties": {
+              "_sourceTimeStamp": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "falsePositive": {
+                "description": "Specifies whether alert is false positive or not.",
+                "type": "boolean"
+              },
+              "_source": {
+                "description": "An identifier of the alert producer.",
+                "type": "string"
+              },
+              "tenant": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "locator"
+                ],
+                "properties": {
+                  "id": {
+                    "description": "An identifier of the alert owner.",
+                    "type": "string"
+                  },
+                  "locator": {
+                    "description": "Ascending hierarchy of tenant IDs separated by '/'.",
+                    "example": "/1/2/3/",
+                    "type": "string"
+                  }
+                }
+              },
+              "id": {
+                "$ref": "#/components/schemas/uuid"
+              },
+              "createdAt": {
+                "description": "A client-side date and time when alert was created. Equals to the `receivedAt` field if not set by client.",
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+              },
+              "updatedAt": {
+                "description": "A date and time when the alert has been activated, deleted or dismissed.",
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+              },
+              "details": {
+                "description": "Copy of context is merged to details.\nNull if details and context are empty.\n",
+                "type": "object"
+              },
+              "category": {
+                "description": "Alert category.",
+                "type": "string"
+              },
+              "severity": {
+                "description": "Alert severity level.",
+                "enum": [
+                  "ok",
+                  "information",
+                  "warning",
+                  "error",
+                  "critical"
+                ],
+                "type": "string"
+              },
+              "deletedAt": {
+                "description": "A date and time when the alert was dismissed.",
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+              },
+              "receivedAt": {
+                "description": "A server-side date and time when the alert was received.",
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+              },
+              "type": {
+                "type": "string"
+              },
+              "affinity": {
+                "description": "Alert synchronization affinity (e.g., agent ID).",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "CustomerAlertCount": {
+        "type": "object",
+        "required": [
+          "customer_id",
+          "customer_name",
+          "parents",
+          "alerts_count"
+        ],
+        "properties": {
+          "customer_id": {
+            "description": "Customer ID.",
+            "type": "string"
+          },
+          "customer_name": {
+            "description": "Customer name.",
+            "type": "string"
+          },
+          "parents": {
+            "description": "List of parent tenant names.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "alerts_count": {
+            "description": "Amount of customer's alerts.",
+            "type": "integer"
+          }
+        }
+      },
+      "CustomerAlerts": {
+        "type": "object",
+        "required": [
+          "customer_id",
+          "alerts"
+        ],
+        "properties": {
+          "customer_id": {
+            "description": "Customer ID.",
+            "type": "string"
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertView"
+            }
+          }
+        }
+      },
+      "Statistics": {
+        "example": {
+          "count": 12044,
+          "modifiedAt": "2022-02-20T16:42:22.270415369Z"
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "description": "Active alerts count.",
+            "type": "integer"
+          },
+          "modifiedAt": {
+            "description": "Most recent alert modification time.",
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+){0,1}(Z|(\\+|-)([01][0-9]|2[0-3]):([0-5][0-9]))$"
+          }
+        }
+      },
+      "kbLinkInfo": {
+        "description": "Components for kblink",
+        "type": "object",
+        "required": [
+          "lineTag",
+          "serCode",
+          "version",
+          "build",
+          "product",
+          "os"
+        ],
+        "properties": {
+          "lineTag": {
+            "type": "string"
+          },
+          "serCode": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "build": {
+            "type": "integer"
+          },
+          "product": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          }
+        }
+      },
+      "debugInfo": {
+        "description": "Error debug information (map type)",
+        "type": "object"
+      },
+      "cursors": {
+        "description": "Cursors before and after the current page.",
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/cursor"
+          },
+          "after": {
+            "$ref": "#/components/schemas/cursor"
+          }
+        }
+      },
+      "SeveritiesAndTypesEmbed": {
+        "description": "Alert counters grouped by severity and then by type.",
+        "type": "object",
+        "required": [
+          "information",
+          "warning",
+          "error",
+          "critical"
+        ],
+        "properties": {
+          "information": {
+            "$ref": "#/components/schemas/CountPerType"
+          },
+          "warning": {
+            "$ref": "#/components/schemas/CountPerType"
+          },
+          "error": {
+            "$ref": "#/components/schemas/CountPerType"
+          },
+          "critical": {
+            "$ref": "#/components/schemas/CountPerType"
+          }
+        }
+      },
+      "SeveritiesEmbed": {
+        "description": "Alert counters per severity.",
+        "type": "object",
+        "required": [
+          "information",
+          "warning",
+          "error",
+          "critical"
+        ],
+        "properties": {
+          "information": {
+            "type": "integer"
+          },
+          "warning": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "integer"
+          },
+          "critical": {
+            "type": "integer"
+          }
+        }
+      },
+      "CategoriesEmbed": {
+        "description": "Alert counters per alert category. Object keys are identifiers of alert\ncategories, values are counters of alerts of these categories.\n",
+        "type": "object"
+      },
+      "TypesEmbed": {
+        "description": "Alert counters per alert type. Object keys are identifiers of alert\ntypes, values are counters of alerts of these types.\n",
+        "type": "object"
+      },
+      "TenantCountResult": {
+        "description": "Alert counters for a tenant.",
+        "type": "object",
+        "required": [
+          "locator",
+          "id",
+          "total"
+        ],
+        "properties": {
+          "locator": {
+            "description": "Locator of a tenant.",
+            "type": "string"
+          },
+          "severitiesAndTypes": {
+            "$ref": "#/components/schemas/SeveritiesAndTypesEmbed"
+          },
+          "severities": {
+            "$ref": "#/components/schemas/SeveritiesEmbed"
+          },
+          "categories": {
+            "$ref": "#/components/schemas/CategoriesEmbed"
+          },
+          "id": {
+            "description": "Identifier of a tenant.",
+            "type": "string"
+          },
+          "types": {
+            "$ref": "#/components/schemas/TypesEmbed"
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "Status": {
+        "description": "Status of any scope that represents the last alert with the highest severity in the scope.\n",
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "createdAt",
+          "details"
+        ],
+        "properties": {
+          "id": {
+            "description": "ID of the alert.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Type of the alert.",
+            "type": "string"
+          },
+          "severity": {
+            "description": "Severity level of the alert.",
+            "enum": [
+              "ok",
+              "information",
+              "warning",
+              "error",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "A date and time when the alert was created.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "description": "Details about the alert.",
+            "type": "object"
+          }
+        }
+      },
+      "ACEPKeyValue": {
+        "description": "Key-value mapping between context fields and ACEP fields.\nIt is mostly for internal use only.\n",
+        "type": "object",
+        "required": [
+          "name",
+          "acep_name"
+        ],
+        "properties": {
+          "name": {
+            "description": "Context field key name.",
+            "type": "string"
+          },
+          "acep_name": {
+            "description": "Alias for corresponding field in ACEP.",
+            "type": "string"
+          },
+          "acep_path": {
+            "description": "If a custom column is JSON data, this property makes possible to export specific field from JSON.\n",
+            "type": "string"
+          }
+        }
+      },
+      "NotificationRecipient": {
+        "enum": [
+          "SIBLINGS",
+          "DIRECT_PARENT",
+          "ALL_PARENTS"
+        ],
+        "type": "string"
+      },
+      "cursor": {
+        "description": "Specific location in some collection.",
+        "type": "string"
+      },
+      "CountPerType": {
+        "description": "Alert counters per type while grouping by severity as well.",
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "types": {
+            "$ref": "#/components/schemas/TypesEmbed"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth_2_0": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 security scheme definition for a user authorization.",
+        "flows": {
+          "clientCredentials": {
+            "scopes": {
+              "urn:acronis.com::alert_manager::admin": "",
+              "urn:acronis.com::alert_manager::viewer": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "password": {
+            "scopes": {
+              "urn:acronis.com::alert_manager::admin": "",
+              "urn:acronis.com::alert_manager::viewer": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "authorizationCode": {
+            "scopes": {
+              "urn:acronis.com::alert_manager::admin": "",
+              "urn:acronis.com::alert_manager::viewer": ""
+            },
+            "authorizationUrl": "https://dev-cloud.acronis.com/api/2/idp/authorize",
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/alert_manager/v1",
+      "variables": {}
+    }
+  ]
+}

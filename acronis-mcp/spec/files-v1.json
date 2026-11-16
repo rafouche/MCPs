@@ -1,0 +1,5141 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "File Sync & Share API",
+    "version": "v1"
+  },
+  "paths": {
+    "/audit_log": {
+      "get": {
+        "operationId": "Get audit log entries list",
+        "description": "Gets a list of audit log entries",
+        "parameters": [
+          {
+            "name": "filter_user",
+            "description": "Filter by user UUID\n\nSet to `\"-\"` to return log entries not associated with a user",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by user UUID\n\nSet to `\"-\"` to return log entries not associated with a user",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter_share",
+            "description": "Filter by shared folder UUID\n\nSet to `\"-\"` to return log entries not associated with a shared folder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by shared folder UUID\n\nSet to `\"-\"` to return log entries not associated with a shared folder",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter_node_uuid",
+            "description": "Filter by node UUID\n\nSet to `\"-\"` to return log entries not associated with a node",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by node UUID\n\nSet to `\"-\"` to return log entries not associated with a node",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter_severity",
+            "description": "Filter by severity level\n\nSeverity levels are:\n\n- `1` - Info\n- `2` - Warning\n- `3` - Error\n- `4` - Fatal",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by severity level\n\nSeverity levels are:\n\n- `1` - Info\n- `2` - Warning\n- `3` - Error\n- `4` - Fatal",
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ],
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filter_text",
+            "description": "Filter by text",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by text",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter_from",
+            "description": "Filter by date and time (on or after the specified datetime)",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by date and time (on or after the specified datetime)",
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "filter_to",
+            "description": "Filter by date and time (on or before the specified datetime)",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "Filter by date and time (on or before the specified datetime)",
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "per_page",
+            "description": "The number of items to be retrieved",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The number of items to be retrieved",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "description": "The page to return\n\nStarts from 1",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The page to return\n\nStarts from 1",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": [
+                    {
+                      "uuid": "2057c38b-4dba-4fb3-bc83-f77562cac980",
+                      "code": 0,
+                      "created_at": "2019-06-25T13:25:36Z",
+                      "text": "Added new file 'file.txt'.",
+                      "severity": 1,
+                      "node_uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "node": {
+                        "uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                        "name": "file.txt"
+                      },
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    },
+                    {
+                      "uuid": "c94ad17d-5727-41d9-ab15-cfc72349e555",
+                      "code": 0,
+                      "created_at": "2019-06-25T12:46:56Z",
+                      "text": "Added new share 'Folder'.",
+                      "severity": 1,
+                      "share_uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "share": {
+                        "uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                        "name": "Folder"
+                      },
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    },
+                    {
+                      "uuid": "b2abe6d6-2077-41d6-937b-db76ea4bf839",
+                      "code": 0,
+                      "created_at": "2019-04-04T03:00:00Z",
+                      "text": "Log purge completed. 1 entries older than 2019-01-04 were purged from the log.",
+                      "severity": 1
+                    },
+                    {
+                      "uuid": "61dd43d3-a0fe-4d65-9dc8-5ecfe7a070ce",
+                      "code": 0,
+                      "created_at": "2019-06-18T12:05:53Z",
+                      "text": "Error uploading file to repository",
+                      "severity": 3,
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    }
+                  ],
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Successfully retrieved part of the list",
+            "headers": {
+              "Content-Range": {
+                "description": "The range of returned items relative to the whole collection",
+                "required": true,
+                "schema": {
+                  "description": "The range of returned items relative to the whole collection",
+                  "example": "items 1-4/10",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": [
+                    {
+                      "uuid": "2057c38b-4dba-4fb3-bc83-f77562cac980",
+                      "code": 0,
+                      "created_at": "2019-06-25T13:25:36Z",
+                      "text": "Added new file 'file.txt'.",
+                      "severity": 1,
+                      "node_uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "node": {
+                        "uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                        "name": "file.txt"
+                      },
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    },
+                    {
+                      "uuid": "c94ad17d-5727-41d9-ab15-cfc72349e555",
+                      "code": 0,
+                      "created_at": "2019-06-25T12:46:56Z",
+                      "text": "Added new share 'Folder'.",
+                      "severity": 1,
+                      "share_uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "share": {
+                        "uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                        "name": "Folder"
+                      },
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    },
+                    {
+                      "uuid": "b2abe6d6-2077-41d6-937b-db76ea4bf839",
+                      "code": 0,
+                      "created_at": "2019-04-04T03:00:00Z",
+                      "text": "Log purge completed. 1 entries older than 2019-01-04 were purged from the log.",
+                      "severity": 1
+                    },
+                    {
+                      "uuid": "61dd43d3-a0fe-4d65-9dc8-5ecfe7a070ce",
+                      "code": 0,
+                      "created_at": "2019-06-18T12:05:53Z",
+                      "text": "Error uploading file to repository",
+                      "severity": 3,
+                      "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                      "user": {
+                        "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    }
+                  ],
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/devices": {
+      "get": {
+        "operationId": "Get devices list",
+        "description": "Gets a list of devices",
+        "parameters": [
+          {
+            "name": "per_page",
+            "description": "The number of items to be retrieved",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The number of items to be retrieved",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "description": "The page to return\n\nStarts from 1",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The page to return\n\nStarts from 1",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Successfully retrieved part of the list",
+            "headers": {
+              "Content-Range": {
+                "description": "The range of returned items relative to the whole collection",
+                "required": true,
+                "schema": {
+                  "description": "The range of returned items relative to the whole collection",
+                  "example": "items 1-3/10",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/devices/{device_uuid}": {
+      "get": {
+        "operationId": "Get device information",
+        "description": "Gets information about a device",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "device_uuid",
+            "description": "Unique identifier of the device",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the device",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Device"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update device",
+        "description": "Updates a device",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "device_uuid",
+            "description": "Unique identifier of the device",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the device",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "device": {
+                    "notes": "Example notes"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "device"
+                ],
+                "properties": {
+                  "device": {
+                    "type": "object",
+                    "properties": {
+                      "notes": {
+                        "description": "Notes about the device",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the device",
+            "content": {}
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete device",
+        "description": "Deletes a device",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "device_uuid",
+            "description": "Unique identifier of the device",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the device",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully deleted the device",
+            "content": {}
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes": {
+      "post": {
+        "operationId": "Create folder",
+        "description": "Creates a folder by name or path\n\nIf a folder with the same name, but different letter case exists in the same location it will be renamed",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "sync_and_share_node"
+                ],
+                "properties": {
+                  "sync_and_share_node": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "description": "Name of the folder. Do not use together with the \"path\" paramater.",
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "parent_uuid": {
+                        "description": "UUID of the parent folder\n\nDefaults to root folder ID (`\"0\"`) if not specified",
+                        "type": "string",
+                        "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                      },
+                      "path": {
+                        "description": "Full path of the folder. Do not use together with the \"name\" paramater.",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Successfully created the folder",
+                  "type": "object",
+                  "required": [
+                    "owner",
+                    "parents",
+                    "name",
+                    "office_online_permissions",
+                    "synced",
+                    "parent_uuid",
+                    "read_only",
+                    "has_shared_child_nodes",
+                    "is_shared",
+                    "has_writable_children",
+                    "actions",
+                    "file_modification_date",
+                    "path",
+                    "permissions",
+                    "uuid",
+                    "is_directory",
+                    "owner_email",
+                    "is_deleted",
+                    "checksum",
+                    "has_active_links"
+                  ],
+                  "properties": {
+                    "size": {
+                      "description": "Size of the node",
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "owner": {
+                      "description": "Information about the owner of the node",
+                      "type": "object",
+                      "required": [
+                        "uuid",
+                        "name",
+                        "email"
+                      ],
+                      "properties": {
+                        "uuid": {
+                          "$ref": "#/components/schemas/UUID"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "parents": {
+                      "description": "Parent nodes of the current node\n\nThe nodes are hierarchically ordered and include the current node",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "uuid",
+                          "is_root"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "uuid": {
+                            "$ref": "#/components/schemas/NodeUUID"
+                          },
+                          "is_root": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "name": {
+                      "description": "Name of the node",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "office_online_permissions": {
+                      "description": "Node permissions related to Office Online",
+                      "type": "object",
+                      "required": [
+                        "can_create_files_into",
+                        "can_be_previewed",
+                        "can_be_edited"
+                      ],
+                      "properties": {
+                        "can_create_files_into": {
+                          "type": "boolean"
+                        },
+                        "can_be_previewed": {
+                          "type": "boolean"
+                        },
+                        "can_be_edited": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "synced": {
+                      "description": "Sync status of the node",
+                      "enum": [
+                        "not_synced",
+                        "sync_2_way"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_uuid": {
+                      "description": "Unique identifier of the parent node",
+                      "type": "string",
+                      "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    },
+                    "read_only": {
+                      "description": "Whether the node is read-only",
+                      "type": "boolean"
+                    },
+                    "has_shared_child_nodes": {
+                      "description": "Whether any of the node's child nodes have been shared",
+                      "type": "boolean"
+                    },
+                    "is_shared": {
+                      "description": "Whether the node has been shared",
+                      "type": "boolean"
+                    },
+                    "preview_type": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "has_writable_children": {
+                      "description": "Whether the node has writable child nodes",
+                      "type": "boolean"
+                    },
+                    "actions": {
+                      "description": "Relative URLs to actions that can be performed on the node",
+                      "type": "object",
+                      "properties": {
+                        "download": {
+                          "description": "Download URL",
+                          "type": "string"
+                        },
+                        "upload": {
+                          "description": "Upload URL",
+                          "type": "string"
+                        },
+                        "preview": {
+                          "description": "Preview URL",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "expiration_date": {
+                      "description": "Date when the shared access to the node will expire",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "file_modification_date": {
+                      "description": "Modification date of the node",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "path": {
+                      "description": "Path to the node",
+                      "type": "string"
+                    },
+                    "permissions": {
+                      "description": "Permissions for the current user related to the node",
+                      "type": "object",
+                      "required": [
+                        "can_be_renamed",
+                        "can_be_unsubscribed",
+                        "can_be_restored",
+                        "can_create_folders_into",
+                        "can_be_copied",
+                        "can_create_files_into",
+                        "can_view_members",
+                        "can_be_synced_2_way",
+                        "can_be_deleted",
+                        "can_be_synced_1_way",
+                        "can_be_moved",
+                        "can_be_shared",
+                        "can_be_shared_via_link",
+                        "can_invite",
+                        "can_be_downloaded",
+                        "can_selectively_purge_revisions"
+                      ],
+                      "properties": {
+                        "can_be_renamed": {
+                          "description": "Whether the node can be renamed",
+                          "type": "boolean"
+                        },
+                        "can_be_unsubscribed": {
+                          "description": "Whether the node can be unsubscribed from\n\nUsers can unsubscribe from nodes shared to them",
+                          "type": "boolean"
+                        },
+                        "can_be_restored": {
+                          "description": "Whether a deleted node can be restored",
+                          "type": "boolean"
+                        },
+                        "can_create_folders_into": {
+                          "description": "Whether new folders can be created in this node",
+                          "type": "boolean"
+                        },
+                        "can_be_copied": {
+                          "description": "Whether the node can be copied",
+                          "type": "boolean"
+                        },
+                        "can_create_files_into": {
+                          "description": "Whether new files can be created in this node",
+                          "type": "boolean"
+                        },
+                        "can_view_members": {
+                          "description": "Whether members of this node can be viewed",
+                          "type": "boolean"
+                        },
+                        "can_be_synced_2_way": {
+                          "description": "Whether the node can be 2-way synced",
+                          "type": "boolean"
+                        },
+                        "can_be_deleted": {
+                          "description": "Whether the node can be deleted",
+                          "type": "boolean"
+                        },
+                        "can_be_synced_1_way": {
+                          "description": "Whether the node can be 1-way synced",
+                          "type": "boolean"
+                        },
+                        "can_be_moved": {
+                          "description": "Whether the node can be moved",
+                          "type": "boolean"
+                        },
+                        "can_be_shared": {
+                          "description": "Whether the node node can be shared to other users",
+                          "type": "boolean"
+                        },
+                        "can_be_shared_via_link": {
+                          "description": "Whether the node can be shared via file link",
+                          "type": "boolean"
+                        },
+                        "can_invite": {
+                          "description": "Whether new members can be invited to this node",
+                          "type": "boolean"
+                        },
+                        "can_be_downloaded": {
+                          "description": "Whether the node can be downloaded",
+                          "type": "boolean"
+                        },
+                        "can_selectively_purge_revisions": {
+                          "description": "Whether revisions of this node can be permanently deleted",
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "uuid": {
+                      "description": "Unique identifier of the node",
+                      "type": "string",
+                      "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    },
+                    "is_directory": {
+                      "description": "Whether the node is a directory or a file",
+                      "type": "boolean"
+                    },
+                    "owner_email": {
+                      "description": "Email of the node's owner",
+                      "type": "string"
+                    },
+                    "is_deleted": {
+                      "description": "Whether the node is deleted",
+                      "type": "boolean"
+                    },
+                    "checksum": {
+                      "description": "MD5 checksum of the node",
+                      "type": "string"
+                    },
+                    "has_active_links": {
+                      "description": "Whether the node has any active links",
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}": {
+      "get": {
+        "operationId": "Get file or folder information",
+        "description": "Gets information about a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the file/folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update file or folder",
+        "description": "Updates a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "sync_and_share_node": {
+                    "name": "new_name.txt"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "sync_and_share_node"
+                ],
+                "properties": {
+                  "sync_and_share_node": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "description": "New name of the file/folder",
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the file/folder",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete file or folder",
+        "description": "Deletes a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully deleted the file/folder",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/contents": {
+      "get": {
+        "operationId": "Get files and folders list",
+        "description": "Gets a list of files and folders within a folder",
+        "parameters": [
+          {
+            "name": "per_page",
+            "description": "The number of items to be retrieved",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The number of items to be retrieved",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "description": "The page to return\n\nStarts from 1",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The page to return\n\nStarts from 1",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of files and folders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Node"
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Successfully retrieved part of the list",
+            "headers": {
+              "Content-Range": {
+                "description": "The range of returned items relative to the whole collection",
+                "required": true,
+                "schema": {
+                  "description": "The range of returned items relative to the whole collection",
+                  "example": "items 1-2/10",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": [
+                    {
+                      "uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                      "name": "Folder",
+                      "is_directory": true,
+                      "file_modification_date": "2019-06-13T11:42:04Z",
+                      "is_deleted": false,
+                      "synced": "sync_2_way",
+                      "read_only": false,
+                      "has_active_links": false,
+                      "has_shared_child_nodes": false,
+                      "is_shared": false,
+                      "owner_email": "user@example.com",
+                      "path": "Parent folder/Folder",
+                      "parents": [
+                        {
+                          "name": "Sync & Share",
+                          "uuid": "0",
+                          "is_root": true
+                        },
+                        {
+                          "name": "Parent folder",
+                          "uuid": "2644085b-6431-4751-a09a-dcb8bd6489a1",
+                          "is_root": false
+                        },
+                        {
+                          "name": "Folder",
+                          "uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                          "is_root": false
+                        }
+                      ],
+                      "checksum": "",
+                      "parent_uuid": "2644085b-6431-4751-a09a-dcb8bd6489a1",
+                      "has_writable_children": true,
+                      "office_online_permissions": {
+                        "can_create_files_into": false,
+                        "can_be_previewed": false,
+                        "can_be_edited": false
+                      },
+                      "owner": {
+                        "uuid": "90f04afd-c9c7-4b25-a7cf-b8129696fca6",
+                        "name": "user",
+                        "email": "user@example.com"
+                      },
+                      "permissions": {
+                        "can_be_renamed": true,
+                        "can_be_unsubscribed": false,
+                        "can_be_restored": false,
+                        "can_create_folders_into": true,
+                        "can_be_copied": true,
+                        "can_create_files_into": true,
+                        "can_view_members": true,
+                        "can_be_synced_2_way": false,
+                        "can_be_deleted": true,
+                        "can_be_synced_1_way": false,
+                        "can_be_moved": true,
+                        "can_be_shared": true,
+                        "can_be_shared_via_link": false,
+                        "can_invite": true,
+                        "can_be_downloaded": true,
+                        "can_selectively_purge_revisions": false
+                      },
+                      "actions": {
+                        "download": "/fc/api/v1/sync_and_share_nodes/444f4f94-9f0e-4183-9d47-b1804e819f61/download",
+                        "upload": "/fc/api/v1/sync_and_share_nodes/444f4f94-9f0e-4183-9d47-b1804e819f61/upload"
+                      }
+                    },
+                    {
+                      "uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                      "name": "file.txt",
+                      "is_directory": false,
+                      "size": 5,
+                      "file_modification_date": "2019-06-13T08:57:12Z",
+                      "is_deleted": false,
+                      "synced": "sync_2_way",
+                      "preview_type": "text",
+                      "read_only": false,
+                      "has_active_links": false,
+                      "has_shared_child_nodes": false,
+                      "is_shared": false,
+                      "owner_email": "user@example.com",
+                      "path": "Parent folder/file.txt",
+                      "parents": [
+                        {
+                          "name": "Sync & Share",
+                          "uuid": "0",
+                          "is_root": true
+                        },
+                        {
+                          "name": "Parent folder",
+                          "uuid": "2644085b-6431-4751-a09a-dcb8bd6489a1",
+                          "is_root": false
+                        },
+                        {
+                          "name": "file.txt",
+                          "uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+                          "is_root": false
+                        }
+                      ],
+                      "checksum": "040b7cf4a55014e185813e0644502ea9",
+                      "parent_uuid": "2644085b-6431-4751-a09a-dcb8bd6489a1",
+                      "has_writable_children": false,
+                      "office_online_permissions": {
+                        "can_create_files_into": false,
+                        "can_be_previewed": false,
+                        "can_be_edited": false
+                      },
+                      "owner": {
+                        "uuid": "90f04afd-c9c7-4b25-a7cf-b8129696fca6",
+                        "name": "user",
+                        "email": "user@example.com"
+                      },
+                      "permissions": {
+                        "can_be_renamed": true,
+                        "can_be_unsubscribed": false,
+                        "can_be_restored": false,
+                        "can_create_folders_into": false,
+                        "can_be_copied": true,
+                        "can_create_files_into": false,
+                        "can_view_members": true,
+                        "can_be_synced_2_way": false,
+                        "can_be_deleted": true,
+                        "can_be_synced_1_way": false,
+                        "can_be_moved": true,
+                        "can_be_shared": false,
+                        "can_be_shared_via_link": false,
+                        "can_invite": true,
+                        "can_be_downloaded": true,
+                        "can_selectively_purge_revisions": false
+                      },
+                      "actions": {
+                        "download": "/fc/api/v1/sync_and_share_nodes/b8a80643-9d35-43dd-a7f6-c05aaf1d5606/download",
+                        "preview": "/fc/api/v1/sync_and_share_nodes/b8a80643-9d35-43dd-a7f6-c05aaf1d5606/preview"
+                      }
+                    }
+                  ],
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Node"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/revisions": {
+      "get": {
+        "operationId": "Get file or folder revisions list",
+        "description": "Gets a list of all revisions of a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of revisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": [
+                    {
+                      "node_uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                      "name": "file.txt",
+                      "file_modification_date": "2019-06-12T15:28:15Z",
+                      "revision": 2,
+                      "size": 13499,
+                      "is_latest": true,
+                      "created_at": "2019-06-13T11:40:54Z",
+                      "is_deleted": false,
+                      "available": false,
+                      "purged": true,
+                      "writable": true,
+                      "revised_by": {
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    },
+                    {
+                      "node_uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+                      "name": "file.txt",
+                      "file_modification_date": "2019-06-12T15:28:15Z",
+                      "revision": 1,
+                      "size": 12435,
+                      "is_latest": false,
+                      "created_at": "2019-06-12T15:28:15Z",
+                      "is_deleted": false,
+                      "available": false,
+                      "purged": true,
+                      "writable": true,
+                      "revised_by": {
+                        "name": "user",
+                        "email": "user@example.com"
+                      }
+                    }
+                  ],
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeRevision"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/revisions/{revision_number}": {
+      "post": {
+        "operationId": "Restore file revision",
+        "description": "Restores specific revision of a file\n\nA new latest revision will be created that's the same as the one to restore",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "revision_number",
+            "description": "Number of the revision to which the file will be restored",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Number of the revision to which the file will be restored",
+              "example": 3,
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully reverted the file to its previous revision",
+            "content": {}
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/download": {
+      "get": {
+        "operationId": "Get file or folder contents",
+        "description": "Downloads a file/folder\n\nFolders are downloaded as a ZIP archive",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully downloaded the file/folder",
+            "headers": {
+              "Content-Disposition": {
+                "required": true,
+                "schema": {
+                  "example": "attachment; filename=\"test.txt\"; filename*=utf-8''test.txt",
+                  "type": "string"
+                }
+              },
+              "Content-Transfer-Encoding": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "binary"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "application/octet-stream"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Transfer-Encoding": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "chunked"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/upload": {
+      "post": {
+        "operationId": "Upload file",
+        "description": "Uploads a file\n\nIf a file with same name exists in the target folder a new revision will be created",
+        "parameters": [
+          {
+            "name": "filename",
+            "description": "Name of the file",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Name of the file",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "size",
+            "description": "Size of the file, in bytes",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Size of the file, in bytes",
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "checksum",
+            "description": "MD5 digest of the file's contents\n\nWhen present, this checksum will be used to verify the integrity of the uploaded data",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "MD5 digest of the file's contents\n\nWhen present, this checksum will be used to verify the integrity of the uploaded data",
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "Content-Type",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "enum": [
+                "application/octet-stream"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Transfer-Encoding",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "enum": [
+                "chunked"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully uploaded the file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileNode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed to upload the file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/copy": {
+      "post": {
+        "operationId": "Copy file or folder",
+        "description": "Copies a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "parent_uuid"
+                ],
+                "properties": {
+                  "parent_uuid": {
+                    "description": "UUID of the target parent folder",
+                    "type": "string",
+                    "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully copied the file/folder",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/move": {
+      "post": {
+        "operationId": "Move file or folder",
+        "description": "Moves a file/folder",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "parent_uuid"
+                ],
+                "properties": {
+                  "parent_uuid": {
+                    "description": "UUID of the target parent folder",
+                    "type": "string",
+                    "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully moved the file/folder",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/links": {
+      "post": {
+        "operationId": "Create file link",
+        "description": "Creates a file link\n\nFile links can optionally be sent to multiple persons by email",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "link": {
+                    "recipients": [
+                      {
+                        "email": "user1@example.com"
+                      },
+                      {
+                        "email": "user2@example.com"
+                      }
+                    ],
+                    "message": "An example message",
+                    "locale": "en",
+                    "ttl": 7,
+                    "access_restriction": "shared",
+                    "single_use": false
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "link"
+                ],
+                "properties": {
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "recipients": {
+                        "description": "List of recipients",
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "description": "Email of a recipient",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "message": {
+                        "description": "Message that will be included in the email containing the link",
+                        "type": "string"
+                      },
+                      "locale": {
+                        "description": "Locale of the email containing the link",
+                        "enum": [
+                          "cs",
+                          "de",
+                          "en",
+                          "es",
+                          "fr",
+                          "it",
+                          "ja",
+                          "ko",
+                          "pl",
+                          "ru",
+                          "zh_tw",
+                          "zh_cn"
+                        ],
+                        "type": "string"
+                      },
+                      "ttl": {
+                        "description": "Expiration period in days\n\nOmit this key to create a link without expiration (if this is allowed by the server configuration)",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "access_restriction": {
+                        "description": "The type of access for the link\n\n- `public` - link can be accessed by anyone\n- `access` - link can be accessed only by authenticated users\n- `shared` - link can be accessed only by the users it has been shared to",
+                        "enum": [
+                          "public",
+                          "access",
+                          "shared"
+                        ],
+                        "type": "string"
+                      },
+                      "single_use": {
+                        "description": "Whether the link will expire after single use",
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created the file link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/links/{link_id}": {
+      "put": {
+        "operationId": "Update file link",
+        "description": "Updates a file link",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "link_id",
+            "description": "Unique identifier of the file link",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the file link",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "ttl": 7,
+                  "access_restriction": "shared",
+                  "single_use": false
+                },
+                "type": "object",
+                "properties": {
+                  "ttl": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "access_restriction": {
+                    "description": "The type of access for the link\n\n- `public` - link can be accessed by anyone\n- `access` - link can be accessed only by authenticated users\n- `shared` - link can be accessed only by the users it has been shared to",
+                    "enum": [
+                      "public",
+                      "access",
+                      "shared"
+                    ],
+                    "type": "string"
+                  },
+                  "single_use": {
+                    "description": "Whether the link will expire after single use",
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated the file link",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/members": {
+      "get": {
+        "operationId": "Get members list",
+        "description": "Gets a list of folder members",
+        "parameters": [
+          {
+            "name": "per_page",
+            "description": "The number of items to be retrieved",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The number of items to be retrieved",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "description": "The page to return\n\nStarts from 1",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "The page to return\n\nStarts from 1",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Successfully retrieved part of the list",
+            "headers": {
+              "Content-Range": {
+                "description": "The range of returned items relative to the whole collection",
+                "required": true,
+                "schema": {
+                  "description": "The range of returned items relative to the whole collection",
+                  "example": "items 1-3/10",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "Create folder member",
+        "description": "Creates a folder member",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "member": {
+                    "email": "user@example.com",
+                    "read_only": false,
+                    "can_invite": true,
+                    "can_view_members": true
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "member"
+                ],
+                "properties": {
+                  "member": {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "description": "Email of the member",
+                        "type": "string"
+                      },
+                      "message": {
+                        "description": "Message that will be included in the invitation email",
+                        "type": "string"
+                      },
+                      "locale": {
+                        "description": "Locale of the invitation email",
+                        "enum": [
+                          "cs",
+                          "de",
+                          "en",
+                          "es",
+                          "fr",
+                          "it",
+                          "ja",
+                          "ko",
+                          "pl",
+                          "ru",
+                          "zh_tw",
+                          "zh_cn"
+                        ],
+                        "type": "string"
+                      },
+                      "read_only": {
+                        "description": "Whether the new member will have read-only access",
+                        "type": "boolean"
+                      },
+                      "can_invite": {
+                        "description": "Whether the new member will be able to invite other members",
+                        "type": "boolean"
+                      },
+                      "can_view_members": {
+                        "description": "Whether the new member will be able to view other members",
+                        "type": "boolean"
+                      },
+                      "expiration_date": {
+                        "description": "Expiration date of the shared folder\n\nIf set, all members will lose access to the shared folder after the specified date",
+                        "type": "string",
+                        "format": "date"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created the member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete all members",
+        "description": "Deletes all members",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully deleted all members",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/members/{member_id}": {
+      "get": {
+        "operationId": "Get member information",
+        "description": "Gets information about a member",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "member_id",
+            "description": "Unique identifier of the member",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the member",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update member",
+        "description": "Updates a member",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "member_id",
+            "description": "Unique identifier of the member",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the member",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "member": {
+                    "read_only": false,
+                    "can_view_members": false,
+                    "can_invite": false
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "member"
+                ],
+                "properties": {
+                  "member": {
+                    "type": "object",
+                    "properties": {
+                      "read_only": {
+                        "description": "Whether the member will have read-only access",
+                        "type": "boolean"
+                      },
+                      "can_invite": {
+                        "description": "Whether the member will be able to invite other members",
+                        "type": "boolean"
+                      },
+                      "can_view_members": {
+                        "description": "Whether the member will be able to view other members",
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated the member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete member",
+        "description": "Deletes a member",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "member_id",
+            "description": "Unique identifier of the member",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the member",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully deleted the member",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/sync_and_share_nodes/{node_uuid}/sync_status": {
+      "post": {
+        "operationId": "Create sync status",
+        "description": "Creates a sync status\n\nCreating a sync status will start syncing the folder to the desktop client",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully created the sync status",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete sync status",
+        "description": "Deletes a sync status\n\nDeleting a sync status will stop syncing the folder to the desktop client",
+        "parameters": [
+          {
+            "name": "node_uuid",
+            "description": "Unique identifier of the node",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "Unique identifier of the node",
+              "type": "string",
+              "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully deleted the sync status",
+            "content": {}
+          },
+          "403": {
+            "description": "Node permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/settings/purging_policies": {
+      "get": {
+        "operationId": "Get purging policies settings",
+        "description": "Gets the purging policies settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the purging policies settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgingPoliciesSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update purging policies settings",
+        "description": "Updates purging policies settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "purging_policies_settings": {
+                    "purge_deleted_files_older_than_enabled": true,
+                    "purge_deleted_files_older_than_n": 2,
+                    "purge_deleted_files_older_than_units": "weeks",
+                    "purge_revisions_older_than_enabled": true,
+                    "purge_revisions_older_than_n": 1,
+                    "purge_revisions_older_than_units": "months",
+                    "keep_at_least_n_revisions_enabled": true,
+                    "keep_at_least_n_revisions": 3,
+                    "only_keep_n_revisions_enabled": true,
+                    "only_keep_n_revisions": 10,
+                    "allow_users_to_selectively_purge_revisions": true
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "purging_policies_settings"
+                ],
+                "properties": {
+                  "purging_policies_settings": {
+                    "type": "object",
+                    "properties": {
+                      "purge_deleted_files_older_than_enabled": {
+                        "description": "Whether to purge deleted files",
+                        "type": "boolean"
+                      },
+                      "purge_deleted_files_older_than_n": {
+                        "description": "The number of time units for purging deleted files",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "purge_deleted_files_older_than_units": {
+                        "description": "The time unit for purging deleted files",
+                        "enum": [
+                          "days",
+                          "weeks",
+                          "months"
+                        ],
+                        "type": "string"
+                      },
+                      "purge_revisions_older_than_enabled": {
+                        "description": "Whether to purge previous revisions",
+                        "type": "boolean"
+                      },
+                      "purge_revisions_older_than_n": {
+                        "description": "The number of time units for purging previous revisions",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "purge_revisions_older_than_units": {
+                        "description": "The time unit for purging previous revisions",
+                        "enum": [
+                          "days",
+                          "weeks",
+                          "months"
+                        ],
+                        "type": "string"
+                      },
+                      "keep_at_least_n_revisions_enabled": {
+                        "description": "Whether to keep a number of revisions regardless of their age",
+                        "type": "boolean"
+                      },
+                      "keep_at_least_n_revisions": {
+                        "description": "The number of revisions to keep from purging",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "only_keep_n_revisions_enabled": {
+                        "description": "Whether to keep only a certain number of revisions",
+                        "type": "boolean"
+                      },
+                      "only_keep_n_revisions": {
+                        "description": "The number of revisions to keep",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "allow_users_to_selectively_purge_revisions": {
+                        "description": "Whether to allow users to selectively purge revisions",
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the purging policies settings",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/settings/server": {
+      "get": {
+        "operationId": "Get server settings",
+        "description": "Gets the server settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the server settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update server settings",
+        "description": "Updates the server settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "server_settings": {
+                    "server_name": "Acronis Files Protect",
+                    "root_web_address": "https://dev-cloud.acronis.com",
+                    "default_locale": "de",
+                    "session_timeout_in_minutes": 120,
+                    "notification_admin_enabled": true,
+                    "notification_admin_email": "administrator1@example.com;administrator2@example.com",
+                    "notification_admin_frequency": 120
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "server_settings"
+                ],
+                "properties": {
+                  "server_settings": {
+                    "type": "object",
+                    "properties": {
+                      "server_name": {
+                        "description": "Cosmetic server name used for the website's title and in admin notification email messages",
+                        "type": "string"
+                      },
+                      "root_web_address": {
+                        "description": "DNS name or IP address of the website",
+                        "type": "string"
+                      },
+                      "default_locale": {
+                        "description": "Language for new Audit Log messages",
+                        "enum": [
+                          "cs",
+                          "de",
+                          "en",
+                          "es",
+                          "fr",
+                          "it",
+                          "ja",
+                          "ko",
+                          "pl",
+                          "ru",
+                          "zh_tw",
+                          "zh_cn"
+                        ],
+                        "type": "string"
+                      },
+                      "session_timeout_in_minutes": {
+                        "description": "Lifespan of the session, in minutes",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "notification_admin_enabled": {
+                        "description": "Whether to send email summary of errors to administrator(s)",
+                        "type": "boolean"
+                      },
+                      "notification_admin_email": {
+                        "description": "Email address(es) of administrators to receive summary of errors\n\nSeparate email addresses with comma `,` or semicolon `;`",
+                        "type": "string"
+                      },
+                      "notification_admin_frequency": {
+                        "description": "Frequency of sending email summary of errors to administrator(s), in minutes",
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the server settings",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/settings/audit_log": {
+      "get": {
+        "operationId": "Get audit log settings",
+        "description": "Gets the audit log settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the audit log settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update audit log settings",
+        "description": "Updates the audit log settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "audit_log_settings": {
+                    "purge_logs_older_than_enabled": "true",
+                    "purge_logs_older_than_units": "days",
+                    "purge_logs_older_than_n": 7
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "audit_log_settings"
+                ],
+                "properties": {
+                  "audit_log_settings": {
+                    "description": "Audit log settings",
+                    "type": "object",
+                    "properties": {
+                      "purge_logs_older_than_enabled": {
+                        "description": "Whether to purge old logs",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "purge_logs_older_than_units": {
+                        "description": "The time unit for purging old logs",
+                        "enum": [
+                          "days",
+                          "weeks",
+                          "months"
+                        ],
+                        "type": "string"
+                      },
+                      "purge_logs_older_than_n": {
+                        "description": "The number of time units for purging old logs",
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the audit log settings",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/settings/security": {
+      "get": {
+        "operationId": "Get security settings",
+        "description": "Gets the security settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the security settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecuritySettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update security settings",
+        "description": "Updates the security settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "security_settings": {
+                    "allow_collaborators_to_invite": "true",
+                    "node_share_link_enable": "true",
+                    "node_share_link_allow_public_links": "false",
+                    "node_share_link_allow_login_links": "true",
+                    "node_share_link_single_use_only": "false",
+                    "node_share_link_ttl_range_enable": "true",
+                    "node_share_link_ttl_max": 30,
+                    "shared_folder_expiration_required": "true",
+                    "shared_folder_expiration_max_days": 30
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "security_settings"
+                ],
+                "properties": {
+                  "security_settings": {
+                    "type": "object",
+                    "properties": {
+                      "allow_collaborators_to_invite": {
+                        "description": "Whether to allow collaborators to invite other users to shared folders",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_enable": {
+                        "description": "Whether to allow single file sharing",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_allow_public_links": {
+                        "description": "Whether to allow public file links",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_allow_login_links": {
+                        "description": "Whether to allow login-required file links",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_single_use_only": {
+                        "description": "Whether to allow only single-use file links",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_ttl_range_enable": {
+                        "description": "Whether to require file links to expire",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "node_share_link_ttl_max": {
+                        "description": "Maximum expiration time for file links, in days",
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "shared_folder_expiration_required": {
+                        "description": "Whether to require shared folders to expire",
+                        "enum": [
+                          "true",
+                          "false"
+                        ],
+                        "type": "string"
+                      },
+                      "shared_folder_expiration_max_days": {
+                        "description": "Maximum expiration time for shared folders, in days",
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the security settings",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/settings/web_preview": {
+      "get": {
+        "operationId": "Get web preview settings",
+        "description": "Gets the web preview settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the web preview settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebPreviewSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Update web preview settings",
+        "description": "Updates the web preview settings",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "settings": {
+                    "office_online_integration_enabled": true,
+                    "office_online_wopi_url": "https://office-online.com",
+                    "office_online_type_of_use": "viewing-editing",
+                    "office_online_additional_services_enabled": true,
+                    "office_online_allow_self_signed_certificates": false,
+                    "web_preview_enabled": true,
+                    "only_allow_not_converted": false,
+                    "max_cache_size_mb": 10000,
+                    "servlet_allow_self_signed_certificates": false,
+                    "generation_max_concurrent_calls": 1
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "settings"
+                ],
+                "properties": {
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "office_online_integration_enabled": {
+                        "description": "Whether to enable the Office Online integration",
+                        "type": "boolean"
+                      },
+                      "office_online_wopi_url": {
+                        "description": "URL to use for contacting Office Online",
+                        "type": "string"
+                      },
+                      "office_online_type_of_use": {
+                        "description": "The allowed type of usage for Office Online",
+                        "enum": [
+                          "editing",
+                          "viewing-editing"
+                        ],
+                        "type": "string"
+                      },
+                      "office_online_additional_services_enabled": {
+                        "description": "Whether to enable additional services for Office Online\n\nMicrosoft services for Bing spelling, proofing and Smart Lookup",
+                        "type": "boolean"
+                      },
+                      "office_online_allow_self_signed_certificates": {
+                        "description": "Whether to allow connections to Office Online using self-signed certificates",
+                        "type": "boolean"
+                      },
+                      "web_preview_enabled": {
+                        "description": "Whether to enable the built-in document previewer",
+                        "type": "boolean"
+                      },
+                      "only_allow_not_converted": {
+                        "description": "Whether to allow previewing only files that do not require conversion",
+                        "type": "boolean"
+                      },
+                      "max_cache_size_mb": {
+                        "description": "Maximum allowed storage use for cached preview files, in MB",
+                        "type": "integer",
+                        "minimum": 251
+                      },
+                      "servlet_allow_self_signed_certificates": {
+                        "description": "Whether to allow connections to the web preview service using self-signed certificates",
+                        "type": "boolean"
+                      },
+                      "generation_max_concurrent_calls": {
+                        "description": "Maximum allowed concurrent preview generation calls",
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successfully updated the web preview settings",
+            "content": {}
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    },
+    "/users/{user_uuid}": {
+      "get": {
+        "operationId": "Get user information",
+        "description": "Gets information about a user",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "UUID of a tenant in which context to perform the request in\n\nIf not specified the request is executed in the current user's tenant context",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "user_uuid",
+            "description": "UUID of the user",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "description": "UUID of the user",
+              "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrative permissions required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0": []
+          }
+        ]
+      }
+    }
+  },
+  "x-roles": [
+    {
+      "name": "public",
+      "id": "1",
+      "description": "public role",
+      "x-tags": [
+        "public"
+      ]
+    },
+    {
+      "name": "private",
+      "id": "2",
+      "description": "private role",
+      "x-tags": [
+        "private"
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AuditLogEntry": {
+        "example": {
+          "uuid": "2057c38b-4dba-4fb3-bc83-f77562cac980",
+          "code": 0,
+          "created_at": "2019-06-25T13:25:36Z",
+          "text": "Added new file 'file.txt'.",
+          "severity": 1,
+          "node_uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+          "owner_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+          "node": {
+            "uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+            "name": "file.txt"
+          },
+          "user": {
+            "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+            "name": "user",
+            "email": "user@example.com"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uuid",
+          "code",
+          "created_at",
+          "text",
+          "severity"
+        ],
+        "properties": {
+          "uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "code": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          },
+          "node_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "share_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "owner_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "share": {
+            "type": "object",
+            "required": [
+              "uuid",
+              "name"
+            ],
+            "properties": {
+              "uuid": {
+                "$ref": "#/components/schemas/UUID"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "node": {
+            "type": "object",
+            "required": [
+              "uuid",
+              "name"
+            ],
+            "properties": {
+              "uuid": {
+                "$ref": "#/components/schemas/UUID"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "user": {
+            "type": "object",
+            "required": [
+              "uuid",
+              "name",
+              "email"
+            ],
+            "properties": {
+              "uuid": {
+                "$ref": "#/components/schemas/UUID"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "domain",
+              "code",
+              "message"
+            ],
+            "properties": {
+              "domain": {
+                "enum": [
+                  "Files"
+                ],
+                "type": "string"
+              },
+              "code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "context": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "Device": {
+        "description": "Device used by users to access the service",
+        "type": "object",
+        "required": [
+          "uuid",
+          "app_version",
+          "filesystem",
+          "last_contact_time",
+          "name",
+          "system_platform",
+          "system_version",
+          "client_type",
+          "user_uuid",
+          "user_name",
+          "actions"
+        ],
+        "properties": {
+          "uuid": {
+            "description": "Unique identifier of the device",
+            "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "app_version": {
+            "description": "Version of the app that the device is using",
+            "type": "string"
+          },
+          "filesystem": {
+            "description": "Type of file system that the device is using\n\n- `0` - any non-iOS device and iOS devices using the standard (non-MDM managed) app\n- `1` - iOS device using the BlackBerry Dynamics app",
+            "enum": [
+              0,
+              1
+            ],
+            "type": "integer"
+          },
+          "last_contact_time": {
+            "description": "Time of last device connection to the server",
+            "type": "string",
+            "format": "date-time"
+          },
+          "model": {
+            "description": "Model of the device",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the device",
+            "type": "string"
+          },
+          "notes": {
+            "description": "Notes about the device",
+            "type": "string"
+          },
+          "system_platform": {
+            "description": "Platform of the device",
+            "type": "string"
+          },
+          "system_version": {
+            "description": "Version of the device's platform",
+            "type": "string"
+          },
+          "client_type": {
+            "description": "Type of the device",
+            "enum": [
+              "mobile",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "user_uuid": {
+            "description": "Unique identifier of the user of the device",
+            "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "user_name": {
+            "description": "Name of the user of the device",
+            "type": "string"
+          },
+          "actions": {
+            "description": "Relative URLs to actions that can be performed on the device",
+            "type": "object",
+            "required": [
+              "remove"
+            ],
+            "properties": {
+              "remove": {
+                "description": "Remove URL",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "UUID": {
+        "description": "Universally unique identifier",
+        "example": "b8ccbf27-4e92-41a9-8b66-d78108985321",
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "NodeUUID": {
+        "description": "Node unique identifier\n\n- UUID for any user nodes\n- `0` for the root node",
+        "type": "string",
+        "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "ConflictErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "domain",
+              "code",
+              "message"
+            ],
+            "properties": {
+              "domain": {
+                "enum": [
+                  "Files"
+                ],
+                "type": "string"
+              },
+              "code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "context": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "Node": {
+        "description": "Single revision of a file or folder",
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "is_directory",
+          "file_modification_date",
+          "is_deleted",
+          "synced",
+          "read_only",
+          "has_active_links",
+          "has_shared_child_nodes",
+          "is_shared",
+          "owner_email",
+          "path",
+          "parents",
+          "checksum",
+          "parent_uuid",
+          "has_writable_children",
+          "office_online_permissions",
+          "owner",
+          "permissions",
+          "actions"
+        ],
+        "properties": {
+          "uuid": {
+            "description": "Unique identifier of the node",
+            "type": "string",
+            "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "name": {
+            "description": "Name of the node",
+            "type": "string",
+            "minLength": 1
+          },
+          "is_directory": {
+            "description": "Whether the node is a directory or a file",
+            "type": "boolean"
+          },
+          "size": {
+            "description": "Size of the node",
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_modification_date": {
+            "description": "Modification date of the node",
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_deleted": {
+            "description": "Whether the node is deleted",
+            "type": "boolean"
+          },
+          "synced": {
+            "description": "Sync status of the node",
+            "enum": [
+              "not_synced",
+              "sync_2_way"
+            ],
+            "type": "string"
+          },
+          "preview_type": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expiration_date": {
+            "description": "Date when the shared access to the node will expire",
+            "type": "string",
+            "format": "date-time"
+          },
+          "read_only": {
+            "description": "Whether the node is read-only",
+            "type": "boolean"
+          },
+          "has_active_links": {
+            "description": "Whether the node has any active links",
+            "type": "boolean"
+          },
+          "has_shared_child_nodes": {
+            "description": "Whether any of the node's child nodes have been shared",
+            "type": "boolean"
+          },
+          "is_shared": {
+            "description": "Whether the node has been shared",
+            "type": "boolean"
+          },
+          "owner_email": {
+            "description": "Email of the node's owner",
+            "type": "string"
+          },
+          "path": {
+            "description": "Path to the node",
+            "type": "string"
+          },
+          "parents": {
+            "description": "Parent nodes of the current node\n\nThe nodes are hierarchically ordered and include the current node",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "uuid",
+                "is_root"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "uuid": {
+                  "$ref": "#/components/schemas/NodeUUID"
+                },
+                "is_root": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "checksum": {
+            "description": "MD5 checksum of the node",
+            "type": "string"
+          },
+          "parent_uuid": {
+            "description": "Unique identifier of the parent node",
+            "type": "string",
+            "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "has_writable_children": {
+            "description": "Whether the node has writable child nodes",
+            "type": "boolean"
+          },
+          "office_online_permissions": {
+            "description": "Node permissions related to Office Online",
+            "type": "object",
+            "required": [
+              "can_create_files_into",
+              "can_be_previewed",
+              "can_be_edited"
+            ],
+            "properties": {
+              "can_create_files_into": {
+                "type": "boolean"
+              },
+              "can_be_previewed": {
+                "type": "boolean"
+              },
+              "can_be_edited": {
+                "type": "boolean"
+              }
+            }
+          },
+          "owner": {
+            "description": "Information about the owner of the node",
+            "type": "object",
+            "required": [
+              "uuid",
+              "name",
+              "email"
+            ],
+            "properties": {
+              "uuid": {
+                "$ref": "#/components/schemas/UUID"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          },
+          "permissions": {
+            "description": "Permissions for the current user related to the node",
+            "type": "object",
+            "required": [
+              "can_be_renamed",
+              "can_be_unsubscribed",
+              "can_be_restored",
+              "can_create_folders_into",
+              "can_be_copied",
+              "can_create_files_into",
+              "can_view_members",
+              "can_be_synced_2_way",
+              "can_be_deleted",
+              "can_be_synced_1_way",
+              "can_be_moved",
+              "can_be_shared",
+              "can_be_shared_via_link",
+              "can_invite",
+              "can_be_downloaded",
+              "can_selectively_purge_revisions"
+            ],
+            "properties": {
+              "can_be_renamed": {
+                "description": "Whether the node can be renamed",
+                "type": "boolean"
+              },
+              "can_be_unsubscribed": {
+                "description": "Whether the node can be unsubscribed from\n\nUsers can unsubscribe from nodes shared to them",
+                "type": "boolean"
+              },
+              "can_be_restored": {
+                "description": "Whether a deleted node can be restored",
+                "type": "boolean"
+              },
+              "can_create_folders_into": {
+                "description": "Whether new folders can be created in this node",
+                "type": "boolean"
+              },
+              "can_be_copied": {
+                "description": "Whether the node can be copied",
+                "type": "boolean"
+              },
+              "can_create_files_into": {
+                "description": "Whether new files can be created in this node",
+                "type": "boolean"
+              },
+              "can_view_members": {
+                "description": "Whether members of this node can be viewed",
+                "type": "boolean"
+              },
+              "can_be_synced_2_way": {
+                "description": "Whether the node can be 2-way synced",
+                "type": "boolean"
+              },
+              "can_be_deleted": {
+                "description": "Whether the node can be deleted",
+                "type": "boolean"
+              },
+              "can_be_synced_1_way": {
+                "description": "Whether the node can be 1-way synced",
+                "type": "boolean"
+              },
+              "can_be_moved": {
+                "description": "Whether the node can be moved",
+                "type": "boolean"
+              },
+              "can_be_shared": {
+                "description": "Whether the node node can be shared to other users",
+                "type": "boolean"
+              },
+              "can_be_shared_via_link": {
+                "description": "Whether the node can be shared via file link",
+                "type": "boolean"
+              },
+              "can_invite": {
+                "description": "Whether new members can be invited to this node",
+                "type": "boolean"
+              },
+              "can_be_downloaded": {
+                "description": "Whether the node can be downloaded",
+                "type": "boolean"
+              },
+              "can_selectively_purge_revisions": {
+                "description": "Whether revisions of this node can be permanently deleted",
+                "type": "boolean"
+              }
+            }
+          },
+          "actions": {
+            "description": "Relative URLs to actions that can be performed on the node",
+            "type": "object",
+            "properties": {
+              "download": {
+                "description": "Download URL",
+                "type": "string"
+              },
+              "upload": {
+                "description": "Upload URL",
+                "type": "string"
+              },
+              "preview": {
+                "description": "Preview URL",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "NodeRevision": {
+        "example": {
+          "node_uuid": "444f4f94-9f0e-4183-9d47-b1804e819f61",
+          "name": "file.txt",
+          "file_modification_date": "2019-06-12T15:28:15Z",
+          "revision": 2,
+          "size": 13499,
+          "is_latest": true,
+          "created_at": "2019-06-13T11:40:54Z",
+          "is_deleted": false,
+          "available": false,
+          "purged": true,
+          "writable": true,
+          "revised_by": {
+            "name": "user",
+            "email": "user@example.com"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_uuid",
+          "name",
+          "file_modification_date",
+          "revision",
+          "size",
+          "is_latest",
+          "created_at",
+          "is_deleted",
+          "available",
+          "purged",
+          "writable",
+          "revised_by"
+        ],
+        "properties": {
+          "node_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "file_modification_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_latest": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_deleted": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "purged": {
+            "type": "boolean"
+          },
+          "writable": {
+            "type": "boolean"
+          },
+          "revised_by": {
+            "type": "object",
+            "required": [
+              "name",
+              "email"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "FileNode": {
+        "description": "Single revision of a file",
+        "type": "object",
+        "required": [
+          "owner",
+          "parents",
+          "name",
+          "office_online_permissions",
+          "synced",
+          "parent_uuid",
+          "read_only",
+          "has_shared_child_nodes",
+          "is_shared",
+          "has_writable_children",
+          "actions",
+          "file_modification_date",
+          "permissions",
+          "path",
+          "uuid",
+          "is_directory",
+          "owner_email",
+          "checksum",
+          "is_deleted",
+          "has_active_links"
+        ],
+        "properties": {
+          "size": {
+            "description": "Size of the node",
+            "type": "integer",
+            "format": "int64"
+          },
+          "owner": {
+            "description": "Information about the owner of the node",
+            "type": "object",
+            "required": [
+              "uuid",
+              "name",
+              "email"
+            ],
+            "properties": {
+              "uuid": {
+                "$ref": "#/components/schemas/UUID"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          },
+          "parents": {
+            "description": "Parent nodes of the current node\n\nThe nodes are hierarchically ordered and include the current node",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "uuid",
+                "is_root"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "uuid": {
+                  "$ref": "#/components/schemas/NodeUUID"
+                },
+                "is_root": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "name": {
+            "description": "Name of the node",
+            "type": "string",
+            "minLength": 1
+          },
+          "office_online_permissions": {
+            "description": "Node permissions related to Office Online",
+            "type": "object",
+            "required": [
+              "can_create_files_into",
+              "can_be_previewed",
+              "can_be_edited"
+            ],
+            "properties": {
+              "can_create_files_into": {
+                "type": "boolean"
+              },
+              "can_be_previewed": {
+                "type": "boolean"
+              },
+              "can_be_edited": {
+                "type": "boolean"
+              }
+            }
+          },
+          "synced": {
+            "description": "Sync status of the node",
+            "enum": [
+              "not_synced",
+              "sync_2_way"
+            ],
+            "type": "string"
+          },
+          "parent_uuid": {
+            "description": "Unique identifier of the parent node",
+            "type": "string",
+            "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "read_only": {
+            "description": "Whether the node is read-only",
+            "type": "boolean"
+          },
+          "has_shared_child_nodes": {
+            "description": "Whether any of the node's child nodes have been shared",
+            "type": "boolean"
+          },
+          "is_shared": {
+            "description": "Whether the node has been shared",
+            "type": "boolean"
+          },
+          "preview_type": {
+            "nullable": true,
+            "type": "string"
+          },
+          "has_writable_children": {
+            "description": "Whether the node has writable child nodes",
+            "type": "boolean"
+          },
+          "actions": {
+            "description": "Relative URLs to actions that can be performed on the node",
+            "type": "object",
+            "properties": {
+              "download": {
+                "description": "Download URL",
+                "type": "string"
+              },
+              "upload": {
+                "description": "Upload URL",
+                "type": "string"
+              },
+              "preview": {
+                "description": "Preview URL",
+                "type": "string"
+              }
+            }
+          },
+          "file_modification_date": {
+            "description": "Modification date of the node",
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiration_date": {
+            "description": "Date when the shared access to the node will expire",
+            "type": "string",
+            "format": "date-time"
+          },
+          "permissions": {
+            "description": "Permissions for the current user related to the node",
+            "type": "object",
+            "required": [
+              "can_be_renamed",
+              "can_be_unsubscribed",
+              "can_be_restored",
+              "can_create_folders_into",
+              "can_be_copied",
+              "can_create_files_into",
+              "can_view_members",
+              "can_be_synced_2_way",
+              "can_be_deleted",
+              "can_be_synced_1_way",
+              "can_be_moved",
+              "can_be_shared",
+              "can_be_shared_via_link",
+              "can_invite",
+              "can_be_downloaded",
+              "can_selectively_purge_revisions"
+            ],
+            "properties": {
+              "can_be_renamed": {
+                "description": "Whether the node can be renamed",
+                "type": "boolean"
+              },
+              "can_be_unsubscribed": {
+                "description": "Whether the node can be unsubscribed from\n\nUsers can unsubscribe from nodes shared to them",
+                "type": "boolean"
+              },
+              "can_be_restored": {
+                "description": "Whether a deleted node can be restored",
+                "type": "boolean"
+              },
+              "can_create_folders_into": {
+                "description": "Whether new folders can be created in this node",
+                "type": "boolean"
+              },
+              "can_be_copied": {
+                "description": "Whether the node can be copied",
+                "type": "boolean"
+              },
+              "can_create_files_into": {
+                "description": "Whether new files can be created in this node",
+                "type": "boolean"
+              },
+              "can_view_members": {
+                "description": "Whether members of this node can be viewed",
+                "type": "boolean"
+              },
+              "can_be_synced_2_way": {
+                "description": "Whether the node can be 2-way synced",
+                "type": "boolean"
+              },
+              "can_be_deleted": {
+                "description": "Whether the node can be deleted",
+                "type": "boolean"
+              },
+              "can_be_synced_1_way": {
+                "description": "Whether the node can be 1-way synced",
+                "type": "boolean"
+              },
+              "can_be_moved": {
+                "description": "Whether the node can be moved",
+                "type": "boolean"
+              },
+              "can_be_shared": {
+                "description": "Whether the node node can be shared to other users",
+                "type": "boolean"
+              },
+              "can_be_shared_via_link": {
+                "description": "Whether the node can be shared via file link",
+                "type": "boolean"
+              },
+              "can_invite": {
+                "description": "Whether new members can be invited to this node",
+                "type": "boolean"
+              },
+              "can_be_downloaded": {
+                "description": "Whether the node can be downloaded",
+                "type": "boolean"
+              },
+              "can_selectively_purge_revisions": {
+                "description": "Whether revisions of this node can be permanently deleted",
+                "type": "boolean"
+              }
+            }
+          },
+          "path": {
+            "description": "Path to the node",
+            "type": "string"
+          },
+          "uuid": {
+            "description": "Unique identifier of the node",
+            "type": "string",
+            "pattern": "^0$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "is_directory": {
+            "description": "Whether the node is a directory or a file",
+            "type": "boolean"
+          },
+          "owner_email": {
+            "description": "Email of the node's owner",
+            "type": "string"
+          },
+          "checksum": {
+            "description": "MD5 checksum of the node",
+            "type": "string"
+          },
+          "is_deleted": {
+            "description": "Whether the node is deleted",
+            "type": "boolean"
+          },
+          "has_active_links": {
+            "description": "Whether the node has any active links",
+            "type": "boolean"
+          }
+        }
+      },
+      "FileLink": {
+        "example": {
+          "id": 252,
+          "node_uuid": "b8a80643-9d35-43dd-a7f6-c05aaf1d5606",
+          "access_restriction": "shared",
+          "download_url": "https://dev-cloud.acronis.com/fc/t/f4cvit1j",
+          "sharing_user_uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+          "ttl": 7,
+          "single_use": false,
+          "emails": [
+            "user1@example.com",
+            "user2@example.com"
+          ],
+          "download_count": 0,
+          "token": "2e5193c4-4fb5-4c39-a4aa-11fce808d841",
+          "created_at": "2019-06-24T13:21:12Z",
+          "updated_at": "2019-06-24T13:21:12Z"
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "node_uuid",
+          "access_restriction",
+          "download_url",
+          "sharing_user_uuid",
+          "ttl",
+          "single_use",
+          "emails",
+          "download_count",
+          "token",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "node_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "access_restriction": {
+            "enum": [
+              "public",
+              "access",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "download_url": {
+            "type": "string"
+          },
+          "sharing_user_uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "ttl": {
+            "type": "integer"
+          },
+          "single_use": {
+            "type": "boolean"
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "download_count": {
+            "type": "integer"
+          },
+          "expired_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Member": {
+        "description": "Member of a shared folder",
+        "type": "object",
+        "required": [
+          "id",
+          "read_only",
+          "can_view_members",
+          "can_invite",
+          "email",
+          "name",
+          "permission_for",
+          "can_be_changed"
+        ],
+        "properties": {
+          "id": {
+            "description": "Unique identifier of the member",
+            "type": "string"
+          },
+          "read_only": {
+            "description": "Whether the member has read-only access",
+            "type": "boolean"
+          },
+          "can_view_members": {
+            "description": "Whether the member can view other members",
+            "type": "boolean"
+          },
+          "can_invite": {
+            "description": "Whether the member can invite other members",
+            "type": "boolean"
+          },
+          "email": {
+            "description": "Email of the member",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the member",
+            "type": "string"
+          },
+          "permission_for": {
+            "description": "Type of the member",
+            "enum": [
+              "owner",
+              "permission",
+              "guest"
+            ],
+            "type": "string"
+          },
+          "can_be_changed": {
+            "description": "Indicators which permissions can be changed",
+            "type": "object",
+            "required": [
+              "can_invite",
+              "can_view_members",
+              "read_only"
+            ],
+            "properties": {
+              "can_invite": {
+                "description": "Whether the `can_invite` permission can be changed",
+                "type": "boolean"
+              },
+              "can_view_members": {
+                "description": "Whether the `can_view_members` permission can be changed",
+                "type": "boolean"
+              },
+              "read_only": {
+                "description": "Whether the `read_only` permission can be changed",
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "PurgingPoliciesSettings": {
+        "example": {
+          "purge_deleted_files_older_than_enabled": false,
+          "purge_deleted_files_older_than_n": 2,
+          "purge_deleted_files_older_than_units": "months",
+          "purge_revisions_older_than_enabled": false,
+          "purge_revisions_older_than_n": 1,
+          "purge_revisions_older_than_units": "months",
+          "keep_at_least_n_revisions_enabled": false,
+          "keep_at_least_n_revisions": 5,
+          "only_keep_n_revisions_enabled": false,
+          "only_keep_n_revisions": 2,
+          "allow_users_to_selectively_purge_revisions": false
+        },
+        "type": "object",
+        "required": [
+          "purge_deleted_files_older_than_enabled",
+          "purge_deleted_files_older_than_n",
+          "purge_deleted_files_older_than_units",
+          "purge_revisions_older_than_enabled",
+          "purge_revisions_older_than_n",
+          "purge_revisions_older_than_units",
+          "keep_at_least_n_revisions_enabled",
+          "keep_at_least_n_revisions",
+          "only_keep_n_revisions_enabled",
+          "only_keep_n_revisions",
+          "allow_users_to_selectively_purge_revisions"
+        ],
+        "properties": {
+          "purge_deleted_files_older_than_enabled": {
+            "type": "boolean"
+          },
+          "purge_deleted_files_older_than_n": {
+            "type": "integer"
+          },
+          "purge_deleted_files_older_than_units": {
+            "enum": [
+              "days",
+              "weeks",
+              "months"
+            ],
+            "type": "string"
+          },
+          "purge_revisions_older_than_enabled": {
+            "type": "boolean"
+          },
+          "purge_revisions_older_than_n": {
+            "type": "integer"
+          },
+          "purge_revisions_older_than_units": {
+            "enum": [
+              "days",
+              "weeks",
+              "months"
+            ],
+            "type": "string"
+          },
+          "keep_at_least_n_revisions_enabled": {
+            "type": "boolean"
+          },
+          "keep_at_least_n_revisions": {
+            "type": "integer"
+          },
+          "only_keep_n_revisions_enabled": {
+            "type": "boolean"
+          },
+          "only_keep_n_revisions": {
+            "type": "integer"
+          },
+          "allow_users_to_selectively_purge_revisions": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ServerSettings": {
+        "example": {
+          "server_name": "Acronis Files Protect",
+          "root_web_address": "https://dev-cloud.acronis.com",
+          "default_locale": "en",
+          "session_timeout_in_minutes": 120,
+          "notification_admin_enabled": false,
+          "notification_admin_email": "adminname@mycompany.com",
+          "notification_admin_frequency": 30
+        },
+        "type": "object",
+        "required": [
+          "server_name",
+          "root_web_address",
+          "default_locale",
+          "session_timeout_in_minutes",
+          "notification_admin_enabled",
+          "notification_admin_email",
+          "notification_admin_frequency"
+        ],
+        "properties": {
+          "server_name": {
+            "type": "string"
+          },
+          "root_web_address": {
+            "type": "string"
+          },
+          "default_locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "session_timeout_in_minutes": {
+            "type": "integer"
+          },
+          "notification_admin_enabled": {
+            "type": "boolean"
+          },
+          "notification_admin_email": {
+            "type": "string"
+          },
+          "notification_admin_frequency": {
+            "type": "integer"
+          }
+        }
+      },
+      "AuditLogSettings": {
+        "example": {
+          "purge_logs_older_than_enabled": true,
+          "purge_logs_older_than_units": "weeks",
+          "purge_logs_older_than_n": 3
+        },
+        "type": "object",
+        "required": [
+          "purge_logs_older_than_enabled",
+          "purge_logs_older_than_units",
+          "purge_logs_older_than_n"
+        ],
+        "properties": {
+          "purge_logs_older_than_enabled": {
+            "type": "boolean"
+          },
+          "purge_logs_older_than_units": {
+            "enum": [
+              "days",
+              "weeks",
+              "months"
+            ],
+            "type": "string"
+          },
+          "purge_logs_older_than_n": {
+            "type": "integer"
+          }
+        }
+      },
+      "SecuritySettings": {
+        "example": {
+          "allow_collaborators_to_invite": true,
+          "node_share_link_enable": false,
+          "node_share_link_allow_public_links": true,
+          "node_share_link_allow_login_links": true,
+          "node_share_link_single_use_only": false,
+          "node_share_link_ttl_range_enable": true,
+          "node_share_link_ttl_max": 365,
+          "shared_folder_expiration_required": false,
+          "shared_folder_expiration_max_days": 365
+        },
+        "type": "object",
+        "required": [
+          "allow_collaborators_to_invite",
+          "node_share_link_enable",
+          "node_share_link_allow_public_links",
+          "node_share_link_allow_login_links",
+          "node_share_link_single_use_only",
+          "node_share_link_ttl_range_enable",
+          "node_share_link_ttl_max",
+          "shared_folder_expiration_required",
+          "shared_folder_expiration_max_days"
+        ],
+        "properties": {
+          "allow_collaborators_to_invite": {
+            "type": "boolean"
+          },
+          "node_share_link_enable": {
+            "type": "boolean"
+          },
+          "node_share_link_allow_public_links": {
+            "type": "boolean"
+          },
+          "node_share_link_allow_login_links": {
+            "type": "boolean"
+          },
+          "node_share_link_single_use_only": {
+            "type": "boolean"
+          },
+          "node_share_link_ttl_range_enable": {
+            "type": "boolean"
+          },
+          "node_share_link_ttl_max": {
+            "type": "integer"
+          },
+          "shared_folder_expiration_required": {
+            "type": "boolean"
+          },
+          "shared_folder_expiration_max_days": {
+            "type": "integer"
+          }
+        }
+      },
+      "WebPreviewSettings": {
+        "example": {
+          "office_online_integration_enabled": false,
+          "office_online_wopi_url": "https://onenote.officeapps.live.com",
+          "office_online_type_of_use": "editing",
+          "office_online_additional_services_enabled": false,
+          "office_online_allow_self_signed_certificates": false,
+          "web_preview_enabled": true,
+          "only_allow_not_converted": false,
+          "max_cache_size_mb": 2000,
+          "servlet_allow_self_signed_certificates": true,
+          "generation_max_concurrent_calls": 2
+        },
+        "type": "object",
+        "required": [
+          "office_online_integration_enabled",
+          "office_online_wopi_url",
+          "office_online_type_of_use",
+          "office_online_additional_services_enabled",
+          "office_online_allow_self_signed_certificates",
+          "web_preview_enabled",
+          "only_allow_not_converted",
+          "max_cache_size_mb",
+          "servlet_allow_self_signed_certificates",
+          "generation_max_concurrent_calls"
+        ],
+        "properties": {
+          "office_online_integration_enabled": {
+            "type": "boolean"
+          },
+          "office_online_wopi_url": {
+            "type": "string"
+          },
+          "office_online_type_of_use": {
+            "enum": [
+              "editing",
+              "viewing-editing"
+            ],
+            "type": "string"
+          },
+          "office_online_additional_services_enabled": {
+            "type": "boolean"
+          },
+          "office_online_allow_self_signed_certificates": {
+            "type": "boolean"
+          },
+          "web_preview_enabled": {
+            "type": "boolean"
+          },
+          "only_allow_not_converted": {
+            "type": "boolean"
+          },
+          "max_cache_size_mb": {
+            "type": "integer"
+          },
+          "servlet_allow_self_signed_certificates": {
+            "type": "boolean"
+          },
+          "generation_max_concurrent_calls": {
+            "type": "integer"
+          }
+        }
+      },
+      "User": {
+        "example": {
+          "name": "user",
+          "email": "user@example.com",
+          "uuid": "0254fc28-1676-4f22-b530-f4f3bd9e7e45",
+          "allow_sync_and_share": true,
+          "disabled": false,
+          "free_space_to_maintain": 0,
+          "is_superuser": false,
+          "licensed": true,
+          "locale": "en",
+          "purge_proactively": false,
+          "override_quota": 3221225472,
+          "quota": 3221225472,
+          "login_url": "https://localhost/signin?email=user%example.com",
+          "updated_at": "2019-04-09T07:16:24Z",
+          "created_at": "2018-01-16T13:04:11Z",
+          "last_logged_in_at": "2019-04-09T07:16:24Z",
+          "sync_and_share_content": {
+            "file_count": 4,
+            "folder_count": 3,
+            "used_space": 818498
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "uuid",
+          "allow_sync_and_share",
+          "disabled",
+          "free_space_to_maintain",
+          "is_superuser",
+          "licensed",
+          "locale",
+          "purge_proactively",
+          "override_quota",
+          "quota",
+          "login_url",
+          "updated_at",
+          "created_at",
+          "sync_and_share_content"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "uuid": {
+            "$ref": "#/components/schemas/UUID"
+          },
+          "allow_sync_and_share": {
+            "type": "boolean"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "free_space_to_maintain": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_superuser": {
+            "type": "boolean"
+          },
+          "licensed": {
+            "type": "boolean"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "purge_proactively": {
+            "type": "boolean"
+          },
+          "override_quota": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quota": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "login_url": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_logged_in_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sync_and_share_content": {
+            "type": "object",
+            "required": [
+              "file_count",
+              "folder_count",
+              "used_space"
+            ],
+            "properties": {
+              "file_count": {
+                "type": "integer"
+              },
+              "folder_count": {
+                "type": "integer"
+              },
+              "used_space": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          }
+        }
+      },
+      "Locale": {
+        "description": "Locale code",
+        "enum": [
+          "cs",
+          "de",
+          "en",
+          "es",
+          "fr",
+          "it",
+          "ja",
+          "ko",
+          "pl",
+          "ru",
+          "zh_tw",
+          "zh_cn"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "oauth_2_0": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "authorizationCode": {
+            "scopes": {},
+            "authorizationUrl": "https://dev-cloud.acronis.com/api/2/idp/authorize",
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/fc/api/v1",
+      "variables": {}
+    }
+  ]
+}

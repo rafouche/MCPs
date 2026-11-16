@@ -1,0 +1,1205 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Event Manager API",
+    "description": "Event Manager API describes the interface for event publishing and subscription management.",
+    "version": "v1"
+  },
+  "paths": {
+    "/topics": {
+      "get": {
+        "operationId": "Fetch topics",
+        "description": "Fetch a list of all available topics that client is allowed to publish or subscribe to.",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "description": "Optional. Specific topic ID to fetch. Wildcard is not supported.",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Specific topic ID to fetch. Wildcard is not supported.",
+              "x-cti.reference": "cti.a.p.em.topic.v1.0",
+              "type": "string",
+              "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+              "maxLength": 1024
+            },
+            "x-cti.reference": "cti.a.p.em.topic.v1.0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of topics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Topic"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:publisher",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    },
+    "/topics/offsets": {
+      "get": {
+        "operationId": "Fetch topic offsets",
+        "description": "Fetch the latest offset for a specific topic, providing a global view of the current stream state.",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "description": "Required, Topic ID to fetch the offset for.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required, Topic ID to fetch the offset for.",
+              "x-cti.reference": "cti.a.p.em.topic.v1.0",
+              "type": "string",
+              "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+              "maxLength": 1024
+            },
+            "x-cti.reference": "cti.a.p.em.topic.v1.0"
+          },
+          {
+            "name": "position",
+            "description": "Required, the position to fetch the offset for.\n",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required, the position to fetch the offset for.\n",
+              "enum": [
+                "EARLIEST",
+                "TIMESTAMP",
+                "CURRENT"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "timestamp",
+            "description": "Required for timestamp positions. Fetch the offset position to the neares future from a specific time. The timestamp is specified in ISO 8601 format using the RFC 3339 profile.\n",
+            "in": "query",
+            "schema": {
+              "description": "Required for timestamp positions. Fetch the offset position to the neares future from a specific time. The timestamp is specified in ISO 8601 format using the RFC 3339 profile.\n",
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTopicsOffsetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:publisher",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    },
+    "/types": {
+      "get": {
+        "operationId": "Fetch event types",
+        "description": "Fetch a list of all available event types that client is allowed to publish or subscribe to.",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "description": "Optional. Topic ID to fetch the event types for.",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Topic ID to fetch the event types for.",
+              "x-cti.reference": "cti.a.p.em.topic.v1.0",
+              "type": "string",
+              "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+              "maxLength": 1024
+            },
+            "x-cti.reference": "cti.a.p.em.topic.v1.0"
+          },
+          {
+            "name": "type_id",
+            "description": "Optional. Specific event type ID to fetch.",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Specific event type ID to fetch.",
+              "x-cti.reference": "cti.a.p.em.event.v1.0",
+              "type": "string",
+              "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+              "maxLength": 1024
+            },
+            "x-cti.reference": "cti.a.p.em.event.v1.0"
+          },
+          {
+            "name": "include_schema",
+            "description": "Optional. Include the schema of the event type.",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Include the schema of the event type.",
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventType"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:publisher",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    },
+    "/subscriptions": {
+      "post": {
+        "operationId": "Create event subscription",
+        "description": "Create a new event subscription based on the provided criteria, such as topic, cti filter, and optional filters.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription was successfully created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another object of the same type already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    },
+    "/subscriptions/offset": {
+      "get": {
+        "operationId": "Fetch subscription offset",
+        "description": "Fetch the current offset for a subscriber, indicating the position up to which events have been acknowledged.",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "description": "Required. Identifier of the subscription.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required. Identifier of the subscription.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSubscriptionOffsetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "Fetch events",
+        "description": "Fetch a batch of events starting from a specified cursor position, supporting real-time event consumption with optional limits and timeouts.",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "description": "Required. Identifier of the subscription under which events are being consumed.  Used in conjunction with instance_id to manage event distribution.\n",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required. Identifier of the subscription under which events are being consumed.  Used in conjunction with instance_id to manage event distribution.\n",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "consumer_id",
+            "description": "Required. Unique identifier for the consumer instance, ensuring event distribution among multiple instances.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required. Unique identifier for the consumer instance, ensuring event distribution among multiple instances.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "offset",
+            "description": "Required. Specifies the starting point for event fetching, allowing instances to resume from a precise position.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Required. Specifies the starting point for event fetching, allowing instances to resume from a precise position.",
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Optional. Limits the number of events returned in one response. Helps manage processing load.",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Limits the number of events returned in one response. Helps manage processing load.",
+              "default": 100,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "timeout",
+            "description": "Optional. Time to wait for events to become available in ISO 8601 duration format. Can be decreased by the server to the session timeout of the subscription.\n",
+            "in": "query",
+            "schema": {
+              "description": "Optional. Time to wait for events to become available in ISO 8601 duration format. Can be decreased by the server to the session timeout of the subscription.\n",
+              "default": "PT30S",
+              "type": "string",
+              "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetEventsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This response indicates that the client must retry the request later. There are two possible reasons:\n  1. **Non-leader consumer instance**: The client is attempting to consume events as a non-leader instance. \n    Only the leader instance is allowed to consume events. \n    The client should retry after the time specified in the `Retry-After` header to attempt to become the leader.\n  2. **Rate limiting**: The client has exceeded the allowed rate of event consumption, either by sending too many poll requests or consuming too many events in a given period. \n    The client should wait before retrying, as specified in the `Retry-After` header.\n",
+            "headers": {
+              "Retry-After": {
+                "description": "The time in seconds to wait before retrying the poll request.",
+                "required": true,
+                "schema": {
+                  "description": "The time in seconds to wait before retrying the poll request.",
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {}
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorMessage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com:event_manager:{cti_query}:subscriber"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Topic": {
+        "description": "Event topic is a stream of events of the same or different types sharing the same delivery, ordering, consolidation & retention rules.\n",
+        "x-cti.cti": "cti.a.p.em.topic.v1.0",
+        "x-cti.final": false,
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "persistency",
+          "ordering",
+          "producer_consolidation",
+          "archive_consolidation",
+          "retention"
+        ],
+        "properties": {
+          "id": {
+            "description": "The topic id is an identifier of a stream of events in publishing and subscribe semantics",
+            "x-cti.id": true,
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "description": {
+            "description": "description of topic purpose and usage",
+            "x-cti.description": true,
+            "type": "string"
+          },
+          "persistency": {
+            "description": "true - events are persisted by Event Manager, Consumers will be able to fetch events that happened before the subscription\n       (see the `archive_consolidation` and retention parameters)\nfalse - events are not persisted and ordering is not strict. Consumers will see only events that happened\n        after consumer created subscription in the Event Manager (Delivery Manager service).\n        Events can be lost in Event Manager in case of restarts or if consumer was not able to receive events within\n        some reasonable time interval and events retention happened in the Event Delivery manager\n",
+            "type": "boolean"
+          },
+          "ordering": {
+            "description": "PRODUCER     - Events must be ordered by Producer, Ingest Manager only validates event sequence id and ensures there are no lost events in the stream.\n               The 'producer' mode is supposed to be used if producer can fully control events sequence, typically it means all the 'producer'\n               instances are sharing the same database.\n\nEVENTMANAGER - events are ordered by Event Manager (Ingest Manager). This mode is useful for multi-Producer case\n               when there is no single Producer' database and so there is no way to guarantee events ordering across multiple Producers\n\nNONE         - No events ordering. Suitable for audit-kind events from different sources\n",
+            "enum": [
+              "NONE",
+              "PRODUCER",
+              "EVENTMANAGER"
+            ],
+            "type": "string"
+          },
+          "producer_consolidation": {
+            "description": "The `producer_consolidation` attribute reflects events consolidation mode on the Producer side, i.e. actual behavior\nof the service rather than configurable parameter:\n\nNONE - no consolidation happens and events are stored independently only\n\nTTS - in addition to raw independent events there will be one more stream of events consolidated by type, tenantid\n      and subject so the latest event with the same type, tenantid and subject will be stored without any retention\n\nFor topics that contain notification events reflecting state changes of long-lived objects (such as tenants, users,\nsettings, workloads, policies, etc.), it is typical ho have `producer_consolidation` set to `TTS`. Such configuration\nallows the event stream to serve dual purposes: notifying state changes and enabling full event stream replay\n(reconciliation) by clients.\n\nFor short-lived objects that have their own retention policies, such as tasks, activities, alerts and such,\nit is typical to have `producer_consolidation` set to `NONE` and `retention` similar to the retention time\nof the event origin object.\n",
+            "default": "NONE",
+            "enum": [
+              "NONE",
+              "TTS"
+            ],
+            "type": "string"
+          },
+          "archive_consolidation": {
+            "description": "The `archive_consolidation` attribute defines events consolidation mode on the Event Archive side:\n\nNONE - no consolidation happens and events are stored independently only with appropriate retention\n\nTTS  - event with the same type (T), tenantid (T) and subject (S) will be stored without any retention\n       (i.e. will overwrite prev event with the same type, tenantid and subject eventually)\n\nThe `TTS` `archive_consolidation` can be typically used for topics that contain notification events reflecting\nstate changes of long-lived objects (such as tenants, users, settings, workloads, policies, etc.). It would\nallow the event stream to serve dual purposes: notifying state changes and enabling full event stream replay\n(reconciliation) by clients.\n\nFor short-lived objects that have their own retention policies, such as tasks, activities, alerts and such,\nit is advisable to set `archive_consolidation` to `NONE` and `retention` similar to the retention time\nof the event origin object.\n",
+            "default": "NONE",
+            "enum": [
+              "NONE",
+              "TTS"
+            ],
+            "type": "string"
+          },
+          "retention": {
+            "description": "Specifies the retention period for events within this topic on event archive side.\n\nThe retention duration begins from the moment an event is received by the Event Manager. Events older than the\nspecified duration are eligible for deletion by the retention job. Must be a valid ISO 8601 duration or\n'INFINITE'.\n\nThis property is ignored if `archive_consolidation` is set to `TTS`, in this case retention effectively is\nequal to 'INFINITE'\n\nIt's recommended to have retention period comparable to the object's lifetime to enable clients to use a single\nmechanism for both change state notifications and full event stream replay (reconciliation).\n",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/duration_iso"
+              },
+              {
+                "$ref": "#/components/schemas/INFINITE"
+              }
+            ]
+          }
+        }
+      },
+      "ErrorMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/error"
+          }
+        }
+      },
+      "GetTopicsOffsetResponse": {
+        "type": "object",
+        "required": [
+          "topic_id",
+          "offset"
+        ],
+        "properties": {
+          "topic_id": {
+            "description": "Identifier of the topic.",
+            "x-cti.reference": "cti.a.p.em.topic.v1.0",
+            "example": "cti.a.p.em.topic.v1.0~a.p.tenant.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "offset": {
+            "description": "Requested offset sequence number.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "EventType": {
+        "description": "Defines the structure of the event type. It is used to define the structure of the event and to validate the event data.\n",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "topic_id",
+          "description"
+        ],
+        "properties": {
+          "allowed_subject_types": {
+            "description": "List of allowed subject types for the event type. If the subject type is not in the list, the event will be rejected.\n",
+            "x-cti.reference": true,
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          },
+          "data_schema": {
+            "description": "A JSON schema that describes the structure of the event.\n",
+            "example": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema\",\n  \"$id\": \"http://acronis.com/tenant-undeleted.json\",\n  \"type\": \"object\",\n  \"title\": \"The schema of tenant.undeleted event.\",\n  \"description\": \"The root schema comprises the entire JSON document.\",\n  \"properties\": {\n    \"subject\": {\n      \"type\": \"string\",\n      \"format\": \"uuid\",\n    },\n    \"data\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"name\": {\n          \"type\": \"string\",\n          \"examples\": [\n            \"My Tenant\"\n          ]\n        }\n      },\n      \"additionalProperties\": false\n    }\n  },\n  \"required\": [\"subject\",\"data\"],\n  \"additionalProperties\": false\n}\n",
+            "type": "string"
+          },
+          "id": {
+            "description": "The specific event type.",
+            "x-cti.reference": "cti.a.p.em.event.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "topic_id": {
+            "description": "Topic unique id",
+            "x-cti.reference": "cti.a.p.em.topic.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "subject_ref_template": {
+            "description": "API endpoint URL to fetch subject details, so the client can\nautomate subject retrieval for given type of events\n",
+            "example": "/api/v2/tenants/{{subjectId}}",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": {
+            "description": "Description of the type purpose and usage",
+            "type": "string"
+          }
+        }
+      },
+      "PostSubscriptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subscription_id",
+          "tenant_depth",
+          "types",
+          "topic_id"
+        ],
+        "properties": {
+          "cel": {
+            "description": "Optional. CEL expression to filter events by.",
+            "type": "string",
+            "maxLength": 4096
+          },
+          "subscription_id": {
+            "description": "Unique identifier of the subscription.",
+            "example": "fd02a25c-fcb0-42a0-a5ce-56c1131db356",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "tenant_depth": {
+            "description": "Required. Specifies the required tenancy depth\n`CURRENT` - return all the events with the tenant_id equal to the tenant_id specified in the subscription.\n`DIRECT` - return events for the tenant_id specified in the subscription and its direct children.\n`ALL` - return all the events for the tenant_id specified in the subscription and all its children.\n",
+            "enum": [
+              "CURRENT",
+              "DIRECT",
+              "ALL"
+            ],
+            "type": "string"
+          },
+          "auto_commit_interval": {
+            "description": "Optional. Interval at which to auto-commit offsets. The interval is specified in ISO 8601 format.\n",
+            "default": "PT5M",
+            "type": "string",
+            "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+          },
+          "auto_commit": {
+            "description": "Optional. Keep track of the last offset acknowledged by this consumer and automatically commit it. Auto-commit will potentially be made at the beginning of each and every poll request and on subscription eviction. This is useful when the subscriber does not have an external storage to keep track of the last offset committed.",
+            "default": false,
+            "type": "boolean"
+          },
+          "types": {
+            "description": "Required. List of event types this subscription delivers.\n\nAllowed CTI prefixes:\n  - `cti.a.p.em.event.v1.0~`\n  - `cti.a.p.em.msg.v1.0~`\n\nSupported forms (right side of `~` only):\n  - Exact type:\n      `cti.a.p.em.event.v1.0~a.p.tenant.created.v1.0`\n  - All types prefixed with a specific path:\n      `cti.a.p.em.event.v1.0~a.p.tenant.*`\n  - Latest version of a particular type:\n      `cti.a.p.em.event.v1.0~a.p.tenant.updated.v1.*`\n\nVersion wildcard semantics:\n  - When v1.* is used, matching events are upcast to the latest available version of that type.\n  - When version is missing (i.e.,cti.a.p.em.event.v1.0~a.p.tenant.*), matching events are upcast to the latest available version of each major version.",
+            "x-cti.reference": [
+              "cti.a.p.em.event.v1.0",
+              "cti.a.p.em.msg.v1.0"
+            ],
+            "type": "array",
+            "maxItems": 32,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          },
+          "topic_id": {
+            "description": "Required. Identifier of the topic to subscribe to. The topic_id is used to filter events based on the topic they belong to.\n",
+            "x-cti.reference": "cti.a.p.em.topic.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "session_timeout": {
+            "description": "Optional. Defines the maximum duration an instance can hold the leadership for event fetching without sending heartbeats. If the instance fails within this period, the system will reassign the leadership to ensure continuous event processing. This mechanism enhances fault tolerance by allowing for the automatic recovery of event consumption in case of instance failures. The duration is specified in ISO 8601 format.\n",
+            "default": "PT30S",
+            "type": "string",
+            "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+          },
+          "tenant_id": {
+            "description": "Optional. Specifies the root of the tenant hierarchy subtree to apply event filtering.\nIf not provided, the tenant_id will be extracted from the access token.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "subject_types": {
+            "description": "Optional. List of subject types to filter by. Wildcard is supported.",
+            "x-cti.reference": true,
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          }
+        }
+      },
+      "GetSubscriptionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subscription_id",
+          "tenant_depth",
+          "types",
+          "topic_id"
+        ],
+        "properties": {
+          "cel": {
+            "description": "Optional. CEL expression to filter events by.",
+            "type": "string",
+            "maxLength": 4096
+          },
+          "subscription_id": {
+            "description": "Unique identifier of the subscription.",
+            "example": "fd02a25c-fcb0-42a0-a5ce-56c1131db356",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "tenant_depth": {
+            "description": "Required. Specifies the required tenancy depth\n`CURRENT` - return all the events with the tenant_id equal to the tenant_id specified in the subscription.\n`DIRECT` - return events for the tenant_id specified in the subscription and its direct children.\n`ALL` - return all the events for the tenant_id specified in the subscription and all its children.\n",
+            "enum": [
+              "CURRENT",
+              "DIRECT",
+              "ALL"
+            ],
+            "type": "string"
+          },
+          "auto_commit_interval": {
+            "description": "Optional. Interval at which to auto-commit offsets. The interval is specified in ISO 8601 format.\n",
+            "default": "PT5M",
+            "type": "string",
+            "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+          },
+          "auto_commit": {
+            "description": "Optional. Keep track of the last offset acknowledged by this consumer and automatically commit it. Auto-commit will potentially be made at the beginning of each and every poll request and on subscription eviction. This is useful when the subscriber does not have an external storage to keep track of the last offset committed.",
+            "default": false,
+            "type": "boolean"
+          },
+          "types": {
+            "description": "Required. List of event types this subscription delivers.\n\nAllowed CTI prefixes:\n  - `cti.a.p.em.event.v1.0~`\n  - `cti.a.p.em.msg.v1.0~`\n\nSupported forms (right side of `~` only):\n  - Exact type:\n      `cti.a.p.em.event.v1.0~a.p.tenant.created.v1.0`\n  - All types prefixed with a specific path:\n      `cti.a.p.em.event.v1.0~a.p.tenant.*`\n  - Latest version of a particular type:\n      `cti.a.p.em.event.v1.0~a.p.tenant.updated.v1.*`\n\nVersion wildcard semantics:\n  - When v1.* is used, matching events are upcast to the latest available version of that type.\n  - When version is missing (i.e.,cti.a.p.em.event.v1.0~a.p.tenant.*), matching events are upcast to the latest available version of each major version.",
+            "x-cti.reference": [
+              "cti.a.p.em.event.v1.0",
+              "cti.a.p.em.msg.v1.0"
+            ],
+            "type": "array",
+            "maxItems": 32,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          },
+          "topic_id": {
+            "description": "Required. Identifier of the topic to subscribe to. The topic_id is used to filter events based on the topic they belong to.\n",
+            "x-cti.reference": "cti.a.p.em.topic.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "session_timeout": {
+            "description": "Optional. Defines the maximum duration an instance can hold the leadership for event fetching without sending heartbeats. If the instance fails within this period, the system will reassign the leadership to ensure continuous event processing. This mechanism enhances fault tolerance by allowing for the automatic recovery of event consumption in case of instance failures. The duration is specified in ISO 8601 format.\n",
+            "default": "PT30S",
+            "type": "string",
+            "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+          },
+          "tenant_id": {
+            "description": "Optional. Specifies the root of the tenant hierarchy subtree to apply event filtering.\nIf not provided, the tenant_id will be extracted from the access token.\n",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "subject_types": {
+            "description": "Optional. List of subject types to filter by. Wildcard is supported.",
+            "x-cti.reference": true,
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          }
+        }
+      },
+      "GetSubscriptionOffsetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subscription_id",
+          "offset"
+        ],
+        "properties": {
+          "subscription_id": {
+            "description": "Unique identifier of the subscription.",
+            "example": "fd02a25c-fcb0-42a0-a5ce-56c1131db356",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "offset": {
+            "description": "Latest committed offset of the subscriber.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "GetEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "offset",
+          "events"
+        ],
+        "properties": {
+          "offset": {
+            "description": "Latest offset of the subscriber. This is the offset that should be used in the next poll request.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "events": {
+            "description": "A batch of events starting from the cursor position for each partition.",
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          }
+        }
+      },
+      "duration_iso": {
+        "description": "Duration format compliant to [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Durations). See regex with unit tests [here](https://regex101.com/r/A2fis4).\n",
+        "type": "string",
+        "pattern": "^P(?:(\\d+)Y)?(?:(\\d+)M)?(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?$"
+      },
+      "INFINITE": {
+        "description": "The retention period for events within this topic on event archive side is infinite.\n",
+        "enum": [
+          "INFINITE"
+        ],
+        "type": "string"
+      },
+      "error": {
+        "description": "Base error object",
+        "example": {
+          "domain": "EventManager",
+          "code": "invalidEvent",
+          "error": "Bad Request",
+          "context": {
+            "errors": [
+              {
+                "event_id": "62d2afda-685e-457f-8624-92132d97a7ed",
+                "message": "Invalid payload: tenant_id is required"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "code"
+        ],
+        "properties": {
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "type": "string"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "type": "string"
+          },
+          "message": {
+            "description": "human-readable message, describing the error.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "kb_link": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          }
+        }
+      },
+      "CTIWildcard": {
+        "description": "CTI with wildcard support, where the wildcard `*` can only be used as the final character of a segment.\n",
+        "type": "string",
+        "pattern": "^cti((\\.([a-z][a-z0-9_]*))|\\.)?(\\.([a-z][a-z0-9_]*))?(\\.([a-z_][a-z0-9_.]*))?(\\.v(\\d+|\\d*\\.\\d*|\\d*\\.)?)?(~(([a-z][a-z0-9_]*)|([a-z][a-z0-9_]*)\\.)?(\\.([a-z][a-z0-9_]*))?(\\.([a-z_][a-z0-9_.]*))?(\\.v(\\d+|\\d*\\.\\d*|\\d*\\.)?)?)*\\*$|^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+        "maxLength": 1024
+      },
+      "Event": {
+        "description": "Defines the structure of the event that has occurred.\nEvents will contain two types of information: the event data representing the occurrence and context metadata providing contextual information about the occurrence. A single occurrence may result in more than one event.\nEvents are limited to a maximum size of 64KB, which includes both headers and payload.\n",
+        "x-cti.cti": [
+          "cti.a.p.em.event.v1.0",
+          "cti.a.p.em.msg.v1.0"
+        ],
+        "x-cti.final": false,
+        "example": {
+          "id": "eb39471d-a1c5-44d4-8a2a-cb413d720e87",
+          "type": "cti.a.p.em.event.v1.0~a.p.test.async.event.v1.0",
+          "time": "2022-03-31T10:43:21Z",
+          "ingest_time": "2021-04-15T19:41:40.1007002Z",
+          "previous": 1,
+          "sequence": 2,
+          "source": "123",
+          "tenant_id": "abbf321a-7d6a-49c9-8538-47db342d1638",
+          "data": {
+            "message": "Hello, World!"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "time",
+          "source",
+          "tenant_id"
+        ],
+        "properties": {
+          "id": {
+            "description": "Immutable, producer-generated identifier of this event instance.  While a randomly generated UUID or a similar mechanism is recommended for system-wide uniqueness, it is not possible to guarantee that no other producer will generate the same ID.\nUniqueness scope - Strongly RECOMMENDED to be a randomly generated UUIDv4 so collisions across producers are practically negligible. - Consumers and downstream services MAY assume uniqueness of `id` within the scope of `(type, id)`. \n  However a better alternative is `(sequence, type)` combination for persistent topics.\n\nGeneration rules - MUST be assigned by the producer when the event is created and MUST NOT change thereafter. - MUST NOT be the nil UUID (`00000000-0000-0000-0000-000000000000`) and MUST NOT be empty. - SHOULD be lowercase canonical UUID text with hyphens.\n",
+            "example": "10c8cd6b-a8b3-4bac-b12f-ceae89c5e43f",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "type": {
+            "description": "The specific event type.",
+            "x-cti.id": true,
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "time": {
+            "description": "Precise time when event has occurred. The time is set by the producer and may be set as past or future time. The time should be in UTC and formatted as ISO 8601.\n",
+            "example": "2021-03-13T22:43:50.1004002Z",
+            "type": "string",
+            "format": "date-time"
+          },
+          "ingest_time": {
+            "description": "Time when the event was received by Event Manager and fully controlled by the Event Manager. The time should be in UTC and formatted as ISO 8601.\n",
+            "x-apis.writeable": false,
+            "example": "2021-04-15T19:41:40.1007002Z",
+            "type": "string",
+            "format": "date-time"
+          },
+          "previous": {
+            "description": "Identifies the sequence number of the directly preceding event in the ordered topic stream. This field is used to explicitly link events in sequence, facilitating tracking of event order and detection of any missing events.\nThis field is optional for unordered topics (e.g. topic.ordering == NONE)\n",
+            "type": "integer",
+            "format": "int64"
+          },
+          "sequence": {
+            "description": "A unique identifier that represents the position of this event within the overall event stream. This sequence number is crucial for maintaining the order of events within ordered topics.\nIn 'PRODUCER' ordering mode, this number is assigned by the event producer.\nIn 'EVENTMANAGER' ordering mode, this number is assigned by the event manager.\nThis field is optional for unordered topics (e.g. topic.ordering == NONE)\n",
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "description": "The source that produced the event, specified by type and ID. It can be any context filled by Producer.\nThis field is not being processed by Event Manager and it's up to Producer to define what to be specified in the source field.\nThis field could be used for debugging purposes or as additional information for Consumer\n",
+            "example": "com.acronis.eu2-cloud/account-server/",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "subject": {
+            "description": "ID of the specific object where event (e.g. state change notification) happened. For example, it can be a task id in the cti.a.p.em.event.v1.0~a.p.task.created.v1.0 event\nIt can be omitted for cases where the event is not related to a specific object.\n",
+            "x-cti.overridable": true,
+            "example": "152a71d6-51cd-11ec-bf63-0242ac130002",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "subject_type": {
+            "description": "CTI type of the subject. Required to provide granular access to events associated with specific subject type.\nIf `allowed_subject_types` is defined for event type field value should represent same or derived CTI type.\n",
+            "x-cti.reference": true,
+            "x-cti.overridable": true,
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "tenant_id": {
+            "description": "Acronis tenant ID that generated the event",
+            "example": "d52a71d6-51cd-11ec-bf63-0242ac130002",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "client_id": {
+            "description": "Acronis API client ID (or Agent ID) that generated the event. Can be used to isolate events for different agents or clients",
+            "example": "a52a71d6-51cd-11ec-bf63-0242ac130002",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "trace_parent": {
+            "description": "ID of event which caused this event to connect event reactions. Typically this uuid should reference to parent event id",
+            "example": "a6771d65-51cd-11ec-bf63-0242ac130002",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "data_ref": {
+            "description": "Payload data stored in some external place, i.e. to impose additional authorization, would be identical content to data",
+            "example": "https://s3.eu4-cloud.acronis.com/payloads/presentation_1",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "data": {
+            "nullable": true
+          }
+        }
+      },
+      "kbLinkInfo": {
+        "description": "Components for kblink",
+        "type": "object",
+        "required": [
+          "line_tag",
+          "ser_code",
+          "version",
+          "build",
+          "product",
+          "os"
+        ],
+        "properties": {
+          "line_tag": {
+            "type": "string"
+          },
+          "ser_code": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "build": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          }
+        }
+      },
+      "debugInfo": {
+        "description": "Error debug information (map type)",
+        "type": "object"
+      },
+      "EventType_1": {
+        "description": "Defines the structure of the event type. It is used to define the structure of the event and to validate the event data.\n",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic_id"
+        ],
+        "properties": {
+          "topic_id": {
+            "description": "Topic unique id",
+            "x-cti.reference": "cti.a.p.em.topic.v1.0",
+            "type": "string",
+            "pattern": "^cti\\.([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+)(~([a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z_][a-z0-9_.]*\\.v[\\d]+\\.[\\d]+))*(~[0-9a-f]{8}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{4}\\b-[0-9a-f]{12})?$",
+            "maxLength": 1024
+          },
+          "allowed_subject_types": {
+            "description": "List of allowed subject types for the event type. If the subject type is not in the list, the event will be rejected.\n",
+            "x-cti.reference": true,
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/CTIWildcard"
+            }
+          },
+          "subject_ref_template": {
+            "description": "API endpoint URL to fetch subject details, so the client can\nautomate subject retrieval for given type of events\n",
+            "example": "/api/v2/tenants/{{subjectId}}",
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 security scheme definition for a service authorization.",
+        "flows": {
+          "password": {
+            "scopes": {
+              "urn:acronis.com:event_manager:{cti_query}:publisher": "",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber": "",
+              "urn:acronis.com:audit:{role|permissions}": ""
+            },
+            "tokenUrl": "/bc/ipd/token"
+          },
+          "clientCredentials": {
+            "scopes": {
+              "urn:acronis.com:event_manager:{cti_query}:publisher": "",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber": "",
+              "urn:acronis.com:audit:{role|permissions}": ""
+            },
+            "tokenUrl": "/bc/ipd/token"
+          },
+          "authorizationCode": {
+            "scopes": {
+              "urn:acronis.com:event_manager:{cti_query}:publisher": "",
+              "urn:acronis.com:event_manager:{cti_query}:subscriber": "",
+              "urn:acronis.com:audit:{role|permissions}": ""
+            },
+            "authorizationUrl": "/bc/ipd/authorize",
+            "tokenUrl": "/bc/ipd/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/event_manager/v1",
+      "variables": {}
+    }
+  ]
+}

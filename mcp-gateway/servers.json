@@ -473,7 +473,7 @@
       "roles": [
         "MCP.Acronis"
       ],
-      "notes": "Acronis Cyber Protect Cloud, every customer under the partner tenant. acronis-mcp is read-only and fails closed. EXCLUDED: acronis_api_get (raw escape hatch).",
+      "notes": "Acronis Cyber Protect Cloud, every customer under the partner tenant. acronis-mcp is read-only and fails closed. find/describe only browse the endpoint catalog. EXCLUDED: acronis_api_get (raw escape hatch).",
       "readTools": [
         "healthcheck",
         "list_customers",
@@ -490,7 +490,9 @@
         "list_agents",
         "list_protection_plans",
         "list_backups",
-        "list_archives"
+        "list_archives",
+        "acronis_find_endpoints",
+        "acronis_describe_endpoint"
       ]
     }
   }

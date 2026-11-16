@@ -17,20 +17,21 @@
  *          e.g. https://us5-cloud.acronis.com (no /api).
  * Fails closed like hudu-mcp: 503 until all four are set.
  *
- * APIs used (developer.acronis.com, read 2026-11-16), all under {dc}/api:
- *   /2/...                         Account Management (clients, tenants, usages)
- *   /alert_manager/v1/alerts       filter `tenant`
- *   /resource_management/v4/...    filter `tenant_id` (resource_statuses = last run / last success)
- *   /policy_management/v4/policies filter `tenant_id`
- *   /agent_manager/v2/agents       filter `tenant_id`
- *   /task_manager/v2/tasks|activities  no tenant filter: scoped by the
- *                                  X-Apigw-Tenant-Id header and re-checked here
- *   /vault_manager/v1/backups|archives no tenant filter: filter by resource
- * Not yet checked against a live tenant: filter syntaxes like
- * completedAt=gt(<ISO>), severity=or(a,b), updated_at=gt(<unix ns>), and the
- * exact shape of policies/usages rows. Every list tool takes `full: true` to
- * return Acronis's raw rows when the trimmed view hides something.
+ * APIs used, all under {dc}/api. Scoping checked against Altec's live account
+ * on 2026-11-16 (see "Scope" below): a customer's machines, agents and backup
+ * tasks belong to UNITS under the customer (e.g. "BackupUser@fncpas.com").
+ *   /2/...                             Account Management (clients, tenants, usages)
+ *   /alert_manager/v1/alerts           tenant=<customer UUID> includes units; or(), gt(ns) work
+ *   /resource_management/v4/resource_statuses  tenant_id=<UUID>, exact tenant: every unit is sent
+ *   /policy_management/v4/policies     tenant_id=<customer UUID>
+ *   /agent_manager/v2/agents           ignores UUIDs: all agents, filtered by unit name here
+ *   /task_manager/v2/tasks|activities  ids UPPERCASE; like()/gt() filters 500 or time out;
+ *                                      X-Apigw-Tenant-Id is ignored: tenant/date filtered here
+ *   /vault_manager/v1/backups|archives returns nothing to this partner-level client
+ * Every list tool takes `full: true` to return Acronis's raw rows.
  */
+
+import catalogJson from "./catalog.json";
 
 interface KVLike {
   get(key: string, type: "json"): Promise<any>;
@@ -111,7 +112,8 @@ async function getToken(env: Env, rejected?: string): Promise<string> {
 // have no tenant filter). Never swallows errors: a failure throws the real
 // status and body. A 401 gets one fresh token; 429/5xx retry twice.
 async function api(env: Env, path: string, params?: Record<string, unknown>, tenant?: string): Promise<any> {
-  const url = new URL(`${base(env)}/api${path}`);
+  // File Sync & Share lives at {dc}/fc/api/v1, every other API under {dc}/api.
+  const url = new URL(path.startsWith("/fc/") ? `${base(env)}${path}` : `${base(env)}/api${path}`);
   for (const [k, v] of Object.entries(params || {})) {
     if (v === undefined || v === null || v === "") continue;
     if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, String(x)));
@@ -232,6 +234,61 @@ async function tenantArg(env: Env, args: Args, needed: boolean): Promise<Tenant 
   throw new Error(`"${s}" matches ${hits.length} tenants: ${hits.slice(0, 15).map((t) => `${t.name} [${t.kind}] (${t.id})`).join("; ")}. Pass the tenant UUID.`);
 }
 
+// ─── Scope: a customer and its units ──────────────────────────────────────────
+//
+// Verified live 2026-11-16 (Fritz, Nippes): machines, agents and backup tasks
+// do not belong to the customer tenant itself but to a `unit` under it, e.g.
+// "BackupUser@fncpas.com" (the account the agent registered with). Each API
+// scopes differently:
+//   alerts            tenant=<customer UUID>    includes units
+//   resource_statuses tenant_id=<UUID>          exact tenant only -> send every unit
+//   policies          tenant_id=<customer UUID> plans live at the customer
+//   agents            tenant_id ignores UUIDs   -> filter by the agent's tenant name
+//   tasks/activities  no tenant filter and the X-Apigw-Tenant-Id header is
+//                     ignored -> filter by row.tenant.uuid here
+
+type Scope = { root: Tenant; customer: Tenant; ids: Set<string>; names: Set<string> };
+
+function ancestors(list: Tenant[], t: Tenant): Tenant[] {
+  const byId = new Map(list.map((x) => [x.id, x]));
+  const chain: Tenant[] = [];
+  let cur: Tenant | undefined = t;
+  for (let i = 0; cur && i < 20; i++) {
+    chain.push(cur);
+    cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+  }
+  return chain;
+}
+
+// The customer a tenant belongs to (itself if it is one), for display.
+async function customerOf(env: Env, uuid?: string): Promise<string | undefined> {
+  if (!uuid) return undefined;
+  try {
+    const list = await allTenants(env);
+    const t = list.find((x) => x.id === uuid);
+    if (!t) return undefined;
+    return (ancestors(list, t).find((x) => x.kind === "customer") || t).name;
+  } catch {
+    return undefined;
+  }
+}
+
+async function scopeArg(env: Env, args: Args, needed: boolean): Promise<Scope | undefined> {
+  const root = await tenantArg(env, args, needed);
+  if (!root) return undefined;
+  const list = await allTenants(env);
+  const ids = new Set<string>([root.id]);
+  // Breadth-first over parent_id: every tenant below root (units, sub-customers).
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const t of list) if (t.parent_id && ids.has(t.parent_id) && !ids.has(t.id)) { ids.add(t.id); grew = true; }
+  }
+  const names = new Set(list.filter((t) => ids.has(t.id)).map((t) => t.name));
+  names.add(root.name);
+  const customer = ancestors(list, root).find((x) => x.kind === "customer") || root;
+  return { root, customer, ids, names };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = /secret|password|passwd|passphrase|private_?key|access_?token|refresh_?token|registration_?token|api_?key/i;
@@ -271,79 +328,174 @@ function list(v: unknown): string[] {
   return (Array.isArray(v) ? v : String(v).split(",")).map((x) => String(x).trim()).filter(Boolean);
 }
 
-// One value as-is, several as or(a,b) (Acronis filter syntax).
+// One value as-is, several as or(a,b) (Acronis filter syntax; works on alerts).
 function orFilter(v: unknown): string | undefined {
   const l = list(v);
   return l.length === 0 ? undefined : l.length === 1 ? l[0] : `or(${l.join(",")})`;
 }
 
-const PROBLEM_STATUSES = ["warning", "error", "critical", "not_protected", "no_policies_applied", "interaction_required"];
+function daysSince(ts?: string): number | undefined {
+  if (!ts) return undefined;
+  const t = Date.parse(ts);
+  return Number.isNaN(t) ? undefined : Math.floor((Date.now() - t) / 86400000);
+}
+
+const PROBLEM_STATUSES = ["warning", "error", "critical", "not_protected", "interaction_required"];
+
+// ─── Data loaders ─────────────────────────────────────────────────────────────
+
+// Workload statuses for a scope: tenant_id is an exact match, so send every
+// tenant in the scope (100 per call). Resource groups are skipped unless asked.
+async function loadWorkloads(env: Env, scope: Scope | undefined, opts: { type?: unknown; includeGroups?: boolean }): Promise<{ rows: any[]; truncated: boolean }> {
+  const rows: any[] = [];
+  let truncated = false;
+  const ids = scope ? [...scope.ids] : [undefined];
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = scope ? ids.slice(i, i + 100) : undefined;
+    const r = await allPages(env, "/resource_management/v4/resource_statuses", { tenant_id: chunk, type: opts.type, limit: 200 }, undefined, scope ? 10 : 25);
+    rows.push(...r.items);
+    truncated ||= r.truncated;
+  }
+  return { rows: opts.includeGroups ? rows : rows.filter((i) => !String(i.context?.type || "").startsWith("resource.group")), truncated };
+}
+
+// Every agent of the partner account, cached 2 minutes (agent_manager ignores
+// UUIDs in tenant_id, so a customer's agents are picked by their tenant name).
+let agentCache: { at: number; rows: any[] } | null = null;
+async function allAgents(env: Env): Promise<any[]> {
+  if (agentCache && Date.now() - agentCache.at < 120000) return agentCache.rows;
+  const { items } = await allPages(env, "/agent_manager/v2/agents", { limit: 100 }, undefined, 30);
+  agentCache = { at: Date.now(), rows: items };
+  return items;
+}
+
+async function loadAgents(env: Env, scope: Scope | undefined): Promise<any[]> {
+  const rows = await allAgents(env);
+  return scope ? rows.filter((a) => scope.names.has(a.tenant?.name)) : rows;
+}
+
+// Resource ids (UPPERCASE, as task_manager stores them) of workloads in scope whose name contains q.
+async function resourceIdsByName(env: Env, scope: Scope | undefined, q: string): Promise<{ ids: string[]; names: string[] }> {
+  const { rows } = await loadWorkloads(env, scope, {});
+  const hits = rows.filter((i) => `${i.context?.name || ""} ${i.context?.user_defined_name || ""}`.toLowerCase().includes(q.toLowerCase()));
+  return { ids: [...new Set(hits.map((i) => String(i.context.id).toUpperCase()))], names: [...new Set(hits.map((i) => i.context.user_defined_name || i.context.name))] };
+}
 
 // ─── Slim views ───────────────────────────────────────────────────────────────
 
+// Acronis errors nest ~20 levels deep; the readable cause is cause_str/effect_str.
+function errorSummary(result: any): unknown {
+  if (!result) return undefined;
+  const e = result.error;
+  const warnings = [...new Set((result.warnings || []).map((w: any) => w?.context?.cause_str || w?.reason).filter(Boolean))].slice(0, 3);
+  if (!e && !warnings.length) return result.code;
+  return {
+    code: result.code,
+    reason: e?.reason || e?.code,
+    cause: e?.context?.cause_str || e?.context?.msg,
+    effect: e?.context?.effect_str,
+    warnings: warnings.length ? warnings : undefined,
+  };
+}
+
 async function slimAlert(env: Env, a: any) {
-  const d = a.details || {};
+  const d = typeof a.details === "string" ? (() => { try { return JSON.parse(a.details); } catch { return {}; } })() : a.details || {};
   return {
     id: a.id, severity: a.severity, category: a.category, type: a.type,
-    tenant: (await tenantName(env, a.tenant?.id)) ?? a.tenant?.id,
-    resource: d.resourceName, plan: d.planName,
+    customer: (await customerOf(env, a.tenant?.uuid)) ?? a.tenant?.id,
+    resource: d.resourceName, resource_id: d.resourceId, plan: d.planName,
+    activity: d.activityName, message: d.warning?.suberror?.suberror?.fields?.ErrorDescription ?? d.errorMessage?.kbLink?.serCode,
     createdAt: a.createdAt, updatedAt: a.updatedAt, dismissedAt: a.deletedAt || undefined,
-    details: cap(d),
   };
 }
 
 async function slimWorkload(env: Env, i: any) {
   const c = i.context || {};
+  const backups = (i.policies || []).filter((p: any) => String(p.type).includes("backup"));
+  const lastSuccess = backups.map((p: any) => p.last_success_run).filter(Boolean).sort().pop();
+  const lastRun = backups.map((p: any) => p.last_run).filter(Boolean).sort().pop();
   return {
     id: c.id, name: c.user_defined_name || c.name, type: c.type,
-    tenant: (await tenantName(env, c.tenant_id)) ?? c.tenant_id,
+    customer: (await customerOf(env, c.tenant_id)) ?? c.tenant_name,
     status: i.aggregate?.status, plans: i.aggregate?.names,
-    policies: (i.policies || []).map((p: any) => cap({ type: p.type, status: p.status, last_run: p.last_run, last_success_run: p.last_success_run, next_run: p.next_run ?? p.next_run_time }, 800)),
+    last_backup_run: lastRun, last_backup_success: lastSuccess,
+    days_since_success: daysSince(lastSuccess),
+    next_run: backups.map((p: any) => p.next_run).filter(Boolean).sort()[0],
+    other_policies: (i.policies || []).filter((p: any) => !String(p.type).includes("backup")).map((p: any) => p.type),
   };
 }
 
 function slimTask(t: any) {
   return {
-    id: t.id, type: t.type, state: t.state, result: cap(t.result, 1200),
-    resource: t.resource ? { id: t.resource.id, name: t.resource.name, type: t.resource.type } : undefined,
-    plan: t.policy ? { id: t.policy.id, name: t.policy.name } : undefined,
-    tenant: t.tenant?.name, startedBy: t.startedByUser,
+    id: t.idString ?? t.id, title: t.context?.title, state: t.state, result: errorSummary(t.result),
+    resource: t.resource?.name, resource_id: t.resource?.id, plan: t.policy?.name,
+    unit: t.tenant?.name, run_mode: t.context?.runMode, started_by: t.startedByUser,
     enqueuedAt: t.enqueuedAt, startedAt: t.startedAt, completedAt: t.completedAt,
+  };
+}
+
+function slimActivity(a: any) {
+  return {
+    id: a.idString ?? a.id, task_id: a.taskIdString ?? a.taskId, title: a.context?.title, state: a.state,
+    result: errorSummary(a.result), resource: a.resource?.name, plan: a.policy?.name ?? a.context?.BackupPlanName,
+    backup_type: a.context?.BackupType, location: a.context?.Location?.StorageKind?.LocationKind,
+    startedAt: a.startedAt, completedAt: a.completedAt,
   };
 }
 
 function slimAgent(a: any) {
   return {
-    id: a.id, hostname: a.hostname, name: a.name !== a.hostname ? a.name : undefined,
-    online: a.online, enabled: a.enabled, tenant: a.tenant?.name,
-    os: a.platform?.family ?? a.platform?.os_family ?? cap(a.platform, 200),
-    version: a.core_version?.current ?? cap(a.installer_version?.current, 200),
-    auto_update: a.auto_update, registered: a.registration_date,
+    id: a.id, hostname: a.hostname, online: a.online, enabled: a.enabled, unit: a.tenant?.name,
+    os: a.platform?.name && a.platform.name !== "windows" ? a.platform.name : a.platform?.family,
+    agent_version: a.core_version?.current ? `${a.core_version.current.release_id}.${a.core_version.current.build}` : undefined,
+    installer_version: a.installer_version?.current?.release_id,
+    update_status: a.unattended_update?.status, registered: a.registration_date,
   };
 }
 
-function slimPlan(it: any) {
-  const p = Array.isArray(it.policy) ? (it.policy.find((x: any) => !x.parent_ids?.length) || it.policy[0]) : (it.policy || it);
+function slimPlan(it: any, customer?: string) {
+  const all: any[] = Array.isArray(it.policy) ? it.policy : [it.policy || it];
+  const p = all.find((x) => !x.parent_ids?.length) || all[0];
   const ctx = it.context?.items;
   return {
-    id: p?.id, name: p?.name, type: p?.type, enabled: p?.enabled, tenant: p?.tenant_id,
+    id: p?.id, name: p?.name, enabled: p?.enabled, comment: p?.comment, customer,
+    enabled_parts: all.filter((x) => x !== p && x.enabled).map((x) => x.name || x.type),
     applied_to: Array.isArray(ctx) ? ctx.map((c: any) => c.name || c.id).slice(0, 100) : undefined,
   };
 }
 
-// Tasks/activities have no tenant filter: keep only rows of that tenant when
-// the row says which tenant it belongs to.
-function sameTenant(row: any, tid: string): boolean {
-  const t = row.tenant;
-  if (!t) return true;
-  return t.uuid === tid || t.id === tid || String(t.locator || "").includes(tid);
-}
+// ─── Endpoint catalog ─────────────────────────────────────────────────────────
+// src/catalog.json is generated from Acronis's OpenAPI specs (spec/, `npm run
+// catalog`). LIVE_NOTES records what calling each API with Altec's
+// partner-level API client actually did (2026-11-16).
+
+type CatOp = { a: string; m: string; p: string; s?: string; d?: string; q: [string, string, number, string, string?, unknown[]?][] };
+const CATALOG = catalogJson as unknown as { built: string; apis: { api: string; title: string; version: string; base: string; operations: number }[]; ops: CatOp[] };
+
+const LIVE_NOTES: Record<string, string> = {
+  "account-management-v2": "Works. Tenant list includes the units under each customer (where machines live).",
+  "alerts-v1": "Works. tenant=<customer UUID> includes its units; severity=or(a,b) and updated_at=gt(<unix ns>) work.",
+  "agents-v2": "Works partner-wide. tenant_id ignores UUIDs (only Acronis's numeric tenant ids, e.g. 273146, which appear in alert/task 'locator' paths).",
+  "resource-policy-management-v4": "Works. resource_statuses tenant_id = exact tenant (send each unit's UUID); policies at the customer UUID; /policy_management/v4/applications gives per-machine deployment state, last success and next run.",
+  "tasks-v2": "Works. Resource ids UPPERCASE; like()/gt() filters return 500 or time out; X-Apigw-Tenant-Id is ignored. Sort with order=desc(id).",
+  "vaultman-v1": "Returns empty lists to this partner-level client (vaults, archives, backups, backed_up_resources, storage_usage_stats). Probably needs a customer-level API client.",
+  "disaster-recovery-v2": "Refused: 'Request is not allowed for tenant kind partner'. Needs a customer-level API client.",
+  "mdr-v1": "Needs customer_id=<customer UUID>; a customer without EDR answers 'route to DB client is not found'.",
+  "events-v1": "Works. /event_manager/v1/topics lists topics (task events, tenant changes); /types needs a topic or type id.",
+  "advanced-automation-v1": "Acronis PSA (ticketing/billing) - only useful if Acronis PSA is in use; Altec uses HaloPSA. Not tested.",
+  "files-v1": "File Sync & Share (Acronis Cyber Files), a separate product - not backup contents. Path starts /fc/api/v1. Not tested.",
+  "pricelist-v1": "Price lists. Not tested.",
+};
+
+const VAULT_NOTE = "Acronis returned no recovery points. With a partner-level API client the Vault Manager API has returned nothing so far (2026-11-16); use list_workloads (last_backup_success) and list_activities instead.";
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
 const TENANT = { type: "string", description: "Customer name (or part of it) or tenant UUID" };
 const FULL = { type: "boolean", description: "Return Acronis's raw rows instead of the trimmed view" };
 const SINCE = { type: "string", description: "Only items since this time: ISO (2026-11-01T00:00:00Z) or relative (24h, 7d)" };
+const RESOURCE = { type: "string", description: "Workload id (from list_workloads / get_backup_status)" };
+const RESOURCE_NAME = { type: "string", description: "Part of the machine/workload name (looked up in list_workloads)" };
 
 const TOOLS = [
   {
@@ -362,7 +514,7 @@ const TOOLS = [
   },
   {
     name: "get_tenant",
-    description: "One tenant's details: kind, parent, enabled, customer type, contact, MFA status, created date.",
+    description: "One tenant's details: kind, parent, enabled, customer type, contact, MFA status, created date, and its units (where the machines live).",
     inputSchema: { type: "object", properties: { tenant: TENANT, full: FULL }, required: ["tenant"] },
   },
   {
@@ -372,20 +524,22 @@ const TOOLS = [
   },
   {
     name: "get_backup_status",
-    description: "Start here for 'is this client's backup working?'. For one customer: every protected workload with its status and last run / last successful run, workloads with problems first, offline agents, and open alerts (warning and worse).",
+    description: "Start here for 'is this client's backup working?'. For one customer: every workload with status, last backup run, last SUCCESSFUL backup and days since it (problems first), offline agents, and open alerts (warning and worse). Then use list_activities with the workload name to see why a backup failed.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
-      name: { type: "string", description: "Only workloads/agents whose name contains this (e.g. a computer name)" },
+      name: { type: "string", description: "Only workloads/agents/alerts whose name contains this (e.g. a computer name)" },
     }, required: ["tenant"] },
   },
   {
     name: "list_workloads",
-    description: "Protection status per workload (machine, VM, M365 mailbox...): status (idle/ok, warning, error, critical, not_protected, running...), plan names, last run and last successful run per plan.",
+    description: "Protection status per workload (machine, VM, M365 mailbox...): status, plan, last backup run, last successful backup, days since success, next run. Across all customers when tenant is left out.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
-      name: { type: "string", description: "Part of the workload name" },
-      type: { type: "string", description: "Acronis resource type, e.g. resource.machine" },
+      name: RESOURCE_NAME,
+      type: { type: "string", description: "Acronis resource type, e.g. resource.machine, resource.virtual_machine.mshyperv" },
       only_problems: { type: "boolean", description: "Only warning/error/critical/not protected/needs interaction" },
+      stale_days: { type: "number", description: "Only workloads whose last successful backup is older than this many days" },
+      include_groups: { type: "boolean", description: "Also return resource groups (hidden by default)" },
       limit: { type: "number", description: "Max rows returned (default 100)" },
       full: FULL,
     } },
@@ -393,18 +547,18 @@ const TOOLS = [
   {
     name: "get_workload",
     description: "One workload (resource) by id, with its attributes (OS, agent, IPs as Acronis records them).",
-    inputSchema: { type: "object", properties: { resource_id: { type: "string" } }, required: ["resource_id"] },
+    inputSchema: { type: "object", properties: { resource_id: RESOURCE }, required: ["resource_id"] },
   },
   {
     name: "list_alerts",
-    description: "Acronis alerts (backup failed, no backup for X days, agent offline, malware...), newest first. Dismissed alerts are hidden unless include_dismissed.",
+    description: "Acronis alerts (backup failed, status unknown, no backup for X days, agent offline, malware...), newest first. Dismissed alerts are hidden unless include_dismissed.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
       severity: { type: "string", description: "One or more of information, warning, error, critical (comma-separated)" },
-      category: { type: "string", description: "e.g. Backup, Monitoring, Antimalware protection" },
-      type: { type: "string", description: "Alert type, e.g. NoBackupForXDays" },
+      category: { type: "string", description: "e.g. Backup, System, Monitoring, Antimalware protection" },
+      type: { type: "string", description: "Alert type, e.g. BackupFailed, BackupStatusUnknown, NoBackupForXDays" },
       query: { type: "string", description: "Part of the resource (machine) or plan name" },
-      resource_id: { type: "string" },
+      resource_id: RESOURCE,
       since: SINCE,
       include_dismissed: { type: "boolean" },
       limit: { type: "number", description: "default 25, max 200" },
@@ -426,76 +580,90 @@ const TOOLS = [
     } },
   },
   {
-    name: "list_tasks",
-    description: "Task history (backup runs, recoveries, replications...), newest first, with result code and error. Filter by workload, plan, state (enqueued/started/completed...) and result (ok, warning, error, cancelled, abandoned, timedout).",
+    name: "list_activities",
+    description: "Backup history for a machine with the REAL error: each backup run/step, newest first, with result and cause (e.g. \"Disk 'E:\\\\...avhdx' is not found\"). Pass resource_name (or resource_id), or task_id for the steps of one task. errors_only skips successful runs.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
-      resource_id: { type: "string" },
-      resource_name: { type: "string", description: "Part of the workload name" },
-      plan_name: { type: "string", description: "Part of the protection plan name" },
-      state: { type: "string" },
-      result: { type: "string", description: "One or more result codes, comma-separated" },
-      type: { type: "string", description: "Task type" },
-      since: { type: "string", description: "Completed since: ISO or 24h / 7d" },
-      limit: { type: "number", description: "default 20, max 200" },
+      resource_name: RESOURCE_NAME,
+      resource_id: RESOURCE,
+      task_id: { type: "string" },
+      errors_only: { type: "boolean", description: "Only runs that ended with error/warning" },
+      since: SINCE,
+      limit: { type: "number", description: "default 15, max 100" },
       full: FULL,
     } },
   },
   {
-    name: "list_activities",
-    description: "Activities (steps) of one task, with their result and error details - use to see why a backup failed.",
+    name: "list_tasks",
+    description: "Task history (backup plan runs, replication, indexing...), newest first, with result and cause. Backup-plan tasks are logged against the machine running the agent (e.g. the Hyper-V host), per-VM detail is in list_activities. Filter by resource, tenant, state and result.",
     inputSchema: { type: "object", properties: {
-      task_id: { type: "string" },
       tenant: TENANT,
-      limit: { type: "number", description: "default 50, max 200" },
-    }, required: ["task_id"] },
+      resource_name: RESOURCE_NAME,
+      resource_id: RESOURCE,
+      state: { type: "string", description: "enqueued, assigned, started, paused, completed" },
+      result: { type: "string", description: "ok, warning, error, cancelled, abandoned, timedout" },
+      since: SINCE,
+      limit: { type: "number", description: "default 15, max 100" },
+      full: FULL,
+    } },
   },
   {
     name: "list_agents",
-    description: "Protection agents: hostname, online, version, OS, tenant. Filter by name, online state, up_to_date.",
+    description: "Protection agents: hostname, online, version, OS, update status. Filter by customer, name, online state.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
       name: { type: "string", description: "Part of the hostname" },
       online: { type: "boolean" },
-      up_to_date: { type: "boolean" },
-      os_family: { type: "string", enum: ["WINDOWS", "LINUX", "MACOSX", "SOLARIS", "UNKNOWN"] },
       limit: { type: "number", description: "Max rows returned (default 100)" },
       full: FULL,
     } },
   },
   {
     name: "list_protection_plans",
-    description: "Protection plans (backup, antimalware, patching...) with enabled state and, if include_resources, which workloads each covers.",
+    description: "A customer's protection plans: enabled state, which parts are on (backup, antimalware, patching...) and, if include_resources, which workloads each covers.",
     inputSchema: { type: "object", properties: {
       tenant: TENANT,
       search: { type: "string", description: "Part of the plan name" },
       include_resources: { type: "boolean" },
       full: FULL,
-    } },
+    }, required: ["tenant"] },
   },
   {
     name: "list_backups",
-    description: "Recovery points of one workload, newest first: time, size, type, validation and malware scan result.",
+    description: "Recovery points of one workload from the Vault Manager API, newest first. NOTE: with our partner-level API client this API has returned nothing so far; prefer list_workloads (last_backup_success) and list_activities.",
     inputSchema: { type: "object", properties: {
-      resource_id: { type: "string", description: "Workload id from list_workloads / get_backup_status" },
-      tenant: TENANT,
+      resource_id: RESOURCE,
       limit: { type: "number", description: "default 10" },
       full: FULL,
     }, required: ["resource_id"] },
   },
   {
     name: "list_archives",
-    description: "Backup archives (backup sets) of one workload or plan, with storage size.",
+    description: "Backup archives of one workload or plan from the Vault Manager API, with storage size. Same caveat as list_backups.",
     inputSchema: { type: "object", properties: {
-      resource_id: { type: "string" },
+      resource_id: RESOURCE,
       plan_id: { type: "string" },
-      tenant: TENANT,
       limit: { type: "number", description: "default 20" },
     } },
   },
   {
+    name: "acronis_find_endpoints",
+    description: `Search every documented Acronis API endpoint (${CATALOG.ops.length} operations, ${CATALOG.ops.filter((o) => o.m === "GET").length} of them reads, from Acronis's own OpenAPI specs: Account Management, Alerts, Agents, Resource/Policy Management, Tasks, Vault Manager, Event Manager, EDR, Disaster Recovery, Acronis PSA, Pricelist, File Sync & Share). Use it to find a read endpoint no named tool covers, then call it with acronis_api_get. With no query, lists the APIs and what this API client can and cannot use. Note: Acronis publishes NO API for searching or browsing files inside backups.`,
+    inputSchema: { type: "object", properties: {
+      query: { type: "string", description: "Words that must all appear in the path, summary, description or parameter names, e.g. 'alert types', 'hardware node', 'archive stats', 'incident'" },
+      api: { type: "string", description: "Only this API, e.g. alerts-v1, vaultman-v1, agents-v2" },
+      include_writes: { type: "boolean", description: "Also list POST/PUT/PATCH/DELETE (not callable here; this MCP is read-only)" },
+      limit: { type: "number", description: "Max hits (default 30)" },
+    } },
+  },
+  {
+    name: "acronis_describe_endpoint",
+    description: "Full detail of one Acronis endpoint from the catalog: path, every parameter (where it goes, required, type, allowed values, meaning), and what is known from live use about calling it with this API client. Pass the path as acronis_find_endpoints shows it.",
+    inputSchema: { type: "object", properties: { path: { type: "string", description: "e.g. /alert_manager/v1/types or /agent_manager/v2/hardware_nodes" }, method: { type: "string", description: "Default GET" } }, required: ["path"] },
+  },
+  {
     name: "acronis_api_get",
-    description: "Read-only escape hatch: GET any Acronis Cyber Platform path under /api, e.g. /2/tenants/{id}, /alert_manager/v1/types?os_type=windows, /policy_management/v4/applications, /resource_management/v4/resources. Query params as an object; tenant sets the X-Apigw-Tenant-Id scope. Token/secret/password paths are refused. 60K cap.",
+    description: "Read-only escape hatch: GET any Acronis path from acronis_find_endpoints - under /api (e.g. /2/tenants/{id}, /alert_manager/v1/types, /policy_management/v4/applications) or /fc/api/v1/... for File Sync & Share. Query params as an object (an array value repeats the parameter). Notes: task_manager ids are UPPERCASE; resource_statuses tenant_id takes UUIDs (exact tenant); agents' tenant_id needs Acronis's numeric id. Token/secret/password paths are refused. 60K cap.",
     inputSchema: { type: "object", properties: { path: { type: "string" }, params: { type: "object" }, tenant: TENANT }, required: ["path"] },
   },
 ];
@@ -511,23 +679,25 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
 
     case "list_customers": {
       const kind = String(args.kind ?? "customer").toLowerCase();
-      let rows = await allTenants(env);
+      const all = await allTenants(env);
+      let rows = all;
       if (kind !== "all") rows = rows.filter((t) => t.kind === kind);
       if (!args.include_disabled) rows = rows.filter((t) => t.enabled !== false);
       if (args.name) rows = rows.filter((t) => (t.name || "").toLowerCase().includes(String(args.name).toLowerCase()));
-      const names = new Map((await allTenants(env)).map((t) => [t.id, t.name]));
-      rows.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      const names = new Map(all.map((t) => [t.id, t.name]));
+      rows = [...rows].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       return out({ count: rows.length, customers: rows.map((t) => ({ name: t.name, id: t.id, kind: t.kind, enabled: t.enabled, parent: names.get(t.parent_id || "") })) });
     }
 
     case "get_tenant": {
-      const t = (await tenantArg(env, args, true))!;
-      const r = await api(env, `/2/tenants/${t.id}`);
+      const s = (await scopeArg(env, args, true))!;
+      const r = await api(env, `/2/tenants/${s.root.id}`);
       if (args.full) return out(r);
+      const units = (await allTenants(env)).filter((t) => s.ids.has(t.id) && t.id !== s.root.id).map((t) => ({ name: t.name, id: t.id, kind: t.kind }));
       return out({
         id: r.id, name: r.name, kind: r.kind, enabled: r.enabled, customer_type: r.customer_type,
         parent: (await tenantName(env, r.parent_id)) ?? r.parent_id, mfa_status: r.mfa_status,
-        pricing_mode: r.pricing_mode, created_at: r.created_at, contact: cap(r.contact, 800),
+        pricing_mode: r.pricing_mode, created_at: r.created_at, contact: cap(r.contact, 800), units,
       });
     }
 
@@ -539,53 +709,49 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
         name: u.name, edition: u.edition, type: u.usage_type ?? u.type, value: u.value, absolute_value: u.absolute_value,
         measurement_unit: u.measurement_unit, quota: u.offering_item?.quota?.value ?? u.quota?.value,
       })));
-      return out({ tenant: t.name, usages: rows.length || !r?.items ? rows : "no non-zero usage rows - call again with full: true", });
+      return out({ tenant: t.name, usages: rows.length || !r?.items ? rows : "no non-zero usage rows - call again with full: true" });
     }
 
-    case "list_workloads":
+    case "list_workloads": {
+      const s = await scopeArg(env, args, false);
+      let { rows, truncated } = await loadWorkloads(env, s, { type: args.type, includeGroups: Boolean(args.include_groups) });
+      if (args.name) rows = rows.filter((i: any) => `${i.context?.name || ""} ${i.context?.user_defined_name || ""}`.toLowerCase().includes(String(args.name).toLowerCase()));
+      if (args.only_problems) rows = rows.filter((i: any) => PROBLEM_STATUSES.includes(String(i.aggregate?.status)));
+      const limit = clampLimit(args.limit, 100, 1000);
+      if (args.full) return out({ count: rows.length, items: rows.slice(0, limit) });
+      let slim = await Promise.all(rows.map((i: any) => slimWorkload(env, i)));
+      if (args.stale_days !== undefined) slim = slim.filter((w) => w.last_backup_run && (w.days_since_success === undefined || w.days_since_success > Number(args.stale_days)));
+      return out({ customer: s?.customer.name, count: slim.length, returned: Math.min(slim.length, limit), truncated, workloads: slim.slice(0, limit) });
+    }
+
     case "get_backup_status": {
-      const t = await tenantArg(env, args, name === "get_backup_status");
+      const s = (await scopeArg(env, args, true))!;
       const nameQ = args.name ? String(args.name).toLowerCase() : undefined;
-      const loadWorkloads = async () => {
-        const { items, truncated } = await allPages(env, "/resource_management/v4/resource_statuses", { tenant_id: t?.id, type: args.type, limit: 200 });
-        let rows = items;
-        if (nameQ) rows = rows.filter((i: any) => `${i.context?.name || ""} ${i.context?.user_defined_name || ""}`.toLowerCase().includes(nameQ));
-        return { rows, truncated };
-      };
-
-      if (name === "list_workloads") {
-        let { rows, truncated } = await loadWorkloads();
-        if (args.only_problems) rows = rows.filter((i: any) => PROBLEM_STATUSES.includes(String(i.aggregate?.status)));
-        const limit = clampLimit(args.limit, 100, 1000);
-        if (args.full) return out({ count: rows.length, items: rows.slice(0, limit) });
-        const slim = await Promise.all(rows.slice(0, limit).map((i: any) => slimWorkload(env, i)));
-        return out({ tenant: t?.name, count: rows.length, returned: slim.length, truncated, workloads: slim });
-      }
-
-      // get_backup_status: each part reports its own error instead of failing the whole answer.
+      // Each part reports its own error instead of failing the whole answer.
       const settle = async <T>(f: () => Promise<T>): Promise<T | { error: string }> => { try { return await f(); } catch (e) { return { error: (e as Error).message }; } };
       const [wl, agents, alerts] = await Promise.all([
-        settle(loadWorkloads),
-        settle(() => allPages(env, "/agent_manager/v2/agents", { tenant_id: t!.id, limit: 100 }, undefined, 5)),
-        settle(() => api(env, "/alert_manager/v1/alerts", { tenant: t!.id, severity: "or(warning,error,critical)", order: "desc(updated_at)", limit: 50 })),
+        settle(() => loadWorkloads(env, s, {})),
+        settle(() => loadAgents(env, s)),
+        settle(() => api(env, "/alert_manager/v1/alerts", { tenant: s.root.id, severity: "or(warning,error,critical)", order: "desc(updated_at)", limit: 100 })),
       ]);
-      const result: Record<string, unknown> = { tenant: t!.name, tenant_id: t!.id, checked_at: iso(Date.now()) };
+      const result: Record<string, unknown> = { customer: s.customer.name, tenant_id: s.root.id, units: [...s.names].filter((n) => n !== s.root.name), checked_at: iso(Date.now()) };
       if ("error" in wl) result.workloads = wl;
       else {
-        const slim = await Promise.all(wl.rows.map((i: any) => slimWorkload(env, i)));
+        let rows = wl.rows;
+        if (nameQ) rows = rows.filter((i: any) => `${i.context?.name || ""} ${i.context?.user_defined_name || ""}`.toLowerCase().includes(nameQ));
+        const slim = await Promise.all(rows.map((i: any) => slimWorkload(env, i)));
         const counts: Record<string, number> = {};
         for (const w of slim) counts[String(w.status)] = (counts[String(w.status)] || 0) + 1;
-        const problems = slim.filter((w) => PROBLEM_STATUSES.includes(String(w.status)));
-        const rest = slim.filter((w) => !PROBLEM_STATUSES.includes(String(w.status)));
+        const problem = (w: any) => PROBLEM_STATUSES.includes(String(w.status)) || (w.days_since_success ?? 0) > 2;
         result.workload_status_counts = counts;
-        result.workloads_with_problems = problems;
-        result.other_workloads = rest.slice(0, 150);
-        if (rest.length > 150 || wl.truncated) result.workloads_note = "list cut short - use list_workloads with name for one machine";
+        result.workloads_with_problems = slim.filter(problem);
+        result.other_workloads = slim.filter((w) => !problem(w)).slice(0, 150);
+        if (wl.truncated) result.workloads_note = "list cut short - use list_workloads with name for one machine";
       }
       if ("error" in agents) result.agents = agents;
       else {
-        let rows = agents.items;
-        if (nameQ) rows = rows.filter((a: any) => String(a.hostname || a.name || "").toLowerCase().includes(nameQ));
+        let rows = agents;
+        if (nameQ) rows = rows.filter((a: any) => String(a.hostname || "").toLowerCase().includes(nameQ));
         result.agents_total = rows.length;
         result.agents_offline = rows.filter((a: any) => a.online === false).map(slimAgent);
       }
@@ -595,6 +761,7 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
         if (nameQ) rows = rows.filter((a: any) => JSON.stringify(a.details || {}).toLowerCase().includes(nameQ));
         result.open_alerts = await Promise.all(rows.map((a: any) => slimAlert(env, a)));
       }
+      result.next_step = "For a workload with problems, call list_activities with its name and errors_only: true to see the cause.";
       return out(result);
     }
 
@@ -631,61 +798,87 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
         severity: orFilter(args.severity ?? "warning,error,critical"), category: orFilter(args.category),
         updated_at: since !== undefined ? `gt(${since}000000)` : undefined,
       });
+      const byName = new Map((await allTenants(env)).filter((t) => t.kind === "customer").map((t) => [t.name, t.id]));
       const rows = (r?.items || []).filter((x: any) => Number(x.alerts_count) > 0)
         .sort((a: any, b: any) => Number(b.alerts_count) - Number(a.alerts_count))
-        .map((x: any) => ({ customer: x.customer_name, tenant_id: x.customer_id, alerts: x.alerts_count }));
+        .map((x: any) => ({ customer: x.customer_name, tenant_id: byName.get(x.customer_name), alerts: x.alerts_count }));
       return out({ customers_with_alerts: rows.length, items: rows });
     }
 
+    case "list_activities":
     case "list_tasks": {
-      const t = await tenantArg(env, args, false);
+      const s = await scopeArg(env, args, false);
       const since = sinceMs(args.since);
-      const like = (v: unknown) => (v === undefined ? undefined : String(v).includes("%") ? `like(${v})` : `like(%${v}%)`);
-      const limit = clampLimit(args.limit, 20, 200);
-      const r = await api(env, "/task_manager/v2/tasks", {
-        resourceId: pick(args, "resource_id"), resourceName: like(pick(args, "resource_name")), policyName: like(pick(args, "plan_name")),
-        state: args.state, resultCode: orFilter(args.result), type: args.type,
-        completedAt: since !== undefined ? `gt(${iso(since)})` : undefined,
-        order: "desc(enqueuedAt)", lod: "full", limit,
-      }, t?.id);
-      let items = r?.items || [];
-      const before = items.length;
-      if (t) items = items.filter((x: any) => sameTenant(x, t.id));
-      if (args.full) return out({ ...r, items });
-      return out({ tenant: t?.name, count: items.length, other_tenants_dropped: before - items.length || undefined, tasks: items.map(slimTask) });
-    }
-
-    case "list_activities": {
-      const t = await tenantArg(env, args, false);
-      const taskId = String(pick(args, "task_id") ?? "");
-      if (!taskId) throw new Error("task_id is required");
-      const r = await api(env, "/task_manager/v2/activities", { taskId, lod: "full", limit: clampLimit(args.limit, 50, 200) }, t?.id);
-      return out({ count: (r?.items || []).length, activities: (r?.items || []).map((a: any) => cap(a, 2500)) });
+      const limit = clampLimit(args.limit, 15, 100);
+      const params: Record<string, unknown> = { lod: "full", order: "desc(id)" };
+      let resolved: string[] | undefined;
+      const taskId = pick(args, "task_id");
+      if (taskId && name === "list_activities") params.taskId = String(taskId);
+      else if (pick(args, "resource_id")) params.resourceId = String(pick(args, "resource_id")).toUpperCase();
+      else if (pick(args, "resource_name")) {
+        const r = await resourceIdsByName(env, s, String(pick(args, "resource_name")));
+        if (!r.ids.length) throw new Error(`No workload matches "${pick(args, "resource_name")}"${s ? ` for ${s.customer.name}` : ""}. Use list_workloads to find it.`);
+        params.resourceId = r.ids.slice(0, 20); // repeated param = any of them
+        resolved = r.names;
+      } else if (!s) throw new Error("Pass tenant, resource_name, resource_id" + (name === "list_activities" ? " or task_id" : ""));
+      if (name === "list_tasks") {
+        if (args.state) params.state = String(args.state);
+        if (args.result) params.resultCode = list(args.result);
+      }
+      // No server-side date or tenant filter that works (like()/gt() give 500s
+      // and timeouts): page newest-first and filter here.
+      const wantErrors = name === "list_activities" && args.errors_only;
+      const rows: any[] = [];
+      let after: string | undefined;
+      let scanned = 0;
+      for (let page = 0; page < 8 && rows.length < limit; page++) {
+        const r = await api(env, `/task_manager/v2/${name === "list_tasks" ? "tasks" : "activities"}`, after ? { limit: 100, after } : { ...params, limit: 100 });
+        const items = r?.items || [];
+        scanned += items.length;
+        let stop = false;
+        for (const x of items) {
+          const when = Date.parse(x.completedAt || x.startedAt || x.enqueuedAt || x.createdAt || "");
+          if (since !== undefined && !Number.isNaN(when) && when > 0 && when < since) { stop = true; break; }
+          if (s && x.tenant?.uuid && !s.ids.has(x.tenant.uuid)) continue;
+          if (wantErrors && !["error", "warning"].includes(x.result?.code) && !(x.result?.warnings || []).length) continue;
+          rows.push(x);
+          if (rows.length >= limit) break;
+        }
+        after = nextCursor(r);
+        if (stop || !after || !items.length) break;
+      }
+      if (args.full) return out({ count: rows.length, items: rows });
+      return out({
+        customer: s?.customer.name, resources: resolved, scanned, count: rows.length,
+        [name === "list_tasks" ? "tasks" : "activities"]: rows.map((x: any) => (name === "list_tasks" ? slimTask(x) : slimActivity(x))),
+      });
     }
 
     case "list_agents": {
-      const t = await tenantArg(env, args, false);
-      const { items, truncated } = await allPages(env, "/agent_manager/v2/agents", { tenant_id: t?.id, online: args.online, up_to_date: args.up_to_date, os_family: args.os_family, limit: 100 }, undefined, 10);
-      let rows = items;
-      if (args.name) rows = rows.filter((a: any) => String(a.hostname || a.name || "").toLowerCase().includes(String(args.name).toLowerCase()));
+      const s = await scopeArg(env, args, false);
+      let rows = await loadAgents(env, s);
+      if (args.name) rows = rows.filter((a: any) => String(a.hostname || "").toLowerCase().includes(String(args.name).toLowerCase()));
+      if (typeof args.online === "boolean") rows = rows.filter((a: any) => a.online === args.online);
       const limit = clampLimit(args.limit, 100, 1000);
       if (args.full) return out({ count: rows.length, items: rows.slice(0, limit) });
-      return out({ tenant: t?.name, count: rows.length, truncated, agents: rows.slice(0, limit).map(slimAgent) });
+      return out({ customer: s?.customer.name, count: rows.length, agents: rows.slice(0, limit).map(slimAgent) });
     }
 
     case "list_protection_plans": {
-      const t = await tenantArg(env, args, false);
-      const { items, truncated } = await allPages(env, "/policy_management/v4/policies", { tenant_id: t?.id, search: args.search, include_applied_context: args.include_resources ? true : undefined, limit: 100 }, undefined, 5);
+      const s = (await scopeArg(env, args, true))!;
+      const { items, truncated } = await allPages(env, "/policy_management/v4/policies", { tenant_id: s.customer.id, include_applied_context: args.include_resources ? true : undefined, limit: 50 }, undefined, 5);
+      let plans = items.map((it: any) => slimPlan(it, s.customer.name));
+      if (args.search) plans = plans.filter((p: any) => String(p.name || "").toLowerCase().includes(String(args.search).toLowerCase()));
       if (args.full) return out({ count: items.length, items });
-      return out({ tenant: t?.name, count: items.length, truncated, plans: items.map(slimPlan) });
+      return out({ customer: s.customer.name, count: plans.length, truncated, plans });
     }
 
     case "list_backups": {
-      const t = await tenantArg(env, args, false);
       const id = String(pick(args, "resource_id") ?? "");
       if (!id) throw new Error("resource_id is required");
-      const r = await api(env, "/vault_manager/v1/backups", { resourceId: id, limit: 500 }, t?.id);
+      const r = await api(env, "/vault_manager/v1/backups", { resourceId: id, limit: 500 });
       const items = (r?.items || []).sort((a: any, b: any) => String(b.created).localeCompare(String(a.created))).slice(0, clampLimit(args.limit, 10, 500));
+      if (!items.length) return out({ count: 0, note: VAULT_NOTE });
       if (args.full) return out({ count: items.length, items });
       return out({ count: items.length, newest_first: items.map((b: any) => ({
         created: b.created, type: b.type ?? b.backup_type, size: b.size, original_data_size: b.original_data_size,
@@ -695,12 +888,55 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
     }
 
     case "list_archives": {
-      const t = await tenantArg(env, args, false);
       if (!args.resource_id && !args.plan_id) throw new Error("Pass resource_id or plan_id");
-      const r = await api(env, "/vault_manager/v1/archives", { resourceId: args.resource_id, backupPlanId: args.plan_id, includeStats: true, limit: clampLimit(args.limit, 20, 200) }, t?.id);
-      return out({ count: (r?.items || []).length, archives: (r?.items || []).map((a: any) => ({
+      const r = await api(env, "/vault_manager/v1/archives", { resourceId: args.resource_id, backupPlanId: args.plan_id, includeStats: true, limit: clampLimit(args.limit, 20, 200) });
+      const items = r?.items || [];
+      if (!items.length) return out({ count: 0, note: VAULT_NOTE });
+      return out({ count: items.length, archives: items.map((a: any) => ({
         id: a.id, name: a.name, created: a.created, updated: a.updated, size: a.size, type: a.type, consistent: a.consistent, deleted: a.deleted || undefined, stats: cap(a.stats, 600),
       })) });
+    }
+
+    case "acronis_find_endpoints": {
+      const words = String(args.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const apiQ = args.api ? String(args.api).toLowerCase() : undefined;
+      if (!words.length && !apiQ) {
+        return out({
+          built: CATALOG.built, operations: CATALOG.ops.length, reads: CATALOG.ops.filter((o) => o.m === "GET").length,
+          apis: CATALOG.apis.map((a) => ({ ...a, reads: CATALOG.ops.filter((o) => o.a === a.api && o.m === "GET").length, live_notes: LIVE_NOTES[a.api] })),
+          file_level_search: "Not available: Acronis publishes no API to search or browse files inside backups.",
+        });
+      }
+      const hits = CATALOG.ops.filter((o) => {
+        if (apiQ && o.a.toLowerCase() !== apiQ) return false;
+        if (!args.include_writes && o.m !== "GET") return false;
+        const hay = `${o.a} ${o.m} ${o.p} ${o.s || ""} ${o.d || ""} ${o.q.map((x) => x[0]).join(" ")}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      });
+      const limit = clampLimit(args.limit, 30, 200);
+      return out({
+        count: hits.length, shown: Math.min(hits.length, limit),
+        endpoints: hits.slice(0, limit).map((o) => ({ api: o.a, method: o.m, path: o.p, summary: o.s, params: o.q.map((x) => (x[2] ? `${x[0]}*` : x[0])).join(", ") || undefined })),
+        next: "acronis_describe_endpoint for parameters, acronis_api_get to call a GET (* = required)",
+      });
+    }
+
+    case "acronis_describe_endpoint": {
+      let p = String(args.path ?? "").trim();
+      if (p.startsWith("/api/")) p = p.slice(4);
+      const method = String(args.method ?? "GET").toUpperCase();
+      const norm = (x: string) => x.replace(/\{[^}]+\}/g, "{}").toLowerCase();
+      const op = CATALOG.ops.find((o) => o.m === method && o.p === p) || CATALOG.ops.find((o) => o.m === method && norm(o.p) === norm(p));
+      if (!op) {
+        const near = CATALOG.ops.filter((o) => o.p.toLowerCase().includes(p.toLowerCase().split("/").filter(Boolean).pop() || "~")).slice(0, 10).map((o) => `${o.m} ${o.p}`);
+        throw new Error(`No ${method} ${p} in the catalog.${near.length ? ` Close: ${near.join("; ")}` : ""} Use acronis_find_endpoints.`);
+      }
+      return out({
+        api: op.a, method: op.m, path: op.p, summary: op.s, description: op.d,
+        callable: op.m === "GET" ? "yes, with acronis_api_get" : "no - this MCP is read-only",
+        params: op.q.map(([name, where, req, type, desc, en]) => ({ name, in: where, required: Boolean(req), type, values: en || undefined, description: desc })),
+        live_notes: LIVE_NOTES[op.a],
+      });
     }
 
     case "acronis_api_get": {

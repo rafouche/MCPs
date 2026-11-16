@@ -1,0 +1,516 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Pricelist API",
+    "version": "1"
+  },
+  "paths": {
+    "/effective_price_lists": {
+      "get": {
+        "operationId": "Fetch tenant's price lists",
+        "description": "Returns a tenant's price lists for one or more months.",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "description": "Tenant UUID to fetch prices for.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Tenant UUID to fetch prices for.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "months",
+            "description": "Array of months (format YYYY-MM) for which to retrieve price lists.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Array of months (format YYYY-MM) for which to retrieve price lists.",
+              "example": "2025-01,2025-02",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "description": "JWT authorization header",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "description": "JWT authorization header",
+              "type": "string",
+              "pattern": "^Bearer (.*)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price lists have been successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "price_lists"
+                  ],
+                  "properties": {
+                    "price_lists": {
+                      "description": "Collected price lists for the requested months.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "month",
+                          "currency",
+                          "commitment",
+                          "pricelist_code",
+                          "prices"
+                        ],
+                        "properties": {
+                          "month": {
+                            "description": "Target month in YYYY-MM (e.g., 2025-08).",
+                            "type": "string",
+                            "maxLength": 8
+                          },
+                          "currency": {
+                            "description": "The currency code (based on ISO 4217).",
+                            "type": "string",
+                            "maxLength": 8
+                          },
+                          "commitment": {
+                            "description": "actual partner's commitment",
+                            "type": "string",
+                            "maxLength": 8
+                          },
+                          "pricelist_code": {
+                            "description": "code of price list",
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "prices": {
+                            "description": "List of SKU/price pairs for the month.",
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "sku",
+                                "effective_price",
+                                "list_price",
+                                "sku_discount",
+                                "pricelist_discount",
+                                "category",
+                                "sub_category",
+                                "name",
+                                "friendly_name"
+                              ],
+                              "properties": {
+                                "sku": {
+                                  "description": "Stock keeping unit identifier.",
+                                  "type": "string",
+                                  "maxLength": 16
+                                },
+                                "effective_price": {
+                                  "description": "price with the discounts.",
+                                  "type": "string",
+                                  "maxLength": 16
+                                },
+                                "list_price": {
+                                  "description": "price without discounts.",
+                                  "type": "string",
+                                  "maxLength": 16
+                                },
+                                "sku_discount": {
+                                  "description": "Discount in percent",
+                                  "type": "string",
+                                  "maxLength": 16
+                                },
+                                "pricelist_discount": {
+                                  "description": "Discount in percent",
+                                  "type": "string",
+                                  "maxLength": 16
+                                },
+                                "category": {
+                                  "description": "category",
+                                  "type": "string",
+                                  "maxLength": 256
+                                },
+                                "sub_category": {
+                                  "description": "sub category",
+                                  "type": "string",
+                                  "maxLength": 256
+                                },
+                                "name": {
+                                  "description": "name",
+                                  "type": "string",
+                                  "maxLength": 256
+                                },
+                                "friendly_name": {
+                                  "description": "friendly name",
+                                  "type": "string",
+                                  "maxLength": 128
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request cannot be processed since it's malformed or contains invalid data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Method required an authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current user has no permissions for this URL/method.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDeniedError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Something unexpected has gone wrong on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth_2_0_user": [
+              "urn:acronis.com::service_plans_manager::price_list_reader"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "x-roles": [
+    {
+      "name": "public",
+      "id": "1",
+      "description": "public role",
+      "x-tags": [
+        "public"
+      ]
+    },
+    {
+      "name": "private",
+      "id": "2",
+      "description": "private role",
+      "x-tags": [
+        "private"
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "InternalServerError": {
+        "description": "Server encountered an unexpected condition that prevented it from \nfulfilling the request. Use as a base for more granular code and context definitions\n",
+        "example": {
+          "domain": "GENERAL",
+          "code": "INTERNAL_SERVER_ERROR"
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "domain"
+        ],
+        "properties": {
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "enum": [
+              "INTERNAL_SERVER_ERROR"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "enum": [
+              "GENERAL"
+            ],
+            "type": "string"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          },
+          "kb_link": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "message": {
+            "description": "human-readable message, describing the error.",
+            "type": "string"
+          }
+        }
+      },
+      "BadRequestError": {
+        "description": "Request is malformed",
+        "example": {
+          "domain": "GENERAL",
+          "code": "BAD_REQUEST_ERROR"
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "domain"
+        ],
+        "properties": {
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "enum": [
+              "BAD_REQUEST_ERROR"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "enum": [
+              "GENERAL"
+            ],
+            "type": "string"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          },
+          "kb_link": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "message": {
+            "description": "human-readable message, describing the error.",
+            "type": "string"
+          }
+        }
+      },
+      "UnauthorizedRequestError": {
+        "description": "Authorization failed",
+        "example": {
+          "domain": "ACCESS",
+          "code": "UNAUTHORIZED_REQUEST"
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "domain"
+        ],
+        "properties": {
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "enum": [
+              "UNAUTHORIZED_REQUEST"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "enum": [
+              "ACCESS"
+            ],
+            "type": "string"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          },
+          "kb_link": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "message": {
+            "description": "human-readable message, describing the error.",
+            "type": "string"
+          }
+        }
+      },
+      "AccessDeniedError": {
+        "description": "Access was denied",
+        "example": {
+          "domain": "ACCESS",
+          "code": "ACCESS_DENIED_ERROR",
+          "context": {
+            "scope": "urn:acronis.com:tenant-id:1234567890:company_admin"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "context",
+          "code",
+          "domain"
+        ],
+        "properties": {
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string"
+              }
+            }
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "enum": [
+              "ACCESS_DENIED_ERROR"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "enum": [
+              "ACCESS"
+            ],
+            "type": "string"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          },
+          "kb_link": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "message": {
+            "description": "human-readable message, describing the error.",
+            "type": "string"
+          }
+        }
+      },
+      "debugInfo": {
+        "description": "Error debug information (map type)",
+        "type": "object"
+      },
+      "kbLinkInfo": {
+        "description": "Components for kblink",
+        "type": "object",
+        "required": [
+          "line_tag",
+          "ser_code",
+          "version",
+          "build",
+          "product",
+          "os"
+        ],
+        "properties": {
+          "line_tag": {
+            "type": "string"
+          },
+          "ser_code": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "build": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth_2_0_user": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 security scheme definition for a user authorization.",
+        "flows": {
+          "password": {
+            "scopes": {
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:writer": "",
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:reader": "",
+              "urn:acronis.com::service_plans_manager::price_list_writer": "",
+              "urn:acronis.com::service_plans_manager::price_list_reader": ""
+            },
+            "tokenUrl": "/api/2/idp/token"
+          },
+          "clientCredentials": {
+            "scopes": {
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:writer": "",
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:reader": "",
+              "urn:acronis.com::service_plans_manager::price_list_writer": "",
+              "urn:acronis.com::service_plans_manager::price_list_reader": ""
+            },
+            "tokenUrl": "/api/2/idp/token"
+          },
+          "authorizationCode": {
+            "scopes": {
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:writer": "",
+              "urn:acronis.com::service_plans_manager:|cti.a.p.lic.service_plan.v1.0[type={plan type}]:reader": "",
+              "urn:acronis.com::service_plans_manager::price_list_writer": "",
+              "urn:acronis.com::service_plans_manager::price_list_reader": ""
+            },
+            "authorizationUrl": "/api/2/idp/authorize",
+            "tokenUrl": "/api/2/idp/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/price_sync/v1",
+      "variables": {}
+    }
+  ]
+}

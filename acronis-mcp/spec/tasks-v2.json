@@ -1,0 +1,1810 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Task Management API",
+    "version": "v2"
+  },
+  "paths": {
+    "/tasks": {
+      "get": {
+        "operationId": "Fetch a list of tasks",
+        "description": "Fetches a list of tasks.\n\n# Sustainable behavior (informative):\nIf `sustainable=true` and a task is returned to the queue, its sustainable activities are moved to `enqueued`\nand must be restarted via `PUT /activities/{id}/started`. If not restarted by task completion, they will be marked `abandoned`.\n",
+        "x-AllowedTo": [
+          "task_manager::admin",
+          "task_manager::viewer"
+        ],
+        "parameters": [
+          {
+            "name": "lod",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/levelOfDetail"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "A number of tasks to return in one page. This parameter restricts usage of the query string parameters to `after`.",
+            "in": "query",
+            "schema": {
+              "description": "A number of tasks to return in one page. This parameter restricts usage of the query string parameters to `after`.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "description": "The page token with the next page of the results. Can be used only with the `limit` query string parameter.",
+            "in": "query",
+            "schema": {
+              "description": "The page token with the next page of the results. Can be used only with the `limit` query string parameter.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "description": "A position-dependent ordering filter.\n\nAvailable ordering operators are:\n- `asc(field)` - ascending order\n- `desc(field)` - descending order\n\nWhere \"field\" is one of the following values:  `id`, `uuid`, `type`, `priority`,\n`startedByUser`, `state`, `enqueuedAt`, `assignedAt`, `startedAt`, `updatedAt`, `completedAt`.\n",
+            "in": "query",
+            "schema": {
+              "description": "A position-dependent ordering filter.\n\nAvailable ordering operators are:\n- `asc(field)` - ascending order\n- `desc(field)` - descending order\n\nWhere \"field\" is one of the following values:  `id`, `uuid`, `type`, `priority`,\n`startedByUser`, `state`, `enqueuedAt`, `assignedAt`, `startedAt`, `updatedAt`, `completedAt`.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "executorId",
+            "description": "filter per task executor ID.",
+            "in": "query",
+            "schema": {
+              "description": "filter per task executor ID.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "description": "An ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "An ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "uuid",
+            "description": "A UUID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A UUID filter. Multiple entries are accepted.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "queue",
+            "description": "Queue filter, multiple entries are accepted",
+            "in": "query",
+            "schema": {
+              "description": "Queue filter, multiple entries are accepted",
+              "type": "string"
+            }
+          },
+          {
+            "name": "priority",
+            "description": "Priority filter, multiple entries are accepted",
+            "in": "query",
+            "schema": {
+              "description": "Priority filter, multiple entries are accepted",
+              "enum": [
+                "low",
+                "belowNormal",
+                "normal",
+                "aboveNormal",
+                "high"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "startedBy",
+            "description": "Started by user filter, multiple entries are accepted, 'like' is supported in the form 'like(value)'",
+            "in": "query",
+            "schema": {
+              "description": "Started by user filter, multiple entries are accepted, 'like' is supported in the form 'like(value)'",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyId",
+            "description": "A policy ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A policy ID filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyName",
+            "description": "A policy name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+            "in": "query",
+            "schema": {
+              "description": "A policy name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyType",
+            "description": "A policy type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A policy type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "A resource ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A resource ID filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "A resource name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a resource name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+            "in": "query",
+            "schema": {
+              "description": "A resource name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a resource name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceType",
+            "description": "A resource type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A resource type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "workflowId",
+            "description": "A workflow ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A workflow ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "state",
+            "description": "A state filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A state filter. Multiple entries are accepted.",
+              "enum": [
+                "enqueued",
+                "assigned",
+                "started",
+                "paused",
+                "completed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "resultCode",
+            "description": "A code filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A code filter. Multiple entries are accepted.",
+              "enum": [
+                "ok",
+                "error",
+                "warning",
+                "cancelled",
+                "abandoned",
+                "timedout"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "enqueuedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "startedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "updatedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "completedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "description": "A tag filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A tag filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "affinityAgentId",
+            "description": "The ID of the agent that is bound to the task.",
+            "in": "query",
+            "schema": {
+              "description": "The ID of the agent that is bound to the task.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "affinityClusterId",
+            "description": "The ID of the cluster that is bound to the task.",
+            "in": "query",
+            "schema": {
+              "description": "The ID of the cluster that is bound to the task.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "allow_deleted",
+            "description": "If true, allows to work with deleted entities.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, allows to work with deleted entities.",
+              "example": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A collection of tasks.",
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/task"
+                      }
+                    },
+                    "cursors": {
+                      "type": "object",
+                      "properties": {
+                        "after": {
+                          "description": "The page token that points to the next page",
+                          "type": "string"
+                        },
+                        "before": {
+                          "description": "The page token that points to the previous page.",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad user input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::task_manager::admin",
+              "urn:acronis.com::task_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/tasks/{task-id}": {
+      "get": {
+        "operationId": "Fetch a task",
+        "description": "Fetches a task by provided task ID.",
+        "x-AllowedTo": [
+          "task_manager::admin",
+          "task_manager::viewer"
+        ],
+        "parameters": [
+          {
+            "name": "lod",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/levelOfDetailSingleEntity"
+            }
+          },
+          {
+            "name": "allow_deleted",
+            "description": "If true, allows to work with deleted entities.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, allows to work with deleted entities.",
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "task-id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/task_1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad user input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The task does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::task_manager::admin",
+              "urn:acronis.com::task_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/activities": {
+      "get": {
+        "operationId": "Fetch a list of activities",
+        "description": "Fetches a list of activities.\n\n# Sustainable behavior (informative):\nSustainable activities move to `enqueued` when their task is requeued and must be restarted with `PUT /activities/{id}/started`.\nIf not restarted by task completion, they will be marked `abandoned`.\n",
+        "x-AllowedTo": [
+          "task_manager::admin",
+          "task_manager::viewer"
+        ],
+        "parameters": [
+          {
+            "name": "lod",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/levelOfDetail"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "A number of activities to return in one page. This parameter restricts usage of the query string parameters to `after`.",
+            "in": "query",
+            "schema": {
+              "description": "A number of activities to return in one page. This parameter restricts usage of the query string parameters to `after`.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "description": "The page token with the next page of the results. Can be used only with the `limit` query string parameter.",
+            "in": "query",
+            "schema": {
+              "description": "The page token with the next page of the results. Can be used only with the `limit` query string parameter.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "description": "An ordering filter (position-dependent).\n\nAvailable ordering operators are:\n- `asc(field)` - ascending order\n- `desc(field)` - descending order\n\nWhere \"field\" is one of the following values:  `id`, `uuid`, `type`, `startedByUser`,\n`state`, `createdAt`, `startedAt`, `updatedAt`, `completedAt`.\n",
+            "in": "query",
+            "schema": {
+              "description": "An ordering filter (position-dependent).\n\nAvailable ordering operators are:\n- `asc(field)` - ascending order\n- `desc(field)` - descending order\n\nWhere \"field\" is one of the following values:  `id`, `uuid`, `type`, `startedByUser`,\n`state`, `createdAt`, `startedAt`, `updatedAt`, `completedAt`.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "description": "An ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "An ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "uuid",
+            "description": "A UUID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A UUID filter. Multiple entries are accepted.",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "type",
+            "description": "A type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "startedBy",
+            "description": "A filter by a user who started the activity. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+            "in": "query",
+            "schema": {
+              "description": "A filter by a user who started the activity. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyId",
+            "description": "A policy ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A policy ID filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyName",
+            "description": "A policy name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+            "in": "query",
+            "schema": {
+              "description": "A policy name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a policy name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyType",
+            "description": "A policy type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A policy type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "description": "A resource ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A resource ID filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceName",
+            "description": "A resource name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a resource name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+            "in": "query",
+            "schema": {
+              "description": "A resource name filter. Multiple entries are accepted.\n\nThe 'like' operator can be used to find a resource name by a sequence of characters. Usage: `like(value)` where \"value\" is a sequence of characters.\n",
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceType",
+            "description": "A resource type filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A resource type filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "description": "A task ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A task ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "workflowId",
+            "description": "A workflow ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A workflow ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "parentActivityId",
+            "description": "A parent activity ID filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A parent activity ID filter. Multiple entries are accepted.",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "state",
+            "description": "A state filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A state filter. Multiple entries are accepted.",
+              "enum": [
+                "enqueued",
+                "assigned",
+                "started",
+                "paused",
+                "completed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "resultCode",
+            "description": "A code filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A code filter. Multiple entries are accepted.",
+              "enum": [
+                "ok",
+                "error",
+                "warning",
+                "cancelled",
+                "abandoned",
+                "timedout"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "createdAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "startedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "updatedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "completedAt",
+            "description": "A time filter. Single entry is accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A time filter. Single entry is accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "description": "A tag filter. Multiple entries are accepted.",
+            "in": "query",
+            "schema": {
+              "description": "A tag filter. Multiple entries are accepted.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sustainable",
+            "description": "Filter by sustainable activities.",
+            "in": "query",
+            "schema": {
+              "description": "Filter by sustainable activities.",
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "allow_deleted",
+            "description": "If true, allows to work with deleted entities.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, allows to work with deleted entities.",
+              "example": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A collection of activities.",
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/activity"
+                      }
+                    },
+                    "cursors": {
+                      "type": "object",
+                      "properties": {
+                        "after": {
+                          "description": "The page token that points to the next page",
+                          "type": "string"
+                        },
+                        "before": {
+                          "description": "The page token that points to the previous page.",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad user input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::task_manager::admin",
+              "urn:acronis.com::task_manager::viewer"
+            ]
+          }
+        ]
+      }
+    },
+    "/activities/{activity-id}": {
+      "get": {
+        "operationId": "Fetch an activity",
+        "description": "Fetches an activity by provided activity ID.",
+        "x-AllowedTo": [
+          "task_manager::admin",
+          "task_manager::viewer"
+        ],
+        "parameters": [
+          {
+            "name": "lod",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/levelOfDetailSingleEntity"
+            }
+          },
+          {
+            "name": "allow_deleted",
+            "description": "If true, allows to work with deleted entities.",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "description": "If true, allows to work with deleted entities.",
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "activity-id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/activity_2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad user input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The activity does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domainError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::task_manager::admin",
+              "urn:acronis.com::task_manager::viewer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "x-roles": [
+    {
+      "name": "public",
+      "id": "1",
+      "description": "public role",
+      "x-tags": [
+        "public"
+      ]
+    },
+    {
+      "name": "private",
+      "id": "2",
+      "description": "private role",
+      "x-tags": [
+        "private"
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "levelOfDetail": {
+        "enum": [
+          "tiny",
+          "short",
+          "long",
+          "full",
+          "debug",
+          "count"
+        ],
+        "type": "string"
+      },
+      "task": {
+        "description": "The task object.",
+        "type": "object",
+        "required": [
+          "state",
+          "id",
+          "issuer",
+          "cancelRequested",
+          "enqueuedAt",
+          "updatedAt",
+          "assignCount"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/executionState"
+          },
+          "result": {
+            "$ref": "#/components/schemas/executionResult"
+          },
+          "id": {
+            "description": "Server-generated unique numeric identifier for the task object.",
+            "type": "integer"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "completedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "issuer": {
+            "description": "The entity that created the task.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "clusterId": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "cancelRequested": {
+            "description": "Whether the task was requested to be cancelled.",
+            "type": "boolean"
+          },
+          "blockers": {
+            "description": "A list of reasons why the task cannot be completed without a user input.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/blocker"
+            }
+          },
+          "enqueuedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "executor": {
+            "description": "The identity of the executor.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "clusterId": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "assignCount": {
+            "description": "Current count of the assignments.",
+            "type": "integer"
+          },
+          "assignedAt": {
+            "$ref": "#/components/schemas/time"
+          }
+        }
+      },
+      "domainError": {
+        "description": "Base error object",
+        "type": "object",
+        "required": [
+          "domain",
+          "code"
+        ],
+        "properties": {
+          "domain": {
+            "description": "Error type or category. Can be ['Licensing','Access'] or name of service (for example 'PolicyManager' or 'VaultManager')",
+            "type": "string"
+          },
+          "code": {
+            "description": "Error id or code, unique in the domain. Same as in 'reason' field",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Obsolete. Error id or code, unique in the domain. Same as in 'code' field",
+            "type": "string"
+          },
+          "context": {
+            "description": "Error context dictionary",
+            "type": "object"
+          },
+          "kbLink": {
+            "$ref": "#/components/schemas/kbLinkInfo"
+          },
+          "debug": {
+            "$ref": "#/components/schemas/debugInfo"
+          }
+        }
+      },
+      "levelOfDetailSingleEntity": {
+        "enum": [
+          "tiny",
+          "short",
+          "long",
+          "full",
+          "debug"
+        ],
+        "type": "string"
+      },
+      "task_1": {
+        "description": "The task object.",
+        "type": "object",
+        "required": [
+          "state",
+          "tenant",
+          "queue",
+          "id",
+          "issuer",
+          "cancelRequested",
+          "enqueuedAt",
+          "updatedAt",
+          "type",
+          "assignCount",
+          "priority"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/executionState"
+          },
+          "ackTimeout": {
+            "description": "The time limit during which the executor has to confirm that it has started the task. Missing property OR 0 value will be defaulted to \"5s\".",
+            "type": "string"
+          },
+          "queueTimeout": {
+            "description": "The time limit during which the task can remain unassigned. Missing property OR 0 value means \"infinite\".",
+            "type": "string"
+          },
+          "context": {
+            "description": "A context of the task."
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/tenant"
+          },
+          "result": {
+            "$ref": "#/components/schemas/executionResult"
+          },
+          "argument": {
+            "description": "An argument of the task."
+          },
+          "queue": {
+            "description": "The target queue.",
+            "type": "string"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "id": {
+            "description": "Server-generated unique numeric identifier for the task object.",
+            "type": "integer"
+          },
+          "startedByUser": {
+            "description": "The name of the user who created the task.",
+            "type": "string"
+          },
+          "completedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "heartBeatInterval": {
+            "description": "The interval that is required for the executor to report the current status of the task. Missing property OR 0 value means \"infinite\". Cannot be infinite for cancellable tasks.",
+            "type": "string"
+          },
+          "resource": {
+            "description": "The link to the resource which is related to the task.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "issuer": {
+            "description": "The entity that created the task.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "clusterId": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "cancelRequested": {
+            "description": "Whether the task was requested to be cancelled.",
+            "type": "boolean"
+          },
+          "uuid": {
+            "description": "Universally unique identifier for the task object. If not set, it will be automatically generated by the server.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "tags": {
+            "description": "A list of user-defined tags.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/string64"
+            }
+          },
+          "blockers": {
+            "description": "A list of reasons why the task cannot be completed without a user input.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/blocker"
+            }
+          },
+          "progress": {
+            "$ref": "#/components/schemas/progress"
+          },
+          "enqueuedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "cancellable": {
+            "description": "Whether the task can be canceled. If true, the `heartBeatInterval` parameter also must be set to a non-infinite value.",
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "executor": {
+            "description": "The identity of the executor.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "clusterId": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "maxAssignCount": {
+            "description": "The limit for assignment attempts. Default is 1.",
+            "type": "integer"
+          },
+          "execTimeout": {
+            "description": "The time limit during which the executor has to complete the task. Missing property OR 0 value means \"infinite\".",
+            "type": "string"
+          },
+          "policy": {
+            "description": "The link to the policy which execution requires to create the task.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "lifeTime": {
+            "description": "The time limit during which the task can remain uncompleted. Missing property OR 0 value means \"infinite\".",
+            "type": "string"
+          },
+          "workflowId": {
+            "description": "The ID of the workflow that is related to the task.",
+            "type": "integer"
+          },
+          "sustainable": {
+            "description": "If true, the task is sustainable:\n- When the task is returned to the queue, its sustainable activities move to `enqueued` instead of failing.\n- Manual abandon does NOT consume an assignment attempt (`assignCount` unchanged).\n- Auto-abandon on missed heartbeats DOES consume an assignment attempt.\n",
+            "type": "boolean"
+          },
+          "type": {
+            "description": "The type of the task that is defined by the user.",
+            "type": "string"
+          },
+          "assignCount": {
+            "description": "Current count of the assignments.",
+            "type": "integer"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/taskPriority"
+          },
+          "assignedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "affinity": {
+            "description": "An object containing the information about task affinity.",
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "description": "The ID of the agent that is bound to the task.",
+                "type": "string"
+              },
+              "clusterId": {
+                "description": "The ID of the cluster that is bound to the task.",
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "activity": {
+        "description": "The activity object.",
+        "type": "object",
+        "required": [
+          "state",
+          "taskId",
+          "tenant",
+          "id",
+          "createdAt",
+          "updatedAt",
+          "executor",
+          "type"
+        ],
+        "properties": {
+          "parentActivityId": {
+            "description": "The ID of the parent activity.",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/executionState"
+          },
+          "taskId": {
+            "description": "The ID of the task that is related to the activity.",
+            "type": "integer"
+          },
+          "context": {
+            "description": "Activity context."
+          },
+          "result": {
+            "$ref": "#/components/schemas/executionResult"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/tenant"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "id": {
+            "description": "Unique numeric identifier for the activity object (server-generated).",
+            "type": "integer"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "startedByUser": {
+            "description": "The name of the user who created the activity.",
+            "type": "string"
+          },
+          "completedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "resource": {
+            "description": "The link to the resource which is related to the activity.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "tags": {
+            "description": "A list of user-defined tags.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/string64"
+            }
+          },
+          "progress": {
+            "$ref": "#/components/schemas/progress"
+          },
+          "uuid": {
+            "description": "Universally unique identifier for the activity object. If not set, it will be automatically generated by the server.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/actor"
+          },
+          "policy": {
+            "description": "The link to the policy which execution requires to create the activity.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "workflowId": {
+            "description": "The ID of the workflow that is related to the activity.",
+            "type": "integer"
+          },
+          "type": {
+            "description": "The type of the activity that is defined by the user.",
+            "type": "string"
+          }
+        }
+      },
+      "activity_2": {
+        "description": "The activity object.",
+        "type": "object",
+        "required": [
+          "state",
+          "taskId",
+          "tenant",
+          "id",
+          "createdAt",
+          "updatedAt",
+          "executor",
+          "type"
+        ],
+        "properties": {
+          "parentActivityId": {
+            "description": "The ID of the parent activity.",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/executionState"
+          },
+          "taskId": {
+            "description": "The ID of the task that is related to the activity.",
+            "type": "integer"
+          },
+          "context": {
+            "description": "Activity context."
+          },
+          "result": {
+            "$ref": "#/components/schemas/executionResult"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/tenant"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "id": {
+            "description": "Unique numeric identifier for the activity object (server-generated).",
+            "type": "integer"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "startedByUser": {
+            "description": "The name of the user who created the activity.",
+            "type": "string"
+          },
+          "completedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "resource": {
+            "description": "The link to the resource which is related to the activity.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "uuid": {
+            "description": "Universally unique identifier for the activity object. If not set, it will be automatically generated by the server.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/progress"
+          },
+          "tags": {
+            "description": "A list of user-defined tags.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/string64"
+            }
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/time"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/actor"
+          },
+          "policy": {
+            "description": "The link to the policy which execution requires to create the activity.",
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/string256"
+              },
+              "id": {
+                "$ref": "#/components/schemas/string64"
+              },
+              "type": {
+                "$ref": "#/components/schemas/string64"
+              }
+            }
+          },
+          "workflowId": {
+            "description": "The ID of the workflow that is related to the activity.",
+            "type": "integer"
+          },
+          "type": {
+            "description": "The type of the activity that is defined by the user.",
+            "type": "string"
+          }
+        }
+      },
+      "executionState": {
+        "description": "An execution state.",
+        "enum": [
+          "enqueued",
+          "assigned",
+          "started",
+          "paused",
+          "completed"
+        ],
+        "type": "string"
+      },
+      "executionResult": {
+        "description": "An execution result.",
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/resultCode"
+          },
+          "error": {
+            "$ref": "#/components/schemas/domainError"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/domainError"
+            }
+          },
+          "payload": {
+            "$ref": "#/components/schemas/blob"
+          }
+        }
+      },
+      "time": {
+        "description": "Time in RFC3339 format.",
+        "type": "string"
+      },
+      "string64": {
+        "description": "A string that may contain up to 64 characters.",
+        "type": "string"
+      },
+      "blocker": {
+        "description": "The task blocker object.",
+        "type": "object",
+        "required": [
+          "taskId",
+          "tenant",
+          "id",
+          "issue"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "integer"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/tenant"
+          },
+          "id": {
+            "description": "Unique numeric identifier for the task blocker object (server-generated).",
+            "type": "integer"
+          },
+          "possibleSolutions": {
+            "description": "Possible solutions of blocker.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/message"
+            }
+          },
+          "issue": {
+            "description": "A reason why the task cannot be completed without a user input.",
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "description": "Message key.",
+                "type": "string"
+              },
+              "context": {
+                "description": "Context dictionary.",
+                "type": "object"
+              }
+            }
+          },
+          "uuid": {
+            "description": "Universally unique identifier for the task blocker object. If not set, it will be automatically generated by the server.",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "solution": {
+            "description": "A solution provided by the user.",
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "description": "Message key.",
+                "type": "string"
+              },
+              "context": {
+                "description": "Context dictionary.",
+                "type": "object"
+              }
+            }
+          },
+          "activityId": {
+            "type": "integer"
+          }
+        }
+      },
+      "kbLinkInfo": {
+        "description": "Components for kblink",
+        "type": "object",
+        "required": [
+          "lineTag",
+          "serCode",
+          "version",
+          "build",
+          "product",
+          "os"
+        ],
+        "properties": {
+          "lineTag": {
+            "type": "string"
+          },
+          "serCode": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "build": {
+            "type": "integer"
+          },
+          "product": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          }
+        }
+      },
+      "debugInfo": {
+        "description": "Error debug information (map type)",
+        "type": "object"
+      },
+      "tenant": {
+        "description": "A tenant identity.",
+        "type": "object",
+        "required": [
+          "id",
+          "uuid"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/string64"
+          },
+          "uuid": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "locator": {
+            "description": "A hierarchical tenant identifier in the following format - `/root-id/unit-id/sub-unit-id/tenant-id/`.",
+            "type": "string"
+          }
+        }
+      },
+      "progress": {
+        "description": "A progress value.",
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "current": {
+            "type": "integer"
+          },
+          "bytesProcessed": {
+            "type": "integer"
+          },
+          "processingSpeed": {
+            "type": "number"
+          },
+          "leftTime": {
+            "$ref": "#/components/schemas/duration"
+          },
+          "bytesSaved": {
+            "type": "integer"
+          },
+          "bottleneck": {
+            "$ref": "#/components/schemas/executionBottleneck"
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "taskPriority": {
+        "description": "The task priority.",
+        "enum": [
+          "low",
+          "belowNormal",
+          "normal",
+          "aboveNormal",
+          "high"
+        ],
+        "type": "string"
+      },
+      "string256": {
+        "description": "A string that may contain up to 256 characters.",
+        "type": "string"
+      },
+      "actor": {
+        "description": "An actor identity.",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/string64"
+          },
+          "clusterId": {
+            "$ref": "#/components/schemas/string64"
+          }
+        }
+      },
+      "resultCode": {
+        "enum": [
+          "ok",
+          "error",
+          "warning",
+          "cancelled",
+          "abandoned",
+          "timedout"
+        ],
+        "type": "string"
+      },
+      "blob": {
+        "description": "Arbitrary data."
+      },
+      "message": {
+        "description": "A message to pass through.",
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "description": "Message key.",
+            "type": "string"
+          },
+          "context": {
+            "description": "Context dictionary.",
+            "type": "object"
+          }
+        }
+      },
+      "uuid": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "duration": {
+        "description": "Duration in the human-readable format like \"1m\", \"10s\", \"1h25m43s\" where \"m\" = \"minutes\", \"s\" = \"seconds\", \"h\" = \"hours\".",
+        "type": "string"
+      },
+      "executionBottleneck": {
+        "description": "An execution bottleneck. The sum of all field values must equal 100.",
+        "type": "object",
+        "properties": {
+          "source": {
+            "description": "Bottleneck score when reading data.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "destination": {
+            "description": "Bottleneck score when writing data.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "processing": {
+            "description": "Bottleneck score during data processing on executor side.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "scopes": {
+              "urn:acronis.com::task_manager::viewer": "",
+              "urn:acronis.com::task_manager::issuer": "",
+              "urn:acronis.com::task_manager::consumer": "",
+              "urn:acronis.com::task_manager::admin": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "password": {
+            "scopes": {
+              "urn:acronis.com::task_manager::viewer": "",
+              "urn:acronis.com::task_manager::issuer": "",
+              "urn:acronis.com::task_manager::consumer": "",
+              "urn:acronis.com::task_manager::admin": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/task_manager/v2",
+      "variables": {}
+    }
+  ]
+}

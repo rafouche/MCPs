@@ -1,0 +1,4803 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PSA API",
+    "version": "v1"
+  },
+  "paths": {
+    "/Product": {
+      "put": {
+        "operationId": "Create product",
+        "description": "Creates a product.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "Active": true,
+                  "Cost": 20,
+                  "Description": "Test-Product-API-Documentation-Description",
+                  "Name": "Test-Product-API-Documentation",
+                  "Price": 100,
+                  "ProductForActivityBasedTicketBilling": false,
+                  "ProjectProduct": false,
+                  "Taxable": true,
+                  "ViewInContract": false
+                },
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Name",
+                  "Price"
+                ],
+                "properties": {
+                  "Active": {
+                    "description": "Defines whether the product is available for sales (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Taxable": {
+                    "description": "Defines whether the product is a subject for taxes (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Name": {
+                    "description": "Defines the product name.",
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "Description": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Price": {
+                    "description": "Defines an end user price for a single product item.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "Cost": {
+                    "description": "Defines a cost of a single product item for the partner.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "ViewInContract": {
+                    "description": "Defines whether product can be used in contracts for the recurring billing (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "ProductForActivityBasedTicketBilling": {
+                    "description": "Defines whether product can be used as an hourly rate for the ticket time billing (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Ledger": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "CreationDate": {
+                    "description": "RFC3339-like date and time without timezone.",
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+                  },
+                  "LastChangeDate": {
+                    "description": "RFC3339-like date and time without timezone.",
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+                  },
+                  "VAR": {
+                    "description": "Defines whether the product is resold (true) or not (false). Used for analytic purposes (VAR = value-added reseller).\n\nAn example of a VAR product can be a 3rd party vendor license, e.g. Acronis. Project hours or Support hours are typically not VAR products.\n",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "TicketProduct": {
+                    "description": "Defines whether product can be sold in service desk tickets as a part of support activity, e.g., Security expert hours for consultancy.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "PriceAdjustable": {
+                    "description": "Defines whether the ticket product price can be manually adjusted by engineers from a ticket (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "ProjectProduct": {
+                    "description": "Defines whether product can be used in projects for the project billing (true) or not (false).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "ProjectProductPriceAdjustable": {
+                    "description": "Defines whether the project product price can be manually adjusted by engineers from a project (true) or not (false).",
+                    "type": "boolean"
+                  },
+                  "ExternalIdNumber": {
+                    "description": "Defines the product ID in 3rd party systems for a product mapping, e.g. in 3rd party accounting platform.",
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "SKU": {
+                    "description": "Defines a SKU code for the project.",
+                    "type": "string",
+                    "maxLength": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::advanced_automation::advanced_automation_admin",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance",
+              "urn:acronis.com::advanced_automation::advanced_automation_engineer",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance_manager",
+              "urn:acronis.com::advanced_automation::advanced_automation_sales"
+            ]
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch products",
+        "description": "Fetches information about the products either by GUID or by filtering parameters.",
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Product"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GetProductSearchResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "urn:acronis.com::advanced_automation::advanced_automation_admin",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance",
+              "urn:acronis.com::advanced_automation::advanced_automation_engineer",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance_manager",
+              "urn:acronis.com::advanced_automation::advanced_automation_sales"
+            ]
+          }
+        ]
+      }
+    },
+    "/Ledger": {
+      "put": {
+        "operationId": "Create ledger",
+        "description": "Creates a ledger.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "Active": true,
+                  "Description": "Api documentation ledger",
+                  "Number": "API-Doc-LG"
+                },
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Description",
+                  "Number"
+                ],
+                "properties": {
+                  "Active": {
+                    "description": "Ledger's status.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "AllowInactive": {
+                    "description": "",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Description": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Externalid": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Number": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ledger"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch ledger",
+        "description": "Fetches information about the ledgers either by GUID or by filtering parameters.",
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Ledger"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GetLedgersSearchResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Ledgers": {
+      "get": {
+        "operationId": "Fetch ledgers",
+        "description": "Fetches a list of all ledgers.",
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLedgersSearchResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/SalesItems": {
+      "get": {
+        "operationId": "Fetch Sales items",
+        "description": "Fetches a list of Sales items.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "FullTextSearchInQuotes",
+                  "FullTextSearch",
+                  "Customer",
+                  "InvoiceDate",
+                  "ProductName",
+                  "SendByEmail",
+                  "HasBeenBilled",
+                  "SortColumn",
+                  "InsertedSaleId"
+                ],
+                "properties": {
+                  "FullTextSearchInQuotes": {
+                    "type": "string"
+                  },
+                  "FullTextSearch": {
+                    "type": "string"
+                  },
+                  "Customer": {
+                    "type": "string"
+                  },
+                  "InvoiceDate": {
+                    "description": "RFC3339-like date and time without timezone.",
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+                  },
+                  "ProductName": {
+                    "type": "string"
+                  },
+                  "SendByEmail": {
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "HasBeenBilled": {
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "SortColumn": {
+                    "enum": [
+                      "InvoiceDate",
+                      "Total",
+                      "Age",
+                      "Status",
+                      "Customer"
+                    ],
+                    "type": "string"
+                  },
+                  "SortDirection": {
+                    "description": "Invoice sorting direction ascending or descending",
+                    "default": "Asc",
+                    "enum": [
+                      "Asc",
+                      "Desc"
+                    ],
+                    "type": "string"
+                  },
+                  "InsertedSaleId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "AmountOfPages",
+                    "AmountRecordsFound",
+                    "SalesItems",
+                    "AmountTotalItems"
+                  ],
+                  "properties": {
+                    "AmountOfPages": {
+                      "type": "integer"
+                    },
+                    "AmountRecordsFound": {
+                      "type": "integer"
+                    },
+                    "SalesItems": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "Guid",
+                          "Customer",
+                          "InvoiceDate",
+                          "HasBeenBilled",
+                          "TotalAmount",
+                          "Age"
+                        ],
+                        "properties": {
+                          "Guid": {
+                            "$ref": "#/components/schemas/Guid"
+                          },
+                          "Customer": {
+                            "type": "string"
+                          },
+                          "InvoiceDate": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "HasBeenBilled": {
+                            "type": "boolean"
+                          },
+                          "TotalAmount": {
+                            "type": "number"
+                          },
+                          "Age": {
+                            "nullable": true,
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "AmountTotalItems": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "Create Sales item",
+        "description": "Creates a Sales Item.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "StartDate": "2024-06-28",
+                  "Incasso": false,
+                  "SalesItemProducts": [
+                    {
+                      "Discount": 5,
+                      "IsItemNote": false,
+                      "Quantity": 1,
+                      "Product": "deffa51b-207c-4e73-972d-0343736bb9f4",
+                      "ProductName": "Test Product",
+                      "Description": null,
+                      "Price": 10
+                    },
+                    {
+                      "Discount": 0,
+                      "IsItemNote": true,
+                      "Quantity": 0,
+                      "Price": 0,
+                      "Description": "Some Line item note",
+                      "Product": "deffa51b-207c-4e73-972d-0343736bb9f4"
+                    }
+                  ],
+                  "BillingEntity": "d84f5018-c38f-4e3b-af36-0849119b41af",
+                  "IsSalesOrContract": true,
+                  "CustomerAddresses": [],
+                  "Address": {
+                    "Street": "",
+                    "HouseNo": "",
+                    "HouseNoAdd": "",
+                    "Zipcode": "",
+                    "City": "",
+                    "Country": "",
+                    "StateCountry": ""
+                  },
+                  "Customer": "9e145169-059d-422d-80eb-07356e9611a8",
+                  "CustomerName": "=CUstomer Sync=",
+                  "Country": "d46c54bd-1704-4a55-bb76-fc03073669a0",
+                  "StateCountry": "b4c87080-7c8c-45e0-8867-a714ffc79b7d",
+                  "EmailAddress": "customer.sync@gmail.com",
+                  "SendByEmail": false,
+                  "SelectedAddress": {},
+                  "Street": "1",
+                  "HouseNo": "1",
+                  "HouseNoAdd": null,
+                  "Zipcode": "1",
+                  "City": "1",
+                  "BuildingName": null
+                },
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "City",
+                  "Customer"
+                ],
+                "properties": {
+                  "BillingEntity": {
+                    "description": "Defines a partner's billing entity used for invoicing.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "BuildingName": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "City": {
+                    "description": "Defines customer's address information to be used on the invoice:  city.",
+                    "type": "string"
+                  },
+                  "Customer": {
+                    "description": "Defines a customer tenant who received products or services.",
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "EmailAddress": {
+                    "description": "Defines a customer's email address.",
+                    "type": "string"
+                  },
+                  "HouseNo": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "HouseNoAdd": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "SalesItemProducts": {
+                    "description": "List of SalesItemProducts",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SalesItemProductsPartial"
+                    }
+                  },
+                  "Address": {
+                    "$ref": "#/components/schemas/Address"
+                  },
+                  "SendByEmail": {
+                    "description": "Defines whether the resulting invoice's delivery method will be \"By email\" (1) or \"Mail\" (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "StateCountry": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Street": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Ticket": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Zipcode": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "sales": {
+                      "SalesItems": [
+                        {
+                          "Id": "00000000-0000-0000-0000-000000000000",
+                          "Customer": "",
+                          "InvoiceDate": "0001-01-01T00:00:00Z",
+                          "HasBeenBilled": false,
+                          "TotalAmount": 0,
+                          "Age": null
+                        }
+                      ],
+                      "AmountRecordsFound": 0,
+                      "AmountOfPages": 0,
+                      "AmountTotalItems": 0
+                    }
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Id",
+                    "AmountOfPages",
+                    "AmountRecordsFound",
+                    "Age",
+                    "InvoiceDate",
+                    "AmountTotalItems",
+                    "Customer",
+                    "TotalAmount",
+                    "HasBeenBilled"
+                  ],
+                  "properties": {
+                    "Id": {
+                      "$ref": "#/components/schemas/Guid"
+                    },
+                    "AmountOfPages": {
+                      "type": "integer"
+                    },
+                    "AmountRecordsFound": {
+                      "type": "integer"
+                    },
+                    "Age": {
+                      "nullable": true,
+                      "type": "integer"
+                    },
+                    "InvoiceDate": {
+                      "$ref": "#/components/schemas/DatetimeNoTZ"
+                    },
+                    "AmountTotalItems": {
+                      "type": "integer"
+                    },
+                    "Customer": {
+                      "type": "string"
+                    },
+                    "TotalAmount": {
+                      "type": "number"
+                    },
+                    "HasBeenBilled": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete Sales item",
+        "description": "Deletes a Sales Item.",
+        "responses": {
+          "200": {
+            "description": "The request was successful.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Contracts": {
+      "put": {
+        "operationId": "Create or update Contract",
+        "description": "Creates or updates a Contract",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "ContractParts": [],
+                  "StartDate": "2024-07-02T06:07:43.603Z",
+                  "IsSalesOrContract": true,
+                  "Name": "ContractName",
+                  "Customer": "9e145169-059d-422d-80eb-07356e9611a8",
+                  "CustomerName": "=CUstomer Sync=",
+                  "DefaultSLA": "5784e627-29db-4ba1-8437-5862027bcf1a",
+                  "Street": "1",
+                  "HouseNo": "1",
+                  "HouseNoAdd": null,
+                  "Zipcode": "1",
+                  "City": "1",
+                  "StateCountry": "b4c87080-7c8c-45e0-8867-a714ffc79b7d",
+                  "BuildingName": null,
+                  "SendInvoiceByEmail": false,
+                  "ContactEmail": "customer.sync@gmail.com",
+                  "Country": "d46c54bd-1704-4a55-bb76-fc03073669a0",
+                  "BillingEntity": "f5124299-aaee-4c8f-b80a-9b28647c5353",
+                  "PaymentIntervalInMonths": "1",
+                  "BillInAdvance": "true",
+                  "Incasso": "false",
+                  "EndDate": "2050-01-01",
+                  "StartDateTmp": "2024-07-02",
+                  "EndDateTmp": "2050-01-01"
+                },
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Name",
+                  "StartDate"
+                ],
+                "properties": {
+                  "BillInAdvance": {
+                    "description": "Defines a billing method for the contract.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "BillingEntity": {
+                    "description": "Defines a billing entity for the contract billing.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "BlockHours": {
+                    "description": "Defines whether support block hours are included (1) into the contract, or not (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "BlockHoursNumber": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "BuildingName": {
+                    "description": "Defines customer's address information to be used on the invoice:  building name.",
+                    "type": "string"
+                  },
+                  "City": {
+                    "description": "Defines customer's address information to be used on the invoice:  city.",
+                    "type": "string"
+                  },
+                  "ContactEmail": {
+                    "description": "Contact email for the contract.",
+                    "type": "string"
+                  },
+                  "ContractParts": {
+                    "description": "Contract's parts - list of contract products.",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ContractPart"
+                    }
+                  },
+                  "Customer": {
+                    "description": "Customer ID.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "EndDate": {
+                    "description": "Contract's end date. Need to describe how to proceed with \"Forever\" end date. We have this check-box in UI.",
+                    "default": "0001-01-01T00:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "HouseNo": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "HouseNoAdd": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "KeepRemainingHours": {
+                    "description": "Defines a retainer option, remaining (unused) hours are kept for the next billing period (1), or dropped (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Name": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "PaymentIntervalInMonths": {
+                    "description": "Defines an invoice interval for the contract.",
+                    "default": 0,
+                    "type": "integer"
+                  },
+                  "ProRated": {
+                    "description": "Defines whether proration for the contract billing is enabled (1), or not (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "ReferenceNumber": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "RenewalThreshold": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "Retainer": {
+                    "description": "Defines whether the contract is a retainer and block hours are billed every month / quarter / half year / year (1), or not (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "SendInvoiceByEmail": {
+                    "description": "Defines a delivery method for generated invoices.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "StartDate": {
+                    "description": "Contract's start date.",
+                    "default": "0001-01-01T00:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "StateCountry": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Street": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Zipcode": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "contractId": "00000000-0000-0000-0000-000000000000"
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "contractId"
+                  ],
+                  "properties": {
+                    "contractId": {
+                      "$ref": "#/components/schemas/Guid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetches Contracts by customer ID",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "The customer ID.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "The customer ID.",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "contracts": [
+                      {
+                        "Id": "00000000-0000-0000-0000-000000000000",
+                        "Name": "",
+                        "StartDate": "0001-01-01T00:00:00Z",
+                        "EndDate": "0001-01-01T00:00:00Z",
+                        "Customer": "00000000-0000-0000-0000-000000000000",
+                        "Street": "",
+                        "BuildingName": "",
+                        "HouseNo": "",
+                        "HouseNoAdd": "",
+                        "City": "",
+                        "StateCountry": null,
+                        "Zipcode": "",
+                        "ReferenceNumber": "",
+                        "Incasso": false,
+                        "BillInAdvance": false,
+                        "PaymentIntervalInMonths": 0,
+                        "ContactEmail": "",
+                        "Contact": "",
+                        "SendInvoiceByEmail": false,
+                        "ContractParts": [],
+                        "BlockHours": false,
+                        "BlockHoursNumber": null,
+                        "RenewalThreshold": null,
+                        "BillingEntity": "00000000-0000-0000-0000-000000000000",
+                        "Retainer": false,
+                        "KeepRemainingHours": false,
+                        "ProRated": false,
+                        "CustomFields": [
+                          {
+                            "CustomFieldId": "00000000-0000-0000-0000-000000000000",
+                            "Name": "",
+                            "Type": 1,
+                            "Active": false,
+                            "Required": false,
+                            "SortNumber": 0,
+                            "CustomFieldValueId": "00000000-0000-0000-0000-000000000000",
+                            "EntityId": "00000000-0000-0000-0000-000000000000",
+                            "Value": ""
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "contracts"
+                  ],
+                  "properties": {
+                    "contracts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Contract"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/ContractPart": {
+      "put": {
+        "operationId": "Create or update a Contract Part",
+        "description": "Creates or updates a contract part.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Price"
+                ],
+                "properties": {
+                  "ActualQuantity": {
+                    "description": "Defines an actual product quantity in use.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "AutomaticUpdate": {
+                    "description": "Defines whether actual quantity will be automatically synchronised from the connected usage integration.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Description": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Discount": {
+                    "description": "Defines a discount percent for billing.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "DiscountReason": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "EndDate": {
+                    "description": "Defines a contract part's start date.",
+                    "default": "0001-01-01T00:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "MinBillableQuantity": {
+                    "description": "Defines a minimum product quantity that will be used for billing.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "Price": {
+                    "description": "Defines a product price for a single item for billing.",
+                    "default": 0,
+                    "type": "number"
+                  },
+                  "Product": {
+                    "description": "Defines a product used for billing.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ServiceLevelAgreement": {
+                    "description": "Defines a SLA that will be used by default in service desk tickets related to the contract part.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ShowMachinesOnInvoice": {
+                    "description": "In case an actual quantity is synchronised from the number of active devices, defines whether device names will be added to the invoice line.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "ShowUsersOnInvoice": {
+                    "description": "In case an actual quantity is synchronised from the number of active users, defines whether user names will be added to the invoice line.",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "StartDate": {
+                    "description": "Defines a contract part's end date. Need to describe how to proceed with \"Forever\" end date. We have this check-box in UI.",
+                    "default": "0001-01-01T00:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "TrialPeriod": {
+                    "description": "Defines whether the contract part will have a trial period. Need to describe how to use it and not use it.",
+                    "default": 0,
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch Contract Part",
+        "description": "Fetches a contract part by Contract ID.",
+        "parameters": [
+          {
+            "name": "contract",
+            "description": "Contract ID",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Contract ID",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "ContractParts": [
+                      {
+                        "ProductName": "",
+                        "Product": "00000000-0000-0000-0000-000000000000",
+                        "Id": null,
+                        "Discount": 0,
+                        "DiscountReason": "",
+                        "ActualQuantity": 0,
+                        "MinBillableQuantity": 0,
+                        "Quantity": 0,
+                        "Price": 0,
+                        "EndDate": "0001-01-01T00:00:00Z",
+                        "StartDate": "0001-01-01T00:00:00Z",
+                        "Description": "",
+                        "APIConnection": null,
+                        "ServiceObjectGroup": null,
+                        "IsReadOnly": false,
+                        "ServiceLevelAgreement": "00000000-0000-0000-0000-000000000000",
+                        "ServiceObjects": [],
+                        "ServiceObjectTypes": [],
+                        "ContractPartType": "00000000-0000-0000-0000-000000000000",
+                        "AutomaticUpdate": false,
+                        "MachinesCount": null,
+                        "Contract": "00000000-0000-0000-0000-000000000000",
+                        "VARConnection": "00000000-0000-0000-0000-000000000000",
+                        "VARGroup": "00000000-0000-0000-0000-000000000000",
+                        "SubscriptionType": "00000000-0000-0000-0000-000000000000",
+                        "ShowUsersOnInvoice": false,
+                        "TrialPeriod": 0,
+                        "UserType": 0,
+                        "DeviceServiceTypes": []
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ContractParts"
+                  ],
+                  "properties": {
+                    "ContractParts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ContractPart"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete Contract Part",
+        "description": "Deletes a Contract Part by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Contract Part ID",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Contract Part ID",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Call": {
+      "put": {
+        "operationId": "Create ticket",
+        "description": "Creates a ticket.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "BillTheCustomer": true,
+                  "BillingActivityType": "493a36c9-4cd2-4b89-a693-99ac067d6776",
+                  "BusinessUnit": "25080d45-fc3f-4928-b861-681ba7d5b2e1",
+                  "BusinessUnitName": "Support group",
+                  "Category": "7f8320eb-d653-40ae-9d57-1257bead1a29",
+                  "CategoryName": "Default Sub-category",
+                  "Client": "eb090e85-8357-4fa3-a9bd-afaad51d030f",
+                  "ClientName": "cstmr_001 admin",
+                  "CurrentDate": "2024-08-09T12:46:18.813Z",
+                  "Customer": "2962473b-50df-4e53-a8d3-0068bbdb54d3",
+                  "CustomerName": "cstmr_001",
+                  "UpdateEmailRecipients": 1,
+                  "FilesForEmailAttachment": [],
+                  "FilesForEmailAttachmentOnCreateTicket": [],
+                  "InternalActions": null,
+                  "InternalNotes": null,
+                  "IsIctService": false,
+                  "ContractPart": null,
+                  "Manager": "be2236fa-df17-4c61-8adb-f5667a343362",
+                  "ManagerName": "cstmr_001  Manager",
+                  "NextContactDate": "2024-08-09",
+                  "Message": "",
+                  "PhoneNumber": "12311111",
+                  "Planned": null,
+                  "PlannedTicket": {
+                    "PlannedDate": "",
+                    "StartHour": "2024-08-09T15:44:20.936Z",
+                    "StartHourstamp": 944,
+                    "Hours": 1,
+                    "Minutes": null
+                  },
+                  "Priority": "683a47ec-e57c-43a5-ba10-2ccdc03fd331",
+                  "ReportedByUser": "df068165-248c-43c5-bf5d-db9cd1f3188e",
+                  "ServiceLevelAgreement": "63b75905-10d4-44e9-ba1e-7aa2eff4100b",
+                  "Status": "4feaaa86-8757-44d6-a8d6-99fdf9f8ce4d",
+                  "SupportUser": "df068165-248c-43c5-bf5d-db9cd1f3188e",
+                  "UpdateUser": "df068165-248c-43c5-bf5d-db9cd1f3188e",
+                  "UpdateUserName": "Partner Administrator",
+                  "TicketProducts": [],
+                  "Title": "Test",
+                  "UTCNextContactDate": "2024-08-09T15:44:20.936Z",
+                  "autoPauseCheck": null,
+                  "elapsedHours": "00",
+                  "elapsedMinutes": "01",
+                  "elapsedSeconds": 116,
+                  "isStreaming": true,
+                  "CustomFields": []
+                },
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Title",
+                  "UpdateType"
+                ],
+                "properties": {
+                  "APIConnection": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "BillTheCustomer": {
+                    "description": "Defines whether ticket time should be marked as billable (1) or not billable (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "BusinessUnit": {
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Category": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Client": {
+                    "description": "Defines a customer ID for a ticket.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ContractPart": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ElapsedSeconds": {
+                    "default": 0,
+                    "type": "integer"
+                  },
+                  "ExternalReferenceNumber": {
+                    "type": "string"
+                  },
+                  "ExternalStatus": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ExternalTicketType": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "ExternalType": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ExternalUpdateId": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "Files": {
+                    "description": "Defines attachments for a ticket.",
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "Followers": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "InternalActions": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "InternalNotes": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "IsIctService": {
+                    "description": "Defines a type of work for a ticket: ICT service (1) or managed service  (0).",
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "Manager": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "MessageToCustomer": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "NextContactDate": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "PhoneNumber": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "Planned": {
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "PreviousEmailId": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "PreviousSupportUser": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "Priority": {
+                    "description": "Defines a priority ID for a ticket.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ReportedByUser": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "SenderEmailAddress": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "ServiceLevelAgreement": {
+                    "description": "Defines a SLA ID for a ticket.",
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "ServiceObject": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "SupportUser": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "TicketProducts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "Title": {
+                    "description": "Defines a ticket title.",
+                    "type": "string"
+                  },
+                  "UpdateEmailRecipients": {
+                    "description": "* None = 0\n* Client = 1\n* Manager = 4\n* Supplier = 8\n",
+                    "default": 0,
+                    "enum": [
+                      0,
+                      1,
+                      4,
+                      8
+                    ],
+                    "type": "integer"
+                  },
+                  "UpdateType": {
+                    "description": "* Customer = 0\n* SupportUser = 1\n",
+                    "default": 0,
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "type": "integer"
+                  },
+                  "UpdateUser": {
+                    "nullable": true,
+                    "example": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "WebUrl": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "id": "8f3325a1-6639-4376-8ecf-e9fd936c8251"
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/components/schemas/Guid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch ticket",
+        "description": "Fetches a ticket by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "The customer ID.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "The customer ID.",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "Call": [
+                      {
+                        "Updates": [],
+                        "AmountOfPagesFound": 0,
+                        "AmountOfRecordsFound": 0,
+                        "LastThreeCalls": [],
+                        "TicketProducts": [],
+                        "Id": "00000000-0000-0000-0000-000000000000",
+                        "Tenant": "00000000-0000-0000-0000-000000000000",
+                        "Title": "",
+                        "Client": "00000000-0000-0000-0000-000000000000",
+                        "ClientName": "",
+                        "Customer": "00000000-0000-0000-0000-000000000000",
+                        "CustomerName": "",
+                        "SupportUser": "00000000-0000-0000-0000-000000000000",
+                        "SupportUserName": "",
+                        "SupportUserDeleted": null,
+                        "ClientDeleted": null,
+                        "ManagerDeleted": null,
+                        "UpdateUser": "00000000-0000-0000-0000-000000000000",
+                        "Manager": "00000000-0000-0000-0000-000000000000",
+                        "ManagerName": "",
+                        "BusinessUnit": "00000000-0000-0000-0000-000000000000",
+                        "BusinessUnitName": "",
+                        "Priority": "00000000-0000-0000-0000-000000000000",
+                        "PriorityName": "",
+                        "Status": "00000000-0000-0000-0000-000000000000",
+                        "StatusName": "",
+                        "StatusTranslatedName": "",
+                        "Category": null,
+                        "CategoryName": "",
+                        "ServiceLevelAgreement": "00000000-0000-0000-0000-000000000000",
+                        "ServiceLevelAgreementName": "",
+                        "Followers": "",
+                        "ServiceObject": null,
+                        "ServiceObjectName": "",
+                        "IsIctService": false,
+                        "PhoneNumber": "",
+                        "ReferenceNumber": "",
+                        "ExternalReferenceNumber": "",
+                        "Reason": "",
+                        "Grade": null,
+                        "TotalTimeSpent": null,
+                        "Planned": false,
+                        "PlannedTicket": {},
+                        "ContractPart": null,
+                        "APIConnection": null,
+                        "ClientDocumentation": "",
+                        "ExternalStatus": null,
+                        "ExternalType": null,
+                        "ExternalTicketType": null,
+                        "HelpdeskPlans": null,
+                        "ExternalDeviceId": "",
+                        "ExternalGroupId": "",
+                        "AutoPause": null,
+                        "RatedBy": "",
+                        "DateLastUpdate": "0001-01-01T00:00:00Z",
+                        "SlaBreachDate": "0001-01-01T00:00:00Z",
+                        "StatusClassName": "",
+                        "ExternalStatusName": "",
+                        "IsContinuumTicket": false,
+                        "EmailCustomer": false,
+                        "BillTheCustomer": false,
+                        "ProjectTicketSolved": false,
+                        "ContinuumTicket": false,
+                        "IsQuoteTicket": false,
+                        "IsQuotePurchaseOrderTicket": false,
+                        "RelatedCalls": [],
+                        "CustomerPhoneNumber": "",
+                        "CallContact": {}
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Call"
+                  ],
+                  "properties": {
+                    "Call": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "AmountOfRecordsFound",
+                          "UpdateEmailRecipients",
+                          "AmountOfPagesFound",
+                          "Title"
+                        ],
+                        "properties": {
+                          "AmountOfRecordsFound": {
+                            "type": "integer"
+                          },
+                          "Followers": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "PhoneNumber": {
+                            "description": "Defines contacts information for a customer's user: phone number.",
+                            "type": "string"
+                          },
+                          "PreviousEmailId": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "TicketProducts": {
+                            "description": "",
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "ElapsedSeconds": {
+                            "default": 0,
+                            "type": "integer"
+                          },
+                          "Category": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "SenderEmailAddress": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "Planned": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
+                          "UpdateType": {
+                            "description": "* Customer = 0\n* SupportUser = 1\n",
+                            "default": 0,
+                            "enum": [
+                              0,
+                              1
+                            ],
+                            "type": "integer"
+                          },
+                          "ExternalUpdateId": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "ExternalTicketType": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "InternalActions": {
+                            "description": "Optional internal information for a ticket: actions.",
+                            "type": "string"
+                          },
+                          "Client": {
+                            "description": "Defines a customer ID for a ticket.",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "MessageToCustomer": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "NextContactDate": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "WebUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "ContractPart": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "BillTheCustomer": {
+                            "description": "Defines whether ticket time should be marked as billable (1) or not billable (0).",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "Priority": {
+                            "description": "Defines a priority ID for a ticket.",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "UpdateEmailRecipients": {
+                            "description": "* None = 0\n* Client = 1\n* Manager = 4\n* Supplier = 8\n",
+                            "default": 0,
+                            "enum": [
+                              0,
+                              1,
+                              4,
+                              8
+                            ],
+                            "type": "integer"
+                          },
+                          "ExternalStatus": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "UpdateUser": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "SupportUser": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "ServiceLevelAgreement": {
+                            "description": "Defines a SLA ID for a ticket.",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "ServiceObject": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "IsIctService": {
+                            "description": "Defines a type of work for a ticket: ICT service (1) or managed service  (0).",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "Manager": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "AmountOfPagesFound": {
+                            "type": "integer"
+                          },
+                          "Files": {
+                            "description": "Defines attachments for a ticket.",
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "APIConnection": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "ExternalReferenceNumber": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "ReportedByUser": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "Title": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "InternalNotes": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "PreviousSupportUser": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "ExternalType": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "BusinessUnit": {
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/SchedulerTickets": {
+      "put": {
+        "operationId": "Update Ticket",
+        "description": "Covers ticket updates management",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "ExternalUpdateId": {
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "Note": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "TicketId": {
+                    "default": "00000000-0000-0000-0000-000000000000",
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch Ticket updates",
+        "description": "Covers ticket updates management",
+        "parameters": [
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": {
+              "description": "RFC3339-like date and time without timezone.",
+              "nullable": true,
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+            }
+          },
+          {
+            "name": "id",
+            "description": "User id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "User id",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": {
+              "description": "RFC3339-like date and time without timezone.",
+              "nullable": true,
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "Tickets": [],
+                    "PlannedTickets": [],
+                    "CalendarWorkingHours": [],
+                    "CalendarWorkingHoursFiltered": [],
+                    "calls": [],
+                    "Customers": {
+                      "customers": []
+                    },
+                    "BussinesUnits": [],
+                    "CalendarEvents": [],
+                    "Activities": {
+                      "Activities": [],
+                      "Paging": {
+                        "AmountRecordsFound": 0,
+                        "AmountOfPages": 0,
+                        "AmountTotalItems": 0
+                      }
+                    },
+                    "DayOffs": []
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Activities",
+                    "BussinesUnits",
+                    "CalendarEvents",
+                    "CalendarWorkingHours",
+                    "CalendarWorkingHoursFiltered",
+                    "Customers",
+                    "DayOffs",
+                    "PlannedTickets",
+                    "Tickets",
+                    "calls"
+                  ],
+                  "properties": {
+                    "Activities": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "Activities",
+                        "Paging"
+                      ],
+                      "properties": {
+                        "Activities": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "Paging": {
+                          "$ref": "#/components/schemas/Paging"
+                        }
+                      }
+                    },
+                    "BussinesUnits": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "CalendarEvents": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "CalendarWorkingHours": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "CalendarWorkingHoursFiltered": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "Customers": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "customers"
+                      ],
+                      "properties": {
+                        "customers": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    },
+                    "DayOffs": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "PlannedTickets": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "Tickets": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "calls": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/UploadedFiles": {
+      "get": {
+        "operationId": "Fetch helpdesk attachment",
+        "description": "Lists attachments available for a ticket",
+        "parameters": [
+          {
+            "name": "customer",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "referenceNumber",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ticketId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "FileName",
+                    "FileSizeInBytes",
+                    "FileSrc",
+                    "FileType"
+                  ],
+                  "properties": {
+                    "FileName": {
+                      "type": "string"
+                    },
+                    "FileSizeInBytes": {
+                      "type": "integer"
+                    },
+                    "FileSrc": {
+                      "type": "string"
+                    },
+                    "FileType": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/EmailUpdates": {
+      "get": {
+        "operationId": "Fetch email attachment",
+        "description": "Covers attachments management for a ticket: upload, download, delete.\n",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "list"
+                  ],
+                  "properties": {
+                    "list": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "Base64ImageString",
+                        "ContentId",
+                        "ContentType",
+                        "FileName",
+                        "Id",
+                        "Stream"
+                      ],
+                      "properties": {
+                        "Base64ImageString": {
+                          "type": "string",
+                          "format": "binary"
+                        },
+                        "ContentId": {
+                          "description": "",
+                          "type": "string"
+                        },
+                        "ContentType": {
+                          "description": "",
+                          "type": "string"
+                        },
+                        "FileName": {
+                          "description": "",
+                          "type": "string"
+                        },
+                        "Id": {
+                          "description": "",
+                          "example": "00000000-0000-0000-0000-000000000000",
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                        },
+                        "Stream": {
+                          "type": "string",
+                          "format": "binary"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/InvoiceOverview": {
+      "post": {
+        "operationId": "Update invoice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "invoice"
+                ],
+                "properties": {
+                  "invoice": {
+                    "$ref": "#/components/schemas/Guid"
+                  },
+                  "paymentConfirmed": {
+                    "type": "boolean"
+                  },
+                  "intPaymentType": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch invoice",
+        "parameters": [
+          {
+            "name": "Customer",
+            "description": "Customer (GUID)",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "name": "DeliveryMethod",
+            "description": "Invoice's delivery method",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "DeliveryMethodByEmail",
+            "description": "Invoice's delivery method \"By email\"",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's delivery method \"By email\"",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "DeliveryMethodByPost",
+            "description": "Invoice's delivery method \"By mail\"",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's delivery method \"By mail\"",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "InvoiceNumber",
+            "description": "Invoice number",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "name": "PaymentSent",
+            "description": "Invoice's payment link",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "PaymentSentNotSent",
+            "description": "Invoice's payment link not sent",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's payment link not sent",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "PaymentSentSent",
+            "description": "Invoice's payment link sent",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's payment link sent",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "PaymentStatus",
+            "description": "Invoice's payment status",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "PaymentStatusConfirmed",
+            "description": "Invoice's payment status confirmed",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's payment status confirmed",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "PaymentStatusNotConfirmed",
+            "description": "Invoice's payment status not confirmed",
+            "in": "query",
+            "schema": {
+              "description": "Invoice's payment status not confirmed",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "ShowExported",
+            "description": "Allows filtering by exported Invoices",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "SortColumn",
+            "description": "Invoice sorting options",
+            "in": "query",
+            "schema": {
+              "description": "Invoice sorting options",
+              "default": "CustomerName",
+              "enum": [
+                "CustomerName",
+                "BatchNumber",
+                "CreationDate",
+                "ScheduleAt",
+                "DeliveryMethod",
+                "EmailSent",
+                "PaymentConfirmed",
+                "PaidDate",
+                "InvoicedBy",
+                "ExportDate",
+                "Exported",
+                "InvoiceNumber",
+                "BilledFor",
+                "PaymentMethod",
+                "InvoiceTotal"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortDirection",
+            "description": "Invoice sorting direction ascending or descending",
+            "in": "query",
+            "schema": {
+              "description": "Invoice sorting direction ascending or descending",
+              "default": "Asc",
+              "enum": [
+                "Asc",
+                "Desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Page",
+            "description": "Invoice pagination options: page number.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Invoice pagination options: page number.",
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "PageSize",
+            "description": "Invoice pagination options: page size.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Invoice pagination options: page size.",
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "InvoicesPagedSearchResult"
+                  ],
+                  "properties": {
+                    "InvoicesPagedSearchResult": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "Invoices",
+                        "Paging"
+                      ],
+                      "properties": {
+                        "Invoices": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Invoice"
+                          }
+                        },
+                        "Paging": {
+                          "$ref": "#/components/schemas/Paging"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/DownloadInvoice": {
+      "get": {
+        "operationId": "Download invoice",
+        "description": "Downloads an Invoice based on its ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "description": "ID of the invoice.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "ID of the invoice.",
+              "example": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "description": "The invoice PDF."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/ExportInvoice": {
+      "post": {
+        "operationId": "Export invoices",
+        "description": "Exports Invoices based on IDs and format type and sets their `Exported` flag and sets or updates `ExportedDate`.",
+        "parameters": [
+          {
+            "name": "ids",
+            "description": "ID of the invoice.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "ID of the invoice.",
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Guid"
+              }
+            }
+          },
+          {
+            "name": "exportFormat",
+            "description": "Export format. 0 for XML; 1 for CSV.",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "Export format. 0 for XML; 1 for CSV.",
+              "enum": [
+                0,
+                1
+              ],
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "description": "The invoice in CSV format."
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "description": "The invoice in XML format."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/DashboardData": {
+      "get": {
+        "operationId": "Fetch dashboard data",
+        "description": "Fetches data for Dashboard which includes ticket types.",
+        "parameters": [
+          {
+            "name": "CurrentUser",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Guid"
+            }
+          },
+          {
+            "name": "EndDate",
+            "in": "query",
+            "schema": {
+              "description": "RFC3339-like date and time without timezone.",
+              "nullable": true,
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+            }
+          },
+          {
+            "name": "StartDate",
+            "in": "query",
+            "schema": {
+              "description": "RFC3339-like date and time without timezone.",
+              "nullable": true,
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+            }
+          },
+          {
+            "name": "isTier4",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardData"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Priorities": {
+      "get": {
+        "operationId": "Fetch ticket priorities",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "Priorities": [
+                      {
+                        "Id": "00000000-0000-0000-0000-000000000000",
+                        "Tenant": "00000000-0000-0000-0000-000000000000",
+                        "Name": "",
+                        "Active": false,
+                        "InUse": false,
+                        "IsDefault": false,
+                        "APIConnection": null,
+                        "ExternalIdentifier": 0,
+                        "Alias": "",
+                        "LastChangeDate": null
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Priorities"
+                  ],
+                  "properties": {
+                    "Priorities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "APIConnection",
+                          "Active",
+                          "Alias",
+                          "ExternalIdentifier",
+                          "Id",
+                          "InUse",
+                          "IsDefault",
+                          "LastChangeDate",
+                          "Name",
+                          "Tenant"
+                        ],
+                        "properties": {
+                          "APIConnection": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "Active": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "Alias": {
+                            "description": "",
+                            "type": "string"
+                          },
+                          "ExternalIdentifier": {
+                            "description": "",
+                            "default": 0,
+                            "type": "integer"
+                          },
+                          "Id": {
+                            "description": "",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "InUse": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "IsDefault": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "LastChangeDate": {
+                            "description": "RFC3339-like date and time without timezone.",
+                            "nullable": true,
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+                          },
+                          "Name": {
+                            "description": "",
+                            "type": "string"
+                          },
+                          "Tenant": {
+                            "description": "",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Statuses": {
+      "get": {
+        "operationId": "Fetch statuses",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Statuses"
+                  ],
+                  "properties": {
+                    "Statuses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "Active",
+                          "AllowInactive",
+                          "ClassName",
+                          "Id",
+                          "IsStatusForClosedCall",
+                          "LastChangeDate",
+                          "Name",
+                          "NextStatus",
+                          "RequirePlanning",
+                          "Sequence",
+                          "StatusType",
+                          "Tenant",
+                          "Translation"
+                        ],
+                        "properties": {
+                          "Active": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "AllowInactive": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "ClassName": {
+                            "description": "",
+                            "type": "string"
+                          },
+                          "Id": {
+                            "description": "",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "IsStatusForClosedCall": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "LastChangeDate": {
+                            "description": "RFC3339-like date and time without timezone.",
+                            "nullable": true,
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+                          },
+                          "Name": {
+                            "description": "",
+                            "type": "string"
+                          },
+                          "NextStatus": {
+                            "nullable": true,
+                            "example": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "RequirePlanning": {
+                            "description": "",
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "Sequence": {
+                            "description": "",
+                            "default": 0,
+                            "type": "integer"
+                          },
+                          "StatusType": {
+                            "description": "",
+                            "default": 0,
+                            "type": "integer"
+                          },
+                          "Tenant": {
+                            "description": "",
+                            "default": "00000000-0000-0000-0000-000000000000",
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "Translation": {
+                            "description": "",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/SLA": {
+      "get": {
+        "operationId": "Fetch Service Level Agreements (SLA)",
+        "parameters": [
+          {
+            "name": "Active",
+            "description": "",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "Name",
+            "description": "",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "name": "Page",
+            "description": "",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "ShortName",
+            "description": "",
+            "in": "query",
+            "schema": {
+              "description": "",
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortColumn",
+            "description": "",
+            "in": "query",
+            "schema": {
+              "description": "",
+              "enum": [
+                "Name"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortDirection",
+            "description": "",
+            "in": "query",
+            "schema": {
+              "description": "",
+              "enum": [
+                "Asc",
+                "Desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageSize",
+            "description": "",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "description": "",
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "SLAPagedSearchResult": {
+                      "SLAs": [
+                        {
+                          "Id": "00000000-0000-0000-0000-000000000000",
+                          "Name": "",
+                          "Active": false,
+                          "ShortName": "",
+                          "ResponseTime": 0,
+                          "FeedbackInterval": 0,
+                          "IsUsed": false
+                        }
+                      ],
+                      "Paging": {
+                        "AmountRecordsFound": 0,
+                        "AmountOfPages": 0
+                      }
+                    }
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "SLAPagedSearchResult"
+                  ],
+                  "properties": {
+                    "SLAPagedSearchResult": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "SLAs",
+                        "Paging"
+                      ],
+                      "properties": {
+                        "SLAs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SLA"
+                          }
+                        },
+                        "Paging": {
+                          "$ref": "#/components/schemas/Paging"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    },
+    "/Taxes": {
+      "put": {
+        "operationId": "Create tax",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxRequestPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "Id": "00000000-0000-0000-0000-000000000000",
+                    "Tenant": "00000000-0000-0000-0000-000000000000",
+                    "Name": "",
+                    "Value": 0,
+                    "Active": false,
+                    "Code": "",
+                    "AllowInactive": false,
+                    "IsDefault": false
+                  },
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "Active",
+                    "AllowInactive",
+                    "Code",
+                    "Id",
+                    "IsDefault",
+                    "Name",
+                    "Tenant",
+                    "Value"
+                  ],
+                  "properties": {
+                    "Active": {
+                      "description": "",
+                      "type": "boolean"
+                    },
+                    "AllowInactive": {
+                      "description": "",
+                      "type": "boolean"
+                    },
+                    "Code": {
+                      "description": "",
+                      "type": "string"
+                    },
+                    "Id": {
+                      "description": "",
+                      "example": "00000000-0000-0000-0000-000000000000",
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "IsDefault": {
+                      "description": "",
+                      "type": "boolean"
+                    },
+                    "Name": {
+                      "description": "",
+                      "type": "string"
+                    },
+                    "Tenant": {
+                      "description": "",
+                      "example": "00000000-0000-0000-0000-000000000000",
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "Value": {
+                      "description": "",
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "Create taxes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Tax"
+                ],
+                "properties": {
+                  "Tax": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TaxRequestPayload"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "Fetch tax",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxResponsePayload"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "Delete tax",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": []
+          }
+        ]
+      }
+    }
+  },
+  "x-roles": [
+    {
+      "name": "public",
+      "id": "1",
+      "description": "public role",
+      "x-tags": [
+        "public"
+      ]
+    },
+    {
+      "name": "private",
+      "id": "2",
+      "description": "private role",
+      "x-tags": [
+        "private"
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Product": {
+        "example": {
+          "Id": "cbbf9a00-019e-4af8-beb1-76d3fdb73058",
+          "Tenant": "10f7e7cf-0aef-48d0-9ef6-abe96e18e70c",
+          "Active": true,
+          "Taxable": true,
+          "Name": "Test-Product-API-Documentation",
+          "InternalName": null,
+          "Description": "Test-Product-API-Documentation-Description",
+          "InternalDescription": null,
+          "Price": 100,
+          "Cost": 20,
+          "ViewInContract": false,
+          "ProductForActivityBasedTicketBilling": false,
+          "Ledger": null,
+          "CreationDate": "2024-07-18T14:51:35.69",
+          "LastChangeDate": "2024-07-18T00:00:00",
+          "VAR": false,
+          "TicketProduct": false,
+          "PriceAdjustable": false,
+          "ProjectProductPriceAdjustable": false,
+          "ExternalIdNumber": null,
+          "ProjectProduct": false,
+          "SKU": null,
+          "AcronisId": null,
+          "InUseInSales": false,
+          "InUseInTickets": false,
+          "InUseInContracts": false,
+          "InUseInProjects": false,
+          "InUseInTicketBilling": false,
+          "InUseInBundles": false,
+          "InUseInQuoteTemplates": false,
+          "InUse": false,
+          "LedgerNumber": null,
+          "IsDefault": false,
+          "LedgerDescription": null,
+          "CustomFields": null
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "InUseInTickets",
+          "LastChangeDate",
+          "Ledger",
+          "Description",
+          "InUseInBundles",
+          "Id",
+          "Cost",
+          "LedgerNumber",
+          "ProductForActivityBasedTicketBilling",
+          "InternalDescription",
+          "InUseInProjects",
+          "Price",
+          "CreationDate",
+          "ProjectProduct",
+          "Name",
+          "ProjectProductPriceAdjustable",
+          "InUseInSales",
+          "InUse",
+          "InUseInTicketBilling",
+          "Tenant",
+          "InUseInContracts",
+          "InUseInQuoteTemplates",
+          "VAR",
+          "ExternalIdNumber",
+          "AcronisId",
+          "ViewInContract",
+          "Active",
+          "CustomFields",
+          "LedgerDescription",
+          "Taxable",
+          "PriceAdjustable",
+          "SKU",
+          "IsDefault",
+          "InternalName",
+          "TicketProduct"
+        ],
+        "properties": {
+          "InUseInTickets": {
+            "type": "boolean"
+          },
+          "LastChangeDate": {
+            "description": "RFC3339-like date and time without timezone.",
+            "nullable": true,
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "Ledger": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "InUseInBundles": {
+            "type": "boolean"
+          },
+          "Id": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "Cost": {
+            "type": "number"
+          },
+          "LedgerNumber": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ProductForActivityBasedTicketBilling": {
+            "type": "boolean"
+          },
+          "InternalDescription": {
+            "nullable": true,
+            "type": "string"
+          },
+          "InUseInProjects": {
+            "type": "boolean"
+          },
+          "Price": {
+            "type": "number"
+          },
+          "CreationDate": {
+            "$ref": "#/components/schemas/DatetimeNoTZ"
+          },
+          "ProjectProduct": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "ProjectProductPriceAdjustable": {
+            "type": "boolean"
+          },
+          "InUseInSales": {
+            "type": "boolean"
+          },
+          "InUse": {
+            "type": "boolean"
+          },
+          "InUseInTicketBilling": {
+            "type": "boolean"
+          },
+          "Tenant": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "InUseInContracts": {
+            "type": "boolean"
+          },
+          "InUseInQuoteTemplates": {
+            "type": "boolean"
+          },
+          "VAR": {
+            "type": "boolean"
+          },
+          "ExternalIdNumber": {
+            "nullable": true,
+            "type": "string"
+          },
+          "AcronisId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ViewInContract": {
+            "type": "boolean"
+          },
+          "Active": {
+            "type": "boolean"
+          },
+          "CustomFields": {
+            "nullable": true,
+            "type": "array",
+            "items": {}
+          },
+          "LedgerDescription": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Taxable": {
+            "type": "boolean"
+          },
+          "PriceAdjustable": {
+            "type": "boolean"
+          },
+          "SKU": {
+            "nullable": true,
+            "type": "string"
+          },
+          "IsDefault": {
+            "type": "boolean"
+          },
+          "InternalName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "TicketProduct": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GetProductSearchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "products"
+        ],
+        "properties": {
+          "products": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "Result"
+            ],
+            "properties": {
+              "Result": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "Products",
+                  "Paging"
+                ],
+                "properties": {
+                  "Products": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ProductPartial"
+                    }
+                  },
+                  "Paging": {
+                    "$ref": "#/components/schemas/Paging"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Ledger": {
+        "example": {
+          "Id": "65ea810d-7059-4199-8b01-813e9255bc86",
+          "Tenant": "10f7e7cf-0aef-48d0-9ef6-abe96e18e70c",
+          "Active": true,
+          "Number": "Number",
+          "Description": null,
+          "ExternalId": null,
+          "CreationDate": "2024-07-22T05:34:40.1968856",
+          "AllowInactive": true,
+          "LastChangeDate": null
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "LastChangeDate",
+          "Description",
+          "Id",
+          "ExternalId",
+          "CreationDate",
+          "Tenant",
+          "Number",
+          "Active",
+          "AllowInactive"
+        ],
+        "properties": {
+          "LastChangeDate": {
+            "description": "RFC3339-like date and time without timezone.",
+            "nullable": true,
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "Description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Id": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "ExternalId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "CreationDate": {
+            "description": "",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "Tenant": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Number": {
+            "description": "",
+            "type": "string"
+          },
+          "Active": {
+            "description": "",
+            "type": "boolean"
+          },
+          "AllowInactive": {
+            "description": "",
+            "type": "boolean"
+          }
+        }
+      },
+      "GetLedgersSearchResponse": {
+        "example": {
+          "Ledgers": [
+            {
+              "Id": "00000000-0000-0000-0000-000000000000",
+              "Number": "",
+              "Description": "",
+              "Active": true,
+              "CreationDate": "0001-01-01T00:00:00Z",
+              "ExternalId": ""
+            },
+            {
+              "Id": "00000000-0000-0000-0000-000000000000",
+              "Number": "",
+              "Description": "",
+              "Active": true,
+              "CreationDate": "0001-01-01T00:00:00Z",
+              "ExternalId": ""
+            }
+          ],
+          "Paging": {
+            "AmountTotalItems": 0,
+            "AmountRecordsFound": 0,
+            "AmountOfPages": 0
+          }
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Ledgers",
+          "Paging"
+        ],
+        "properties": {
+          "Ledgers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerPartial"
+            }
+          },
+          "Paging": {
+            "$ref": "#/components/schemas/Paging"
+          }
+        }
+      },
+      "Guid": {
+        "example": "00000000-0000-0000-0000-000000000000",
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "Address": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Street",
+          "HouseNo",
+          "HouseNoAdd",
+          "Zipcode",
+          "City",
+          "Country",
+          "StateCountry"
+        ],
+        "properties": {
+          "Street": {
+            "type": "string"
+          },
+          "HouseNo": {
+            "type": "string"
+          },
+          "HouseNoAdd": {
+            "type": "string"
+          },
+          "Zipcode": {
+            "type": "string"
+          },
+          "City": {
+            "type": "string"
+          },
+          "Country": {
+            "type": "string"
+          },
+          "StateCountry": {
+            "type": "string"
+          }
+        }
+      },
+      "SalesItemProductsPartial": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Discount",
+          "IsItemNote",
+          "Quantity",
+          "Product",
+          "Description",
+          "Price"
+        ],
+        "properties": {
+          "Discount": {
+            "type": "number"
+          },
+          "IsItemNote": {
+            "type": "boolean"
+          },
+          "Quantity": {
+            "type": "integer"
+          },
+          "Product": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "ProductName": {
+            "type": "string"
+          },
+          "Description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Price": {
+            "type": "number"
+          }
+        }
+      },
+      "DatetimeNoTZ": {
+        "description": "RFC3339-like date and time without timezone.",
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+      },
+      "ContractPart": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "APIConnection",
+          "ActualQuantity",
+          "AutomaticUpdate",
+          "Contract",
+          "ContractPartType",
+          "Description",
+          "Discount",
+          "DiscountReason",
+          "EndDate",
+          "Id",
+          "IsReadOnly",
+          "MachinesCount",
+          "MinBillableQuantity",
+          "Price",
+          "Product",
+          "ProductName",
+          "Quantity",
+          "ServiceLevelAgreement",
+          "ServiceObjectGroup",
+          "ShowUsersOnInvoice",
+          "StartDate",
+          "SubscriptionType",
+          "TrialPeriod",
+          "UserType",
+          "VARConnection",
+          "VARGroup"
+        ],
+        "properties": {
+          "APIConnection": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "ActualQuantity": {
+            "type": "number"
+          },
+          "AutomaticUpdate": {
+            "type": "boolean"
+          },
+          "Contract": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "ContractPartType": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "Description": {
+            "type": "string"
+          },
+          "Discount": {
+            "type": "number"
+          },
+          "DiscountReason": {
+            "type": "string"
+          },
+          "EndDate": {
+            "$ref": "#/components/schemas/DatetimeNoTZ"
+          },
+          "Id": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "IsReadOnly": {
+            "type": "boolean"
+          },
+          "MachinesCount": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "MinBillableQuantity": {
+            "type": "number"
+          },
+          "Price": {
+            "type": "number"
+          },
+          "Product": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "ProductName": {
+            "type": "string"
+          },
+          "Quantity": {
+            "type": "number"
+          },
+          "ServiceLevelAgreement": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "ServiceObjectGroup": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "ShowUsersOnInvoice": {
+            "type": "boolean"
+          },
+          "StartDate": {
+            "$ref": "#/components/schemas/DatetimeNoTZ"
+          },
+          "SubscriptionType": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "TrialPeriod": {
+            "type": "integer"
+          },
+          "UserType": {
+            "type": "integer"
+          },
+          "VARConnection": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "VARGroup": {
+            "$ref": "#/components/schemas/Guid"
+          }
+        }
+      },
+      "Contract": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "BillInAdvance",
+          "BillingEntity",
+          "BlockHours",
+          "BlockHoursNumber",
+          "BuildingName",
+          "City",
+          "ContactEmail",
+          "ContractParts",
+          "Customer",
+          "EndDate",
+          "HouseNo",
+          "HouseNoAdd",
+          "KeepRemainingHours",
+          "Name",
+          "PaymentIntervalInMonths",
+          "ProRated",
+          "ReferenceNumber",
+          "RenewalThreshold",
+          "Retainer",
+          "SendInvoiceByEmail",
+          "StartDate",
+          "StateCountry",
+          "Street",
+          "Zipcode"
+        ],
+        "properties": {
+          "BillInAdvance": {
+            "description": "Defines a billing method for the contract.",
+            "type": "boolean"
+          },
+          "BillingEntity": {
+            "description": "Defines a billing entity for the contract billing.",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "BlockHours": {
+            "description": "Defines whether support block hours are included (1) into the contract, or not (0).",
+            "type": "boolean"
+          },
+          "BlockHoursNumber": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "BuildingName": {
+            "description": "Defines customer's address information to be used on the invoice:  building name.",
+            "type": "string"
+          },
+          "City": {
+            "description": "Defines customer's address information to be used on the invoice:  city.",
+            "type": "string"
+          },
+          "ContactEmail": {
+            "description": "Contact email for the contract.",
+            "type": "string"
+          },
+          "ContractParts": {
+            "description": "Contract's parts - list of contract products.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractPart"
+            }
+          },
+          "Customer": {
+            "description": "Customer ID.",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "EndDate": {
+            "description": "Contract's end date.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "HouseNo": {
+            "description": "Defines customer's address information to be used on the invoice:  street number.",
+            "type": "string"
+          },
+          "HouseNoAdd": {
+            "description": "Defines customer's address information to be used on the invoice:  building number.",
+            "type": "string"
+          },
+          "KeepRemainingHours": {
+            "description": "Defines a retainer option, remaining (unused) hours are kept for the next billing period (1), or dropped (0).",
+            "type": "boolean"
+          },
+          "Name": {
+            "description": "Contract name.",
+            "type": "string"
+          },
+          "PaymentIntervalInMonths": {
+            "description": "Defines an invoice interval for the contract.",
+            "type": "integer"
+          },
+          "ProRated": {
+            "description": "Defines whether proration for the contract billing is enabled (1), or not (0).",
+            "type": "boolean"
+          },
+          "ReferenceNumber": {
+            "description": "Contract's reference number.",
+            "type": "string"
+          },
+          "RenewalThreshold": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "Retainer": {
+            "description": "Defines whether the contract is a retainer and block hours are billed every month / quarter / half year / year (1), or not (0).",
+            "type": "boolean"
+          },
+          "SendInvoiceByEmail": {
+            "description": "Defines a delivery method for generated invoices.",
+            "type": "boolean"
+          },
+          "StartDate": {
+            "description": "Contract's start date.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "StateCountry": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Street": {
+            "description": "Defines customer's address information to be used on the invoice:  street.",
+            "type": "string"
+          },
+          "Zipcode": {
+            "description": "Defines customer's address information to be used on the invoice:  ZIP or postal code.",
+            "type": "string"
+          }
+        }
+      },
+      "Paging": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "AmountTotalItems",
+          "AmountRecordsFound",
+          "AmountOfPages"
+        ],
+        "properties": {
+          "AmountTotalItems": {
+            "type": "integer"
+          },
+          "AmountRecordsFound": {
+            "type": "integer"
+          },
+          "AmountOfPages": {
+            "type": "integer"
+          }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "BatchNumber",
+          "BillingEntityName",
+          "CreationDate",
+          "Customer",
+          "CustomerName",
+          "Exported",
+          "ExportedDate",
+          "Id",
+          "Incasso",
+          "InvoiceNumber",
+          "InvoiceQueueErrorCount",
+          "InvoiceQueueErrorMessage",
+          "InvoiceQueueExternalInvoiceStatus",
+          "InvoiceQueueId",
+          "InvoiceQueueLastUpdateTime",
+          "InvoiceQueueStatus",
+          "InvoiceXml",
+          "InvoicedBy",
+          "InvoicerDeleted",
+          "IsConsolidateBillingStructure",
+          "PaymentDate",
+          "PaymentSent",
+          "PaymentStatus",
+          "PaymentType",
+          "ScheduledAt",
+          "SendByEmail",
+          "Tenant",
+          "Total"
+        ],
+        "properties": {
+          "BatchNumber": {
+            "description": "",
+            "type": "string"
+          },
+          "BillingEntityName": {
+            "description": "",
+            "type": "string"
+          },
+          "CreationDate": {
+            "description": "",
+            "default": "0001-01-01T00:00:00+00:00",
+            "type": "string",
+            "format": "date-time"
+          },
+          "Customer": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+          },
+          "CustomerName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Exported": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "ExportedDate": {
+            "description": "",
+            "default": "0001-01-01T00:00:00+00:00",
+            "type": "string",
+            "format": "date-time"
+          },
+          "Id": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+          },
+          "Incasso": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "InvoiceNumber": {
+            "description": "",
+            "type": "string"
+          },
+          "InvoiceQueueErrorCount": {
+            "description": "",
+            "default": 0,
+            "type": "integer"
+          },
+          "InvoiceQueueErrorMessage": {
+            "description": "",
+            "type": "string"
+          },
+          "InvoiceQueueExternalInvoiceStatus": {
+            "description": "",
+            "default": 0,
+            "type": "integer"
+          },
+          "InvoiceQueueId": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+          },
+          "InvoiceQueueLastUpdateTime": {
+            "description": "",
+            "default": "0001-01-01T00:00:00",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "InvoiceQueueStatus": {
+            "description": "",
+            "default": 0,
+            "type": "integer"
+          },
+          "InvoiceXml": {
+            "nullable": true,
+            "type": "string"
+          },
+          "InvoicedBy": {
+            "nullable": true,
+            "type": "string"
+          },
+          "InvoicerDeleted": {
+            "description": "",
+            "type": "boolean"
+          },
+          "IsConsolidateBillingStructure": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "PaymentDate": {
+            "description": "",
+            "default": "0001-01-01T00:00:00",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "PaymentSent": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "PaymentStatus": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "PaymentType": {
+            "description": "",
+            "default": 0,
+            "type": "integer"
+          },
+          "ScheduledAt": {
+            "description": "",
+            "default": "0001-01-01T00:00:00",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "SendByEmail": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "Tenant": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+          },
+          "Total": {
+            "description": "",
+            "default": 0,
+            "type": "number"
+          }
+        }
+      },
+      "DashboardData": {
+        "example": {
+          "OpenTicketsNumberDay": 0,
+          "SLATicketsNumberDay": 0,
+          "UnassignedTicketsNumber": 0,
+          "NPSRatings": {
+            "IsGroup": false,
+            "NPSGroupMonth": 0,
+            "NPSGroupYear": 0,
+            "NPSOwnYear": 0,
+            "NPSOwnMonth": 0
+          },
+          "TicketStatistics": {
+            "TicketStatistics": {},
+            "TicketStatisticsAll": {},
+            "TicketStatisticsLast": {}
+          },
+          "OccupancyRate": 0,
+          "TotalEndpointsUnderManagement": 0,
+          "EndpointsPartOfAContract": 0,
+          "NumberOfEndUsers": 0,
+          "CurrentContractsRevenue": 0,
+          "Revenues": [],
+          "MRRGrowth": {
+            "LastNet": 0,
+            "NetGrowth": 0
+          },
+          "SalesItemsGrowth": {
+            "LastBilledSalesItems": 0,
+            "SalesItemsGrowth": 0
+          },
+          "ARPU": 0,
+          "ShowNumberEndpoints": true,
+          "ShowNumberEndUsers": true,
+          "ShowCurrentContractsRevenue": true,
+          "ShowARPU": true,
+          "ShowNewSalesItems": true,
+          "ShowAllRevenue": true,
+          "ShowOccupancyRate": true,
+          "TicketTypes": [],
+          "TicketTypesSplit": [],
+          "AllCurrentSalesItemsAmount": 0,
+          "TicketsDueTodayNumber": 0,
+          "UpcomingOnSiteVisitNumber": 0,
+          "UpcomingOnSiteVisit": {},
+          "accountIsExpired": {
+            "TrialAccountExpired": false
+          }
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ARPU",
+          "AllCurrentSalesItemsAmount",
+          "CurrentContractsRevenue",
+          "EndpointsPartOfAContract",
+          "MRRGrowth",
+          "NPSRatings",
+          "NumberOfEndUsers",
+          "OccupancyRate",
+          "OpenTicketsNumberDay",
+          "Revenues",
+          "SLATicketsNumberDay",
+          "SalesItemsGrowth",
+          "ShowARPU",
+          "ShowAllRevenue",
+          "ShowCurrentContractsRevenue",
+          "ShowNewSalesItems",
+          "ShowNumberEndpoints",
+          "ShowOccupancyRate",
+          "TicketStatistics",
+          "TicketTypes",
+          "TicketTypesSplit",
+          "TicketsDueTodayNumber",
+          "TotalEndpointsUnderManagement",
+          "UnassignedTicketsNumber",
+          "UpcomingOnSiteVisit",
+          "UpcomingOnSiteVisitNumber",
+          "accountIsExpired"
+        ],
+        "properties": {
+          "ARPU": {
+            "description": "",
+            "type": "number"
+          },
+          "AllCurrentSalesItemsAmount": {
+            "description": "",
+            "type": "integer"
+          },
+          "CurrentContractsRevenue": {
+            "description": "",
+            "type": "number"
+          },
+          "EndpointsPartOfAContract": {
+            "description": "",
+            "type": "integer"
+          },
+          "MRRGrowth": {
+            "description": "",
+            "type": "object",
+            "required": [
+              "LastNet",
+              "NetGrowth"
+            ],
+            "properties": {
+              "LastNet": {
+                "description": "",
+                "type": "number"
+              },
+              "NetGrowth": {
+                "description": "",
+                "type": "number"
+              }
+            }
+          },
+          "NPSRatings": {
+            "description": "",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "IsGroup",
+              "NPSGroupMonth",
+              "NPSGroupYear",
+              "NPSOwnMonth",
+              "NPSOwnYear"
+            ],
+            "properties": {
+              "IsGroup": {
+                "description": "",
+                "type": "boolean"
+              },
+              "NPSGroupMonth": {
+                "description": "",
+                "type": "number"
+              },
+              "NPSGroupYear": {
+                "description": "",
+                "type": "number"
+              },
+              "NPSOwnMonth": {
+                "description": "",
+                "type": "number"
+              },
+              "NPSOwnYear": {
+                "description": "",
+                "type": "number"
+              }
+            }
+          },
+          "NumberOfEndUsers": {
+            "description": "",
+            "type": "integer"
+          },
+          "OccupancyRate": {
+            "description": "",
+            "type": "number"
+          },
+          "OpenTicketsNumberDay": {
+            "description": "",
+            "type": "integer"
+          },
+          "Revenues": {
+            "description": "",
+            "type": "array",
+            "items": {}
+          },
+          "SLATicketsNumberDay": {
+            "description": "",
+            "type": "integer"
+          },
+          "SalesItemsGrowth": {
+            "description": "",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "LastBilledSalesItems",
+              "SalesItemsGrowth"
+            ],
+            "properties": {
+              "LastBilledSalesItems": {
+                "description": "",
+                "type": "number"
+              },
+              "SalesItemsGrowth": {
+                "description": "",
+                "type": "number"
+              }
+            }
+          },
+          "ShowARPU": {
+            "description": "",
+            "type": "boolean"
+          },
+          "ShowAllRevenue": {
+            "description": "",
+            "type": "boolean"
+          },
+          "ShowCurrentContractsRevenue": {
+            "description": "",
+            "type": "boolean"
+          },
+          "ShowNewSalesItems": {
+            "description": "",
+            "type": "boolean"
+          },
+          "ShowNumberEndpoints": {
+            "description": "",
+            "type": "boolean"
+          },
+          "ShowOccupancyRate": {
+            "description": "",
+            "type": "boolean"
+          },
+          "TicketStatistics": {
+            "description": "",
+            "type": "object",
+            "required": [
+              "TicketStatistics",
+              "TicketStatisticsAll",
+              "TicketStatisticsLast"
+            ],
+            "properties": {
+              "TicketStatistics": {
+                "description": "",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "MonthClosed",
+                  "MonthClosedGroup",
+                  "TodayClosed",
+                  "TodayClosedGroup",
+                  "TotalClosed",
+                  "TotalClosedGroup",
+                  "YearClosed",
+                  "YearClosedGroup"
+                ],
+                "properties": {
+                  "MonthClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "MonthClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TodayClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TodayClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TotalClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TotalClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "YearClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "YearClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  }
+                }
+              },
+              "TicketStatisticsAll": {
+                "description": "",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "MonthClosed",
+                  "MonthClosedGroup",
+                  "TodayClosed",
+                  "TodayClosedGroup",
+                  "TotalClosed",
+                  "TotalClosedGroup",
+                  "YearClosed",
+                  "YearClosedGroup"
+                ],
+                "properties": {
+                  "MonthClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "MonthClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TodayClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TodayClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TotalClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "TotalClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "YearClosed": {
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "YearClosedGroup": {
+                    "description": "",
+                    "type": "integer"
+                  }
+                }
+              },
+              "TicketStatisticsLast": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "GroupManagerMonth",
+                  "GroupManagerWeek",
+                  "GroupStatisticsMonth",
+                  "GroupStatisticsWeek"
+                ],
+                "properties": {
+                  "GroupManagerMonth": {
+                    "description": "",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Statistics"
+                    }
+                  },
+                  "GroupManagerWeek": {
+                    "description": "",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Statistics"
+                    }
+                  },
+                  "GroupStatisticsMonth": {
+                    "description": "",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Statistics"
+                    }
+                  },
+                  "GroupStatisticsWeek": {
+                    "description": "",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Statistics"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "TicketTypes": {
+            "description": "",
+            "type": "array",
+            "items": {}
+          },
+          "TicketTypesSplit": {
+            "description": "",
+            "type": "array",
+            "items": {}
+          },
+          "TicketsDueTodayNumber": {
+            "description": "",
+            "type": "integer"
+          },
+          "TotalEndpointsUnderManagement": {
+            "description": "",
+            "type": "integer"
+          },
+          "UnassignedTicketsNumber": {
+            "description": "",
+            "type": "integer"
+          },
+          "UpcomingOnSiteVisit": {
+            "description": "",
+            "type": "boolean"
+          },
+          "UpcomingOnSiteVisitNumber": {
+            "description": "",
+            "type": "integer"
+          },
+          "accountIsExpired": {
+            "description": "",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "TrialAccountExpired"
+            ],
+            "properties": {
+              "TrialAccountExpired": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "SLA": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Active",
+          "FeedbackInterval",
+          "Id",
+          "IsUsed",
+          "Name",
+          "ResponseTime",
+          "ShortName"
+        ],
+        "properties": {
+          "Active": {
+            "description": "",
+            "type": "boolean"
+          },
+          "FeedbackInterval": {
+            "description": "",
+            "type": "integer"
+          },
+          "Id": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "IsUsed": {
+            "description": "",
+            "type": "boolean"
+          },
+          "Name": {
+            "description": "",
+            "type": "string"
+          },
+          "ResponseTime": {
+            "description": "",
+            "type": "integer"
+          },
+          "ShortName": {
+            "description": "",
+            "type": "string"
+          }
+        }
+      },
+      "TaxRequestPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Name"
+        ],
+        "properties": {
+          "Active": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "AllowInactive": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "Code": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Id": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "IsDefault": {
+            "description": "",
+            "default": false,
+            "type": "boolean"
+          },
+          "Name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Tenant": {
+            "description": "",
+            "default": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Value": {
+            "description": "",
+            "default": 0,
+            "type": "number"
+          }
+        }
+      },
+      "TaxResponsePayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Active",
+          "AllowInactive",
+          "Code",
+          "Id",
+          "IsDefault",
+          "Name",
+          "Tenant",
+          "Value"
+        ],
+        "properties": {
+          "Active": {
+            "description": "",
+            "type": "boolean"
+          },
+          "AllowInactive": {
+            "description": "",
+            "type": "boolean"
+          },
+          "Code": {
+            "description": "",
+            "type": "string"
+          },
+          "Id": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "IsDefault": {
+            "description": "",
+            "type": "boolean"
+          },
+          "Name": {
+            "description": "",
+            "type": "string"
+          },
+          "Tenant": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Value": {
+            "description": "",
+            "type": "number"
+          }
+        }
+      },
+      "ProductPartial": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Id",
+          "Active",
+          "Name",
+          "Description",
+          "Price",
+          "Cost",
+          "ViewInContract",
+          "Ledger",
+          "LastChangeDate",
+          "ExternalIdNumber",
+          "AcronisId"
+        ],
+        "properties": {
+          "Id": {
+            "$ref": "#/components/schemas/Guid"
+          },
+          "Active": {
+            "type": "boolean"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Price": {
+            "type": "number"
+          },
+          "Cost": {
+            "type": "number"
+          },
+          "ViewInContract": {
+            "type": "boolean"
+          },
+          "Ledger": {
+            "nullable": true,
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "LastChangeDate": {
+            "description": "RFC3339-like date and time without timezone.",
+            "nullable": true,
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "ExternalIdNumber": {
+            "nullable": true,
+            "type": "string"
+          },
+          "AcronisId": {
+            "nullable": true,
+            "type": "string"
+          }
+        }
+      },
+      "LedgerPartial": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Active",
+          "CreationDate",
+          "Description",
+          "ExternalId",
+          "Id",
+          "Number"
+        ],
+        "properties": {
+          "Active": {
+            "description": "",
+            "type": "boolean"
+          },
+          "CreationDate": {
+            "description": "",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "Description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ExternalId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "Id": {
+            "description": "",
+            "example": "00000000-0000-0000-0000-000000000000",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "Number": {
+            "description": "",
+            "type": "string"
+          }
+        }
+      },
+      "Statistics": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Closed",
+          "Day",
+          "OutOfSLA"
+        ],
+        "properties": {
+          "Closed": {
+            "description": "",
+            "type": "integer"
+          },
+          "Day": {
+            "description": "",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$"
+          },
+          "OutOfSLA": {
+            "description": "",
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "A description of the security scheme.",
+        "flows": {
+          "clientCredentials": {
+            "scopes": {
+              "urn:acronis.com::advanced_automation::advanced_automation_client": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_client_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_admin": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_director": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_engineer": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_group_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_hr": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_sales": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "password": {
+            "scopes": {
+              "urn:acronis.com::advanced_automation::advanced_automation_client": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_client_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_admin": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_director": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_engineer": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_group_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_hr": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_sales": ""
+            },
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          },
+          "authorizationCode": {
+            "scopes": {
+              "urn:acronis.com::advanced_automation::advanced_automation_client": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_client_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_admin": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_director": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_engineer": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_finance_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_group_manager": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_hr": "",
+              "urn:acronis.com::advanced_automation::advanced_automation_sales": ""
+            },
+            "authorizationUrl": "https://dev-cloud.acronis.com/api/2/idp/authorize",
+            "tokenUrl": "https://dev-cloud.acronis.com/api/2/idp/token"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dev-cloud.acronis.com/api/advanced-automation/v1",
+      "variables": {}
+    }
+  ]
+}
