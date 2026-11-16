@@ -734,14 +734,27 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    const configured = Boolean(env.ACRONIS_BASE_URL && env.ACRONIS_CLIENT_ID && env.ACRONIS_CLIENT_SECRET && env.MCP_AUTH_TOKEN);
+    // A secret pasted into the dashboard can carry a trailing space or line
+    // break; compare trimmed values on both sides (2026-11-16: Claude's
+    // connector token was rejected with 401 although it looked right).
+    const expected = (env.MCP_AUTH_TOKEN || "").trim();
+    const configured = Boolean(env.ACRONIS_BASE_URL && env.ACRONIS_CLIENT_ID && env.ACRONIS_CLIENT_SECRET && expected);
     if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok", configured }), { headers: JSON_HEADERS });
     // Fail closed: the API client sees every customer's backups.
     if (!configured) {
       return new Response(JSON.stringify({ error: "acronis-mcp is not configured: set ACRONIS_BASE_URL (var) and the ACRONIS_CLIENT_ID, ACRONIS_CLIENT_SECRET and MCP_AUTH_TOKEN secrets." }), { status: 503, headers: JSON_HEADERS });
     }
-    const provided = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (!timingSafeEqual(provided, env.MCP_AUTH_TOKEN!)) {
+    const header = request.headers.get("Authorization") || "";
+    const provided = header.replace(/^Bearer\s+/i, "").trim();
+    if (!timingSafeEqual(provided, expected)) {
+      // Why it was rejected, never the token itself: scheme, lengths, and
+      // whether the saved secret itself carried whitespace.
+      console.log(JSON.stringify({
+        evt: "auth_rejected", path: url.pathname, method: request.method,
+        scheme: header ? header.split(/\s+/)[0] : "none",
+        provided_len: provided.length, expected_len: expected.length,
+        secret_had_whitespace: (env.MCP_AUTH_TOKEN || "").length !== expected.length,
+      }));
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" } });
     }
     // No event stream here (2026-10-26 repo rule): GET/DELETE /mcp answer 405.
