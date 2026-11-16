@@ -59,6 +59,7 @@ recoverable, so the source is plain JS.
 | pax8 | pax8-mcp | MCP.Pax8 | (noAuth) |
 | m365 | m365-mcp | MCP.M365 | (noAuth) |
 | gchannel | gchannel-mcp | MCP.GoogleChannel | UPSTREAM_GCHANNEL_TOKEN |
+| acronis | acronis-mcp | MCP.Acronis | UPSTREAM_ACRONIS_TOKEN |
 
 JumpCloud was removed on 2026-11-12: the Worker is retired and no longer deployed.
 

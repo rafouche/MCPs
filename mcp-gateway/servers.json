@@ -464,6 +464,34 @@
         "get_admin_activity",
         "list_alerts"
       ]
+    },
+    "acronis": {
+      "name": "Acronis",
+      "upstream": "https://acronis-mcp.young-math-a33a.workers.dev/mcp",
+      "secret": "UPSTREAM_ACRONIS_TOKEN",
+      "allowWrite": false,
+      "roles": [
+        "MCP.Acronis"
+      ],
+      "notes": "Acronis Cyber Protect Cloud, every customer under the partner tenant. acronis-mcp is read-only and fails closed. EXCLUDED: acronis_api_get (raw escape hatch).",
+      "readTools": [
+        "healthcheck",
+        "list_customers",
+        "get_tenant",
+        "get_tenant_usage",
+        "get_backup_status",
+        "list_workloads",
+        "get_workload",
+        "list_alerts",
+        "get_alert",
+        "customer_alert_counts",
+        "list_tasks",
+        "list_activities",
+        "list_agents",
+        "list_protection_plans",
+        "list_backups",
+        "list_archives"
+      ]
     }
   }
 }
