@@ -383,19 +383,37 @@ async function resourceIdsByName(env: Env, scope: Scope | undefined, q: string):
 
 // ─── Slim views ───────────────────────────────────────────────────────────────
 
-// Acronis errors nest ~20 levels deep; the readable cause is cause_str/effect_str.
+// Acronis errors nest ~20 levels deep under context._src.suberror. cause_str /
+// effect_str are the summary; the most specific text is often deeper, e.g. a
+// Hyper-V ErrorDescription ("Checkpoint operation ... failed ... 0x8000FFFF")
+// under a cause_str of just "The task has completed with errors." (2026-11-16).
+function deepestDetail(ctx: any): string | undefined {
+  let node = ctx?._src;
+  let detail: string | undefined;
+  for (let i = 0; node && i < 40; i++) {
+    const d = node.fields?.ErrorDescription || node.fields?.ErrorMessage;
+    if (d) detail = String(d);
+    node = node.suberror && Object.keys(node.suberror).length ? node.suberror : undefined;
+  }
+  return detail;
+}
+
+function oneError(e: any) {
+  const c = e?.context || {};
+  const detail = deepestDetail(c);
+  return {
+    reason: e?.reason || e?.code,
+    cause: c.cause_str || c.msg,
+    detail: detail && detail !== c.cause_str ? detail.replace(/\s+/g, " ").slice(0, 400) : undefined,
+    effect: c.effect_str !== c.cause_str ? c.effect_str : undefined,
+  };
+}
+
 function errorSummary(result: any): unknown {
   if (!result) return undefined;
-  const e = result.error;
-  const warnings = [...new Set((result.warnings || []).map((w: any) => w?.context?.cause_str || w?.reason).filter(Boolean))].slice(0, 3);
-  if (!e && !warnings.length) return result.code;
-  return {
-    code: result.code,
-    reason: e?.reason || e?.code,
-    cause: e?.context?.cause_str || e?.context?.msg,
-    effect: e?.context?.effect_str,
-    warnings: warnings.length ? warnings : undefined,
-  };
+  const warnings = (result.warnings || []).filter((w: any) => w?.reason !== "ActivitySucceededWithWarnings").slice(0, 3).map(oneError);
+  if (!result.error && !warnings.length) return result.code;
+  return { code: result.code, ...(result.error ? oneError(result.error) : {}), warnings: warnings.length ? warnings : undefined };
 }
 
 async function slimAlert(env: Env, a: any) {
@@ -409,6 +427,18 @@ async function slimAlert(env: Env, a: any) {
   };
 }
 
+// Workload rows carry the unit's NUMERIC tenant id and its name, so the
+// customer is found through the unit's name in the tenant list.
+async function customerOfUnitName(env: Env, unitName?: string): Promise<string | undefined> {
+  if (!unitName) return undefined;
+  try {
+    const t = (await allTenants(env)).find((x) => x.name === unitName);
+    return t ? customerOf(env, t.id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function slimWorkload(env: Env, i: any) {
   const c = i.context || {};
   const backups = (i.policies || []).filter((p: any) => String(p.type).includes("backup"));
@@ -416,7 +446,7 @@ async function slimWorkload(env: Env, i: any) {
   const lastRun = backups.map((p: any) => p.last_run).filter(Boolean).sort().pop();
   return {
     id: c.id, name: c.user_defined_name || c.name, type: c.type,
-    customer: (await customerOf(env, c.tenant_id)) ?? c.tenant_name,
+    customer: (await customerOfUnitName(env, c.tenant_name)) ?? c.tenant_name, unit: c.tenant_name,
     status: i.aggregate?.status, plans: i.aggregate?.names,
     last_backup_run: lastRun, last_backup_success: lastSuccess,
     days_since_success: daysSince(lastSuccess),
@@ -810,7 +840,7 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
       const s = await scopeArg(env, args, false);
       const since = sinceMs(args.since);
       const limit = clampLimit(args.limit, 15, 100);
-      const params: Record<string, unknown> = { lod: "full", order: "desc(id)" };
+      const params: Record<string, unknown> = { lod: "short", order: "desc(id)" };
       let resolved: string[] | undefined;
       const taskId = pick(args, "task_id");
       if (taskId && name === "list_activities") params.taskId = String(taskId);
@@ -831,8 +861,8 @@ async function runTool(name: string, args: Args, env: Env): Promise<string> {
       const rows: any[] = [];
       let after: string | undefined;
       let scanned = 0;
-      for (let page = 0; page < 8 && rows.length < limit; page++) {
-        const r = await api(env, `/task_manager/v2/${name === "list_tasks" ? "tasks" : "activities"}`, after ? { limit: 100, after } : { ...params, limit: 100 });
+      for (let page = 0; page < 5 && rows.length < limit; page++) {
+        const r = await api(env, `/task_manager/v2/${name === "list_tasks" ? "tasks" : "activities"}`, after ? { limit: 50, after } : { ...params, limit: 50 });
         const items = r?.items || [];
         scanned += items.length;
         let stop = false;
