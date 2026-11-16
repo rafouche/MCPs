@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "acronis-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-21",
+  "observability": { "enabled": true },
+  // Secrets (never in this file): ACRONIS_CLIENT_ID, ACRONIS_CLIENT_SECRET
+  // (Acronis Management Portal > Settings > API clients) and MCP_AUTH_TOKEN.
+  // ACRONIS_BASE_URL (the datacenter URL shown with the API client, e.g.
+  // https://us5-cloud.acronis.com) is set in the Cloudflare dashboard until
+  // it is known; then it can move into "vars" here.
+  // Fails closed: 503 until all four are set.
+  //
+  // Optional: bind a KV namespace as ACRONIS_TOKENS to share the 2-hour token
+  // across isolates (see getToken in src/index.ts).
+  "keep_vars": true
+}
