@@ -529,8 +529,10 @@ no tile (rafouche/Dashboard v1.8 shows the total as a footnote).
 - **meraki-mcp:** status offline or dormant and `lastReportedAt` older than
   30 days (field confirmed live). Dormant devices used to count toward the
   total but not as offline; they now count as offline until stale.
-- **peplink-mcp:** offline and `last_online` (else `offline_at`, else
-  `first_appear`) older than 30 days. `/licenses` unchanged.
+- **peplink-mcp:** offline and the later of `offline_at` / `last_online`
+  (else `first_appear`) older than 30 days. `last_online` is when the device
+  last came online, not when it was last seen, so it cannot be used alone
+  (the first version did and hid week-old outages). `/licenses` unchanged.
 - **ninjarmm-mcp:** offline and `lastContact` older than 30 days.
 - **unifi-mcp:** the cloud API has no last-seen time, so a cron
   (`*/10 * * * *`, `scheduled()`) walks sites that have offline devices

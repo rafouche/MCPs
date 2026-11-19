@@ -180,9 +180,13 @@ function tileName(org: any, device: any, multiGroup: boolean): string {
   return (multiGroup && device.group_name) || org.name || `Org ${org.id}`;
 }
 
-// Stale devices (Roger, 2026-11-19): an offline device last online more than
-// STALE_DAYS ago (last_online, else offline_at, else first_appear - InControl2
-// times carry no zone and are read as UTC, close enough at this scale) is
+// Stale devices (Roger, 2026-11-19): an offline device that went offline more
+// than STALE_DAYS ago is left out. The time used is the LATER of offline_at
+// and last_online, else first_appear: last_online is when the device last
+// CAME online, not when it was last seen (confirmed live - a device online
+// since July that dropped last week has last_online in July), so on its own
+// it hides fresh outages. InControl2 times carry no zone and are read as
+// UTC, close enough at this scale. Such a device is
 // left out of the wallboard's totals and offline counts: shelved or abandoned
 // hardware, not an outage. A client whose devices are all stale drops off;
 // staleHidden says how many devices were left out. /licenses is unchanged.
@@ -190,8 +194,8 @@ const STALE_DAYS = 30;
 
 function isStale(d: any, staleBefore: number): boolean {
   if (!(d.online === false || d.status === "offline")) return false;
-  const raw = d.last_online || d.offline_at || d.first_appear;
-  const last = raw ? new Date(/[zZ]|[+-]dd:?dd$/.test(raw) ? raw : raw + "Z").getTime() : 0;
+  const ms = (raw: unknown) => (typeof raw === "string" && raw ? new Date(/[zZ]|[+-]dd:?dd$/.test(raw) ? raw : raw + "Z").getTime() : 0) || 0;
+  const last = Math.max(ms(d.last_online), ms(d.offline_at)) || ms(d.first_appear);
   return !(last >= staleBefore);
 }
 
