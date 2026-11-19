@@ -648,7 +648,17 @@ const TOOLS = [
 // A tool normally returns text; get_ticket_attachment can return MCP content
 // blocks instead (an image block), which tools/call passes through as-is.
 type ToolContent = { content: Array<Record<string, unknown>> };
+// 2026-11-19: calls were reaching the vendor with a missing ID ("GET /v2/device/undefined", "GET /Users/undefined").
+// A required argument that is absent is refused here, by name, before anything is sent.
+function missingRequired(name: string, args: Record<string, unknown>): string | null {
+  const tool = (TOOLS as any[]).find((t) => t.name === name);
+  const required: string[] = tool?.inputSchema?.required ?? [];
+  const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === "" || (typeof args[k] === "number" && Number.isNaN(args[k])));
+  return missing.length ? `${name} was called without ${missing.map((k) => `\`${k}\``).join(", ")}. Nothing was sent. Call it again with ${missing.length > 1 ? "those arguments" : "that argument"} (this tool takes: ${Object.keys(tool?.inputSchema?.properties ?? {}).join(", ")}).` : null;
+}
+
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string | ToolContent> {
+  { const refused = missingRequired(name, args); if (refused) throw new Error(refused); }
   switch (name) {
     case "healthcheck": { const token = await getToken(env); return `Connected OK to ${env.HALO_BASE_URL} tenant:${env.HALO_TENANT} token:${token.substring(0, 20)}`; }
     case "list_tickets": { const p: Record<string, string> = { count: String(args.count ?? 20) }; if (args.open_only !== false) p.open_only = "true"; if (args.client_id) p.client_id = String(args.client_id); if (args.agent_id) p.agent_id = String(args.agent_id); if (args.team_id) p.team_id = String(args.team_id); if (args.status_id) p.status_id = String(args.status_id); if (args.pageinate) p.pageinate = "true"; if (args.page_no) p.page_no = String(args.page_no); if (args.page_size) p.page_size = String(args.page_size); if (args.search) p.search = String(args.search); return JSON.stringify(await haloGet(env, "/Tickets", p), null, 2); }

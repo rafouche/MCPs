@@ -527,3 +527,12 @@ mail came back for a client. The tool now POSTs the body (verified live against 
 filters honoured), returns a trimmed list of up to 100 rows (`full: true` for raw), refuses a result whose rows do
 not match the sender/recipient asked for, and `cipp_api_get` refuses ListMessageTrace. It is a read, although it
 is sent as a POST. With no sender or recipient there is nothing to check the rows against.
+
+## Required arguments are checked in the Worker (2026-11-19)
+cipp-mcp, ninjarmm-mcp and halopsa-mcp refuse a tool call that lacks an argument its inputSchema lists as
+`required` (`missingRequired`, first line of `runTool`), naming the argument, before anything is sent to the vendor.
+Before: "GET /v2/device/undefined", "GET /Users/undefined", "GET undefined". So `required` in a tool's schema is now
+enforced: only list an argument there if the tool cannot work without it. The other Workers do not have the check yet.
+cipp-mcp `list_group_members` uses ListGroups?groupID=..&members=true&owners=true (CIPP has no ListGroupMembers).
+halopsa-mcp `emergency_follow_up` puts the ticket's status back after a re-page (Halo moves it to Waiting on client
+when an email action is added; #24711).

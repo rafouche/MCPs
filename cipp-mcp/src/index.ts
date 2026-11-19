@@ -120,7 +120,7 @@ const TOOLS = [
 
   // Groups
   { name: "list_groups", description: "List all groups in a tenant", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" } }, required: ["tenantFilter"] } },
-  { name: "list_group_members", description: "List members of a specific group", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, GroupId: { type: "string", description: "Group ID" } }, required: ["tenantFilter", "GroupId"] } },
+  { name: "list_group_members", description: "A group's members and owners (id, displayName, userPrincipalName, mail), with the group's name, address and type. GroupId is the group's object id from list_groups. Pass full: true for CIPP's raw result.", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, GroupId: { type: "string", description: "Group object ID (from list_groups)" }, full: { type: "boolean" } }, required: ["tenantFilter", "GroupId"] } },
   { name: "add_group_member", description: "Add a user to a group", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, GroupId: { type: "string" }, UserId: { type: "string" } }, required: ["tenantFilter", "GroupId", "UserId"] } },
   { name: "remove_group_member", description: "Remove a user from a group", inputSchema: { type: "object", properties: { tenantFilter: { type: "string" }, GroupId: { type: "string" }, UserId: { type: "string" } }, required: ["tenantFilter", "GroupId", "UserId"] } },
 
@@ -162,7 +162,17 @@ const TOOLS = [
   { name: "cipp_api_post", description: "Call any CIPP write (POST) API endpoint by name, for functionality with no dedicated tool above — e.g. ExecMailTest, ExecGDAPTrace, ExecTransportRule. Look up exact endpoint names and body shape at docs.cipp.app/api-documentation or CIPP's own endpoint reference.", inputSchema: { type: "object", properties: { endpoint: { type: "string", description: "CIPP API endpoint name, e.g. ExecGDAPTrace" }, body: { type: "object", description: "JSON request body for the endpoint" } }, required: ["endpoint"] } },
 ];
 
+// 2026-11-19: calls were reaching the vendor with a missing ID ("GET /v2/device/undefined", "GET /Users/undefined").
+// A required argument that is absent is refused here, by name, before anything is sent.
+function missingRequired(name: string, args: Record<string, unknown>): string | null {
+  const tool = (TOOLS as any[]).find((t) => t.name === name);
+  const required: string[] = tool?.inputSchema?.required ?? [];
+  const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === "" || (typeof args[k] === "number" && Number.isNaN(args[k])));
+  return missing.length ? `${name} was called without ${missing.map((k) => `\`${k}\``).join(", ")}. Nothing was sent. Call it again with ${missing.length > 1 ? "those arguments" : "that argument"} (this tool takes: ${Object.keys(tool?.inputSchema?.properties ?? {}).join(", ")}).` : null;
+}
+
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
+  { const refused = missingRequired(name, args); if (refused) throw new Error(refused); }
   const t = args.tenantFilter as string | undefined;
   switch (name) {
     case "healthcheck": { const data = await cippGet(env, "ListTenants"); return `Connected OK to ${env.CIPP_URL} - ${JSON.stringify(data).substring(0, 120)}`; }
@@ -205,7 +215,17 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 
     // Groups
     case "list_groups": return JSON.stringify(await cippGet(env, "ListGroups", { tenantFilter: t! }), null, 2);
-    case "list_group_members": return JSON.stringify(await cippGet(env, "ListGroupMembers", { tenantFilter: t!, GroupId: args.GroupId as string }), null, 2);
+    case "list_group_members": {
+      // 2026-11-19: CIPP has no ListGroupMembers endpoint (404 on every call). ListGroups with a groupID returns the
+      // group with its members and owners; verified live.
+      const raw: any = await cippGet(env, "ListGroups", { tenantFilter: t!, groupID: args.GroupId as string, members: "true", owners: "true" });
+      if (args.full === true) return JSON.stringify(raw, null, 2);
+      const person = (x: any) => ({ id: x.id ?? null, displayName: x.displayName ?? null, userPrincipalName: x.userPrincipalName ?? null, mail: x.mail ?? null, type: String(x["@odata.type"] ?? "").replace("#microsoft.graph.", "") || null });
+      const g = raw?.groupInfo ?? {};
+      const members = Array.isArray(raw?.members) ? raw.members.map(person) : [];
+      const owners = Array.isArray(raw?.owners) ? raw.owners.map(person) : [];
+      return JSON.stringify({ group: { id: g.id ?? null, displayName: g.displayName ?? null, mail: g.mail ?? null, groupType: g.groupType ?? null, dynamic: g.dynamicGroupBool ?? null, onPremisesSync: g.onPremisesSyncEnabled ?? null }, member_count: members.length, members, owners });
+    }
     case "add_group_member": return JSON.stringify(await cippPost(env, "EditGroup", { tenantFilter: t, GroupId: args.GroupId, UserId: args.UserId, Action: "AddMember" }), null, 2);
     case "remove_group_member": return JSON.stringify(await cippPost(env, "EditGroup", { tenantFilter: t, GroupId: args.GroupId, UserId: args.UserId, Action: "RemoveMember" }), null, 2);
 
