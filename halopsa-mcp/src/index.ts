@@ -996,6 +996,11 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       // retry: the fallback list first (the first page found nobody on the current shift); 30 min: current on-call again; 60 min: the fallback list.
       const page = await pageOnCall(env, ticketId, now, subject, body, stage !== "30min", dryRun);
       if (dryRun) return JSON.stringify({ ticket_id: ticketId, dry_run: true, stage, minutes_since_page: Math.round(minutes), would_page: page.list !== "none", list: page.list, who: page.who, to: page.to, tried: page.tried }, null, 2);
+      // 2026-11-19 (#24711): Halo moves a ticket to "Waiting on client" when an email action is added, so the 30-minute
+      // re-page took an unanswered emergency out of Follow Up Needed. Put the status back to what it was before the page.
+      if (page.sent && ticket.status_id != null) {
+        try { await haloPost(env, "/Tickets", [{ id: ticketId, status_id: Number(ticket.status_id) }]); } catch { /* the page went out; the status is cosmetic next to that */ }
+      }
       if (!page.sent) {
         const note = `${marker} ${now.toISOString()} - ${what[stage]}: NOT paged - ${page.error}. A person needs to call on-call by hand.`;
         await haloPost(env, "/Actions", [{ ticket_id: ticketId, note, note_html: noteToHtml(note), hiddenfromuser: true, outcome_id: 7 }]);
