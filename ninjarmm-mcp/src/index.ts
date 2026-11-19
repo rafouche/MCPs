@@ -569,14 +569,22 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 const NODE_CLASSES = ["NMS_FIREWALL", "NMS_ROUTER", "NMS_PRIVATE_NETWORK_GATEWAY"];
 const ROLE_LABELS: Record<string, string> = { NMS_FIREWALL: "Firewall", NMS_ROUTER: "Router", NMS_PRIVATE_NETWORK_GATEWAY: "Gateway" };
 
+const STALE_DAYS = 30;
+
 async function buildNocStatus(env: Env) {
   const orgs = (await ninjaGet(env, "/organizations", { pageSize: "1000" })) as any[];
   const orgNameById = new Map(orgs.map((o) => [o.id, o.name]));
 
   const devices = (await ninjaGet(env, "/devices", { pageSize: "1000" })) as any[];
 
-  const filtered = devices
-    .filter((d) => NODE_CLASSES.includes(d.nodeClass))
+  // Stale devices (Roger, 2026-11-19): an offline device whose last contact
+  // is more than STALE_DAYS ago is left off the wallboard (shelved or
+  // abandoned hardware, not an outage); staleHidden says how many.
+  const staleBefore = Date.now() / 1000 - STALE_DAYS * 24 * 3600;
+  const tracked = devices.filter((d) => NODE_CLASSES.includes(d.nodeClass));
+  const current = tracked.filter((d) => !(d.offline && d.lastContact && d.lastContact < staleBefore));
+
+  const filtered = current
     .map((d) => ({
       id: d.id,
       client: orgNameById.get(d.organizationId) || `Org ${d.organizationId}`,
@@ -586,7 +594,7 @@ async function buildNocStatus(env: Env) {
       lastContact: d.lastContact ? new Date(d.lastContact * 1000).toISOString() : new Date().toISOString(),
     }));
 
-  return { updated: new Date().toISOString(), devices: filtered };
+  return { updated: new Date().toISOString(), devices: filtered, staleHidden: tracked.length - current.length, staleDays: STALE_DAYS };
 }
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept" };

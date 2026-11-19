@@ -520,6 +520,31 @@ keeps an old tool list; use a fresh session/connector refresh to see the new
 tools. Deploying needs `CLOUDFLARE_ACCOUNT_ID=77913d04ce44a8767e3736930eadc0c4`
 (wrangler now sees several accounts and can't pick one non-interactively).
 
+## Wallboard /status leaves out devices offline over 30 days (2026-11-19)
+
+Roger asked for it; done in the Workers because the wallboard only gets
+counts. `STALE_DAYS = 30` in each; every `/status` now also returns
+`staleHidden` and `staleDays`, and a client whose devices are all stale has
+no tile (rafouche/Dashboard v1.8 shows the total as a footnote).
+- **meraki-mcp:** status offline or dormant and `lastReportedAt` older than
+  30 days (field confirmed live). Dormant devices used to count toward the
+  total but not as offline; they now count as offline until stale.
+- **peplink-mcp:** offline and `last_online` (else `offline_at`, else
+  `first_appear`) older than 30 days. `/licenses` unchanged.
+- **ninjarmm-mcp:** offline and `lastContact` older than 30 days.
+- **unifi-mcp:** the cloud API has no last-seen time, so a cron
+  (`*/10 * * * *`, `scheduled()`) walks sites that have offline devices
+  through the Cloud Connector's classic Network API:
+  `.../proxy/network/api/s/{site}/stat/device-basic` (tiny: mac + state,
+  0 = offline) and `.../stat/device/{mac}` (one device, `last_seen`) the
+  first time a device is seen offline. Budget 40 outbound calls per run.
+  Kept as one record in KV `UNIFI_STALE` (id
+  7c718598e7cf4d709ebb9c9ca1bb6307, key `stale`), one write per run (144 a
+  day). `/status` subtracts per site and reports `staleTracking`. The full
+  `stat/device` list is hundreds of KB per site - do not use it here. A
+  console the key does not own answers 403; its host is skipped for a day
+  and its sites are not filtered.
+
 ## cipp-mcp: list_message_trace (2026-11-13, #24585)
 CIPP's ListMessageTrace reads tenantFilter, days, sender and recipient from the request BODY (sender/recipient as
 arrays). Called as a GET with query parameters it ignored the tenant and traced the partner tenant, so Altec's own

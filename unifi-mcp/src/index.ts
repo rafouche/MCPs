@@ -39,9 +39,16 @@
  * resolves it to a friendly device name and filters by device_id itself.
  */
 
+// Just the KV methods used here - this project has no @cloudflare/workers-types.
+interface KVNamespace {
+  get<T>(key: string, options: { type: "json" }): Promise<T | null>;
+  put(key: string, value: string): Promise<void>;
+}
+
 export interface Env {
   MCP_AUTH_TOKEN?: string; // optional inbound bearer token - see the check at the top of fetch()
   UNIFI_API_KEY: string;
+  UNIFI_STALE?: KVNamespace; // last-seen times of offline devices, kept by scheduled() - see "Stale devices"
 }
 
 const UNIFI_BASE = "https://api.ui.com";
@@ -232,11 +239,119 @@ function isGenericSiteName(desc: string | undefined): boolean {
   return !desc || desc.trim().toLowerCase() === "default";
 }
 
+// ============================================================
+// Stale devices (Roger, 2026-11-19): a device offline for more than
+// STALE_DAYS is left out of the wallboard's totals and offline counts -
+// shelved or abandoned hardware, not an outage.
+//
+// The cloud API /status is built from has no last-seen time: /v1/sites
+// gives counts only and /v1/devices has status but no date. The classic
+// Network API on the console does, and the Cloud Connector proxies it
+// (confirmed live): .../proxy/network/api/s/{site}/stat/device-basic is a
+// tiny list of {mac, state} (state 0 = offline) and .../stat/device/{mac}
+// is one device with last_seen (epoch seconds). The full stat/device list
+// is hundreds of KB per site, far too heavy to parse here.
+//
+// So a cron run every 10 minutes (scheduled(), below) walks the sites that
+// have offline devices, least recently checked first, within a budget of
+// 40 outbound calls (free plan: 50 per invocation): one device-basic call
+// per site, plus one stat/device/{mac} call the first time a device is
+// seen offline. The result - siteId -> { mac: last_seen } for offline
+// devices only - is one KV record (UNIFI_STALE, key "stale"), written once
+// per run (144 writes a day; the free plan allows 1,000). /status reads it
+// and subtracts the devices of each site whose last_seen is older than
+// STALE_DAYS. A device that comes back online is dropped from the record
+// on the next visit to its site, and at once from /status whenever the
+// offline count of the site is 0.
+//
+// Limits: a console this API key does not own answers 403 on the
+// connector (confirmed live on one); its host is skipped for a day and its
+// sites are simply not filtered. A site is revisited about once an hour,
+// which is plenty for a 30-day threshold.
+// ============================================================
+
+const STALE_DAYS = 30;
+const STALE_KEY = "stale";
+const STALE_CALL_BUDGET = 40;
+
+interface StaleRecord {
+  updated: string;
+  sites: Record<string, { checked: number; offline: Record<string, number> }>;
+  badHosts: Record<string, number>; // hostId -> epoch seconds until which it is skipped
+}
+
+async function refreshStaleRecord(env: Env): Promise<void> {
+  if (!env.UNIFI_STALE) return;
+  const now = Math.floor(Date.now() / 1000);
+  const rec: StaleRecord = (await env.UNIFI_STALE.get<StaleRecord>(STALE_KEY, { type: "json" })) || { updated: "", sites: {}, badHosts: {} };
+  rec.sites = rec.sites || {};
+  rec.badHosts = rec.badHosts || {};
+  for (const [h, until] of Object.entries(rec.badHosts)) if (until <= now) delete rec.badHosts[h];
+
+  const sitesResp = (await unifiGet(env, "/v1/sites")) as any;
+  let calls = 1;
+  // The same site can be listed under more than one hostId; keep them all so a dead one can be skipped.
+  const bySiteId = new Map<string, { name: string; offline: number; hostIds: string[] }>();
+  for (const s of (sitesResp.data || []) as any[]) {
+    const e = bySiteId.get(s.siteId);
+    if (e) { e.hostIds.push(s.hostId); continue; }
+    bySiteId.set(s.siteId, { name: s.meta?.name, offline: s.statistics?.counts?.offlineDevice || 0, hostIds: [s.hostId] });
+  }
+
+  for (const id of Object.keys(rec.sites)) {
+    const s = bySiteId.get(id);
+    if (!s || s.offline === 0) delete rec.sites[id];
+  }
+
+  const due = [...bySiteId.entries()]
+    .filter(([, s]) => s.offline > 0 && s.name)
+    .sort((a, b) => (rec.sites[a[0]]?.checked || 0) - (rec.sites[b[0]]?.checked || 0));
+
+  for (const [siteId, s] of due) {
+    if (calls >= STALE_CALL_BUDGET) break;
+    const hostId = s.hostIds.find((h) => !rec.badHosts[h]);
+    if (!hostId) continue;
+    const base = `/v1/connector/consoles/${hostId}/proxy/network/api/s/${s.name}/stat`;
+    let basic: any[];
+    try {
+      calls++;
+      basic = ((await unifiGet(env, `${base}/device-basic`)) as any).data || [];
+    } catch {
+      rec.badHosts[hostId] = now + 24 * 3600;
+      continue;
+    }
+    const entry = rec.sites[siteId] || { checked: 0, offline: {} };
+    const offlineMacs = new Set<string>(basic.filter((d) => d.state === 0 && d.mac).map((d) => String(d.mac)));
+    for (const mac of Object.keys(entry.offline)) if (!offlineMacs.has(mac)) delete entry.offline[mac];
+    let complete = true;
+    for (const mac of offlineMacs) {
+      if (entry.offline[mac]) continue;
+      if (calls >= STALE_CALL_BUDGET) { complete = false; break; }
+      try {
+        calls++;
+        const dev = (((await unifiGet(env, `${base}/device/${mac}`)) as any).data || [])[0];
+        entry.offline[mac] = Number(dev?.last_seen) || now; // never seen: the clock starts now
+      } catch {
+        complete = false; // picked up on the next visit
+      }
+    }
+    // A site left half-read keeps its old "checked" time so it is next in line.
+    if (complete) entry.checked = now;
+    rec.sites[siteId] = entry;
+  }
+
+  rec.updated = new Date().toISOString();
+  await env.UNIFI_STALE.put(STALE_KEY, JSON.stringify(rec));
+}
+
 async function buildNetworkStatus(env: Env) {
-  const [sitesResp, devicesResp] = await Promise.all([
+  const [sitesResp, devicesResp, staleRec] = await Promise.all([
     unifiGet(env, "/v1/sites") as Promise<any>,
     unifiGet(env, "/v1/devices") as Promise<any>,
+    env.UNIFI_STALE ? env.UNIFI_STALE.get<StaleRecord>(STALE_KEY, { type: "json" }).catch(() => null) : Promise.resolve(null),
   ]);
+  const staleBefore = Date.now() / 1000 - STALE_DAYS * 24 * 3600;
+  let staleHidden = 0;
   const allSites: any[] = sitesResp.data || [];
   const hostNameById = new Map<string, string>((devicesResp.data || []).map((h: any) => [h.hostId, h.hostName]));
 
@@ -250,15 +365,26 @@ async function buildNetworkStatus(env: Env) {
     .map((s) => {
       const siteName = s.meta.desc || s.meta.name;
       const orgName = isGenericSiteName(siteName) ? hostNameById.get(s.hostId) || siteName || `Site ${s.siteId}` : siteName;
+      const offlineCount: number = s.statistics.counts.offlineDevice || 0;
+      const tracked = Object.values(staleRec?.sites?.[s.siteId]?.offline || {}) as number[];
+      const stale = Math.min(offlineCount, tracked.filter((lastSeen) => lastSeen < staleBefore).length);
+      staleHidden += stale;
       return {
         orgName,
-        totalDevices: s.statistics.counts.totalDevice,
-        offlineCount: s.statistics.counts.offlineDevice,
+        totalDevices: s.statistics.counts.totalDevice - stale,
+        offlineCount: offlineCount - stale,
         offlineDevices: [] as unknown[],
       };
-    });
+    })
+    .filter((n) => n.totalDevices > 0);
 
-  return { updated: new Date().toISOString(), networks };
+  return {
+    updated: new Date().toISOString(),
+    networks,
+    staleHidden,
+    staleDays: STALE_DAYS,
+    staleTracking: staleRec ? { updated: staleRec.updated, sitesTracked: Object.keys(staleRec.sites || {}).length, hostsSkipped: Object.keys(staleRec.badHosts || {}).length } : null,
+  };
 }
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept" };
@@ -278,6 +404,11 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export default {
+  // Cron (wrangler.jsonc "triggers"): keeps the stale-device record current. See "Stale devices" above.
+  async scheduled(_event: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+    ctx.waitUntil(refreshStaleRecord(env).catch((err) => console.error(`stale refresh failed: ${(err as Error).message}`)));
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });

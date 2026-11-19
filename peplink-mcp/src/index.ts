@@ -180,10 +180,28 @@ function tileName(org: any, device: any, multiGroup: boolean): string {
   return (multiGroup && device.group_name) || org.name || `Org ${org.id}`;
 }
 
+// Stale devices (Roger, 2026-11-19): an offline device last online more than
+// STALE_DAYS ago (last_online, else offline_at, else first_appear - InControl2
+// times carry no zone and are read as UTC, close enough at this scale) is
+// left out of the wallboard's totals and offline counts: shelved or abandoned
+// hardware, not an outage. A client whose devices are all stale drops off;
+// staleHidden says how many devices were left out. /licenses is unchanged.
+const STALE_DAYS = 30;
+
+function isStale(d: any, staleBefore: number): boolean {
+  if (!(d.online === false || d.status === "offline")) return false;
+  const raw = d.last_online || d.offline_at || d.first_appear;
+  const last = raw ? new Date(/[zZ]|[+-]dd:?dd$/.test(raw) ? raw : raw + "Z").getTime() : 0;
+  return !(last >= staleBefore);
+}
+
 async function buildNetworkStatus(env: Env) {
   const tiles = new Map<string, { orgName: string; totalDevices: number; offlineCount: number; offlineDevices: Array<{ name: string; status: string }> }>();
+  const staleBefore = Date.now() - STALE_DAYS * 24 * 3600 * 1000;
+  let staleHidden = 0;
   for (const { org, devices, multiGroup } of await listOrgDevices(env)) {
     for (const d of devices) {
+      if (isStale(d, staleBefore)) { staleHidden++; continue; }
       const name = tileName(org, d, multiGroup);
       if (!tiles.has(name)) tiles.set(name, { orgName: name, totalDevices: 0, offlineCount: 0, offlineDevices: [] });
       const t = tiles.get(name)!;
@@ -194,7 +212,7 @@ async function buildNetworkStatus(env: Env) {
       }
     }
   }
-  return { updated: new Date().toISOString(), networks: [...tiles.values()] };
+  return { updated: new Date().toISOString(), networks: [...tiles.values()], staleHidden, staleDays: STALE_DAYS };
 }
 
 async function buildLicenseStatus(env: Env) {

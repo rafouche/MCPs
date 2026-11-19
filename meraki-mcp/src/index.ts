@@ -320,13 +320,32 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
 // subrequest cap — no batching/concurrency-limiting needed at this scale.
 // ============================================================
 
+// Stale devices (Roger, 2026-11-19): a device that is offline or dormant and
+// last reported more than STALE_DAYS ago is left out of the wallboard's
+// totals and offline counts - it is shelved or abandoned hardware, not an
+// outage. lastReportedAt confirmed live on /devices/statuses. An org whose
+// devices are all stale drops off the wallboard; staleHidden says how many
+// devices were left out. "dormant" (Meraki's status for a device offline
+// over a week) used to count toward the total but not as offline; it now
+// counts as offline until it goes stale.
+const STALE_DAYS = 30;
+
 async function buildNetworkStatus(env: Env) {
   const orgs: any[] = (await merakiGet(env, "/organizations")) as any[];
+  const staleBefore = Date.now() - STALE_DAYS * 24 * 3600 * 1000;
+  let staleHidden = 0;
 
   const networks = (await Promise.all(orgs.map(async (org) => {
     try {
-      const statuses: any[] = (await merakiGet(env, `/organizations/${org.id}/devices/statuses`)) as any[];
-      const offline = statuses.filter((d) => d.status === "offline" || d.status === "alerting");
+      const all: any[] = (await merakiGet(env, `/organizations/${org.id}/devices/statuses`)) as any[];
+      const statuses = all.filter((d) => {
+        if (d.status !== "offline" && d.status !== "dormant") return true;
+        const last = d.lastReportedAt ? new Date(d.lastReportedAt).getTime() : 0;
+        return last >= staleBefore;
+      });
+      staleHidden += all.length - statuses.length;
+      if (statuses.length === 0) return null;
+      const offline = statuses.filter((d) => d.status === "offline" || d.status === "dormant" || d.status === "alerting");
       return {
         orgName: org.name,
         totalDevices: statuses.length,
@@ -339,7 +358,7 @@ async function buildNetworkStatus(env: Env) {
     }
   }))).filter((n): n is NonNullable<typeof n> => n !== null);
 
-  return { updated: new Date().toISOString(), networks };
+  return { updated: new Date().toISOString(), networks, staleHidden, staleDays: STALE_DAYS };
 }
 
 // ============================================================

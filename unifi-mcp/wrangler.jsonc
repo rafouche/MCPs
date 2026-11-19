@@ -4,5 +4,12 @@
   "compatibility_date": "2026-06-01",
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
-  "keep_vars": true
+  "keep_vars": true,
+  // Last-seen times of offline devices, so /status can leave out devices
+  // offline for more than 30 days. Filled by the cron below (scheduled() in
+  // src/index.ts, "Stale devices").
+  "kv_namespaces": [
+    { "binding": "UNIFI_STALE", "id": "7c718598e7cf4d709ebb9c9ca1bb6307" }
+  ],
+  "triggers": { "crons": ["*/10 * * * *"] }
 }
