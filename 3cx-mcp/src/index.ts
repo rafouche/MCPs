@@ -544,7 +544,19 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
       const path = String(args.path ?? "");
       if (!path.startsWith("/") || path.includes("?")) throw new Error("path must start with '/' and contain no '?' (put options in query)");
       const c = await resolveClient(env, args.client);
-      return out(await tcx(env, c, "GET", path, normalizeQuery(args.query)));
+      const query = normalizeQuery(args.query);
+      try {
+        return out(await tcx(env, c, "GET", path, query));
+      } catch (err) {
+        // 2026-11-23: /Defs and other single records refuse the list options ($top, $filter ...) with a 400
+        // ("The requested resource is not a collection"). Read it again without them and say so.
+        const listOnly = ["$top", "$skip", "$filter", "$orderby", "$count", "$search"];
+        const dropped = query ? listOnly.filter((k) => k in (query as Record<string, unknown>)) : [];
+        if (!dropped.length || !/not a collection/i.test((err as Error).message)) throw err;
+        const kept = Object.fromEntries(Object.entries(query as Record<string, unknown>).filter(([k]) => !listOnly.includes(k)));
+        const data = await tcx(env, c, "GET", path, Object.keys(kept).length ? (kept as any) : undefined);
+        return out({ note: `${path} is a single record, not a list, so ${dropped.join(", ")} ${dropped.length > 1 ? "were" : "was"} left out.`, result: data });
+      }
     }
 
     case "tcx_api_request": {
