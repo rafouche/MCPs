@@ -125,7 +125,17 @@ const TOOLS = [
   { name: "list_clients", description: "List client devices (computers, phones, IoT, etc.) connected to a UniFi network, each resolved with the name of the specific AP/switch/gateway it's connected to. Optionally filter to only the clients connected to one device.", inputSchema: { type: "object", properties: { host_id: { type: "string" }, site_id: { type: "string", description: "Site ID from list_network_sites" }, device_id: { type: "string", description: "Optional: only return clients connected to this device (AP/switch/gateway) ID" }, limit: { type: "number", description: "Max clients to return, default 200" } }, required: ["host_id", "site_id"] } },
 ];
 
+// 2026-11-19: calls were reaching the vendor with a missing ID ("GET /v2/device/undefined", "GET /Users/undefined").
+// A required argument that is absent is refused here, by name, before anything is sent.
+function missingRequired(name: string, args: Record<string, unknown>): string | null {
+  const tool = (TOOLS as any[]).find((t) => t.name === name);
+  const required: string[] = tool?.inputSchema?.required ?? [];
+  const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === "" || (typeof args[k] === "number" && Number.isNaN(args[k])));
+  return missing.length ? `${name} was called without ${missing.map((k) => `\`${k}\``).join(", ")}. Nothing was sent. Call it again with ${missing.length > 1 ? "those arguments" : "that argument"} (this tool takes: ${Object.keys(tool?.inputSchema?.properties ?? {}).join(", ")}).` : null;
+}
+
 async function runTool(name: string, args: Record<string, unknown>, env: Env): Promise<string> {
+  { const refused = missingRequired(name, args as Record<string, unknown>); if (refused) throw new Error(refused); }
   switch (name) {
     case "unifi_api_get": {
       const path = String(args.path ?? "");

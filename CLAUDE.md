@@ -559,7 +559,8 @@ is sent as a POST. With no sender or recipient there is nothing to check the row
 cipp-mcp, ninjarmm-mcp and halopsa-mcp refuse a tool call that lacks an argument its inputSchema lists as
 `required` (`missingRequired`, first line of `runTool`), naming the argument, before anything is sent to the vendor.
 Before: "GET /v2/device/undefined", "GET /Users/undefined", "GET undefined". So `required` in a tool's schema is now
-enforced: only list an argument there if the tool cannot work without it. The other Workers do not have the check yet.
+enforced: only list an argument there if the tool cannot work without it. Added 2026-11-23 to 3cx, acronis, gchannel,
+gworkspace, hudu, jumpcloud, m365, meraki, pax8, peplink and unifi (huntress-mcp already had its own check).
 cipp-mcp `list_group_members` uses ListGroups?groupID=..&members=true&owners=true (CIPP has no ListGroupMembers).
 halopsa-mcp `emergency_follow_up` puts the ticket's status back after a re-page (Halo moves it to Waiting on client
 when an email action is added; #24711).

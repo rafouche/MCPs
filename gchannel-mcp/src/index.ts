@@ -338,7 +338,17 @@ const TOOLS = [
 
 // ─── Tool implementation ──────────────────────────────────────────────────────
 
+// 2026-11-19: calls were reaching the vendor with a missing ID ("GET /v2/device/undefined", "GET /Users/undefined").
+// A required argument that is absent is refused here, by name, before anything is sent.
+function missingRequired(name: string, args: Record<string, unknown>): string | null {
+  const tool = (TOOLS as any[]).find((t) => t.name === name);
+  const required: string[] = tool?.inputSchema?.required ?? [];
+  const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === "" || (typeof args[k] === "number" && Number.isNaN(args[k])));
+  return missing.length ? `${name} was called without ${missing.map((k) => `\`${k}\``).join(", ")}. Nothing was sent. Call it again with ${missing.length > 1 ? "those arguments" : "that argument"} (this tool takes: ${Object.keys(tool?.inputSchema?.properties ?? {}).join(", ")}).` : null;
+}
+
 async function runTool(name: string, args: Args, env: Env): Promise<string> {
+  { const refused = missingRequired(name, args as Record<string, unknown>); if (refused) throw new Error(refused); }
   if (name === "healthcheck") {
     const report: Record<string, unknown> = {};
     const sa = mainSa(env);
