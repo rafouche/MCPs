@@ -25,6 +25,7 @@
         "list_receptionists",
         "list_active_calls",
         "get_call_log",
+        "get_call_report",
         "list_event_logs",
         "tcx_find_endpoints",
         "tcx_describe_endpoint",

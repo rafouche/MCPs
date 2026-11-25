@@ -392,6 +392,70 @@ function out(v: unknown): string {
   return `${text.slice(0, MAX_CHARS)}\n...[truncated at ${MAX_CHARS} of ${text.length} chars - narrow it with $top/$skip, $select or $filter]`;
 }
 
+// ---------- call reports (get_call_report) ----------
+// 2026-11-25: every report in the admin console's Reports page, by a short
+// name, with the console's defaults filled in so the caller only gives a
+// date range. All verified live on Altec (20.0.10.1801) except
+// extension_statistics, which 500s on 20.0.9 and 20.0.10 (3CX's side: a null
+// extensionFilter gets a 400, any value a 500).
+const REPORTS: Record<string, { op: string; about: string }> = {
+  call_log: { op: "GetCallLogData", about: "every call leg (same as get_call_log)" },
+  inbound_calls: { op: "GetInboundCalls", about: "calls in from trunks: DID, trunk, answered by, durations, recording" },
+  outbound_calls: { op: "GetOutboundCalls", about: "calls out over trunks: caller, number dialled, durations, cost" },
+  extension_statistics: { op: "GetExtensionStatisticsData", about: "per extension in/out answered/unanswered (3CX returns a 500 on current builds)" },
+  extension_statistics_by_group: { op: "GetExtensionStatisticsByGroupData", about: "the same, for one group (group)" },
+  extensions_by_ring_group: { op: "GetExtensionsStatisticsByRingGroupsData", about: "per extension within ring groups" },
+  ring_group_statistics: { op: "GetRingGroupStatisticsData", about: "per ring group received/answered" },
+  user_activity: { op: "GetUserActivity", about: "answered/unanswered per hour (or day) bucket" },
+  call_distribution: { op: "GetCallDistribution", about: "incoming/outgoing per hour (or day) bucket" },
+  call_cost_by_group: { op: "GetCallCostByExtensionGroupData", about: "call cost per extension group" },
+  queue_performance: { op: "GetQueuePerformanceOverviewData", about: "per queue per agent: received, answered, dropped, talk time" },
+  queue_performance_totals: { op: "GetQueuePerformanceTotalsData", about: "per queue totals" },
+  queue_detailed_statistics: { op: "GetDetailedQueueStatisticsData", about: "per queue: calls, answered, ring/talk time and averages, callbacks" },
+  queue_team_statistics: { op: "GetTeamQueueGeneralStatisticsData", about: "queue team general statistics" },
+  queue_agents: { op: "GetAgentsInQueueStatisticsData", about: "per agent in each queue" },
+  queue_abandoned_calls: { op: "GetAbandonedQueueCallsData", about: "callers who hung up in a queue" },
+  queue_answered_by_wait_time: { op: "GetQueueAnsweredCallsByWaitTimeData", about: "answered queue calls with how long they rang" },
+  queue_callbacks: { op: "GetQueueCallbacksData", about: "queue callbacks made" },
+  queue_failed_callbacks: { op: "GetQueueFailedCallbacksData", about: "queue callbacks that failed" },
+  queue_sla_statistics: { op: "GetStatisticSlaData", about: "per queue received vs. calls outside SLA" },
+  queue_sla_breaches: { op: "GetBreachesSlaData", about: "each call that broke the queue SLA" },
+  queue_agent_login_history: { op: "GetAgentLoginHistoryData", about: "when each agent logged in/out of queues" },
+  queue_answered_unanswered_chart: { op: "GetQueueAnUnCallsData", about: "chart: answered vs. unanswered queue calls (from = chart date, chart_by)" },
+  queue_average_wait_chart: { op: "GetAverageQueueWaitingTimeData", about: "chart: average queue waiting time (from = chart date, chart_by)" },
+  inbound_rules: { op: "GetInboundRulesData", about: "DIDs/inbound rules and where they route (no dates)" },
+  audit_log: { op: "GetAuditLogData", about: "admin changes on the PBX (no dates; use filter/top)" },
+  chat_log: { op: "GetChatLog", about: "chat messages" },
+};
+
+// Fills a report function's parameters from the tool's friendly arguments;
+// anything in args.params wins.
+function reportParams(op: Op, args: Record<string, unknown>): Record<string, unknown> {
+  const p: Record<string, unknown> = {};
+  const tz = args.timezone ?? "America/Chicago";
+  const wait = args.wait_interval ?? "0:00:20";
+  for (const [name, type] of op.pp ?? []) {
+    const n = name.toLowerCase();
+    if (["periodfrom", "startdt", "chartdate"].includes(n)) p[name] = args.from;
+    else if (["periodto", "enddt"].includes(n)) p[name] = args.to;
+    else if (n === "clienttimezone") p[name] = tz;
+    else if (n === "waitinterval" || n === "answerinterval") p[name] = wait;
+    else if (n === "queuedns" || n === "queuednstr") p[name] = args.queues ?? "";
+    else if (n === "extensiondns" || n === "extensionfilter" || n === "agentdnstr") p[name] = args.extensions ?? "";
+    else if (n === "ringgroupdns") p[name] = args.ring_groups ?? "";
+    else if (n === "groupnumber" || n === "groupfilter") p[name] = args.group ?? "";
+    else if (n === "trunkdns") p[name] = args.trunks ?? "";
+    else if (n === "callstype") p[name] = args.calls_type ?? 0;
+    else if (n === "chartby") p[name] = args.chart_by ?? "day";
+    else if (n === "includequeuecalls") p[name] = true;
+    else if (n === "hidepcalls") p[name] = true;
+    else if (n === "calltimefilterfrom" || n === "calltimefilterto") p[name] = "0:00:0";
+    else if (type === "int") p[name] = 0;
+    else if (type === "bool") p[name] = false;
+  }
+  return { ...p, ...((args.params ?? {}) as Record<string, unknown>) };
+}
+
 // ---------- tools ----------
 
 const CLIENT = { client: { type: "string", description: "Which client's PBX: its key from list_clients (e.g. 'altec'), name, company or PBX host. Optional only when exactly one client exists." } };
@@ -426,6 +490,7 @@ const TOOLS = [
   { name: "list_trunks", description: "List a client's SIP trunks (provider, numbers, direction, registration).", inputSchema: { type: "object", properties: { ...CLIENT, ...ODATA } } },
   { name: "list_active_calls", description: "Calls in progress right now on a client's PBX.", inputSchema: { type: "object", properties: { ...CLIENT } } },
   { name: "get_call_log", description: "A client's call log report (the admin console's Call Log: source, destination, direction, status, answered, durations) for a date range, newest first.", inputSchema: { type: "object", properties: { ...CLIENT, ...RANGE, calls_type: { type: "number", description: "0 all (default), 1 answered, 2 unanswered" }, filter: ODATA.filter, top: ODATA.top, skip: ODATA.skip }, required: ["from", "to"] } },
+  { name: "get_call_report", description: `Run one of the admin console's call reports on a client's PBX by name, with the console's defaults filled in - just give a date range. Reports: ${Object.entries(REPORTS).map(([k, v]) => `${k} (${v.about})`).join("; ")}. Optional filters apply where the report has them: queues, extensions, ring_groups, group, trunks (comma-separated DNs), calls_type (0 all, 1 answered, 2 unanswered), wait_interval (SLA/wait threshold, h:mm:ss, default 0:00:20), timezone (IANA, default America/Chicago). params overrides any raw report parameter (see tcx_describe_endpoint). Read-only.`, inputSchema: { type: "object", properties: { ...CLIENT, report: { type: "string", enum: Object.keys(REPORTS) }, from: { type: "string", description: "Start, ISO date-time e.g. 2026-11-01T00:00:00Z (chart reports: the chart date)" }, to: { type: "string", description: "End, ISO date-time" }, queues: { type: "string", description: "Queue DNs, comma-separated (default all)" }, extensions: { type: "string", description: "Extension DNs, comma-separated (default all)" }, ring_groups: { type: "string", description: "Ring group DNs (default all)" }, group: { type: "string", description: "Group number (default all)" }, trunks: { type: "string", description: "Trunk DNs (default all)" }, calls_type: { type: "number", description: "0 all (default), 1 answered, 2 unanswered" }, wait_interval: { type: "string", description: "h:mm:ss, default 0:00:20" }, timezone: { type: "string", description: "IANA time zone, default America/Chicago" }, chart_by: { type: "string", description: "Chart reports only, default 'day'" }, params: { type: "object", description: "Raw report parameters that override the above", additionalProperties: true }, filter: ODATA.filter, orderby: ODATA.orderby, top: ODATA.top, skip: ODATA.skip }, required: ["report"] } },
   { name: "list_event_logs", description: "A client's PBX event log (errors, warnings, info), newest first.", inputSchema: { type: "object", properties: { ...CLIENT, ...ODATA } } },
 ];
 
@@ -626,6 +691,25 @@ async function runTool(name: string, args: Record<string, unknown>, env: Env): P
         hidePcalls: true,
       }, aliases);
       const q: Record<string, unknown> = { $top: args.top ?? 100, $orderby: "StartTime desc", ...aliases };
+      if (args.filter) q.$filter = args.filter;
+      if (args.skip) q.$skip = args.skip;
+      return out(await tcx(env, c, "GET", path, q));
+    }
+
+    case "get_call_report": {
+      const key = String(args.report ?? "").toLowerCase();
+      const rep = REPORTS[key];
+      if (!rep) throw new Error(`Unknown report '${args.report}'. One of: ${Object.keys(REPORTS).join(", ")}`);
+      const op = findOp(rep.op);
+      const dated = (op.pp ?? []).some(([n]) => /^(periodfrom|startdt|chartdate)$/i.test(n));
+      if (dated && !args.from) throw new Error(`${key} needs from${(op.pp ?? []).some(([n]) => /^(periodto|enddt)$/i.test(n)) ? " and to" : ""} (ISO date-time).`);
+      const c = await resolveClient(env, args.client);
+      const aliases: Record<string, string> = {};
+      const path = buildOpPath(op, reportParams(op, args), aliases);
+      const q: Record<string, unknown> = { ...aliases };
+      if (op.q?.includes("t")) q.$top = args.top ?? 100;
+      if (key === "call_log" && !args.orderby) q.$orderby = "StartTime desc";
+      if (args.orderby) q.$orderby = args.orderby;
       if (args.filter) q.$filter = args.filter;
       if (args.skip) q.$skip = args.skip;
       return out(await tcx(env, c, "GET", path, q));

@@ -3,7 +3,7 @@ info:
   title: XAPI
   description: This OData service is located at /xapi/v1
   version: 1.0.0
-  x-pbx-version: 20.0.10.1621
+  x-pbx-version: 20.0.10.1801
 servers:
   - url: /xapi/v1
 paths:
@@ -23400,8 +23400,8 @@ components:
         Result:
           allOf:
             - $ref: '#/components/schemas/Pbx.CallParticipant'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         VttId:
           type: string
           nullable: true
@@ -24556,8 +24556,8 @@ components:
         DefaultRule:
           allOf:
             - $ref: '#/components/schemas/Pbx.InboundRule'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         Groups:
           type: array
           items:
@@ -24625,8 +24625,8 @@ components:
         TrunkDN:
           allOf:
             - $ref: '#/components/schemas/Pbx.Peer'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
     Pbx.Country:
       title: Country
       type: object
@@ -24712,16 +24712,16 @@ components:
         Registered:
           allOf:
             - $ref: '#/components/schemas/Pbx.RegistrarFxs'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         Secret:
           type: string
           nullable: true
         Template:
           allOf:
             - $ref: '#/components/schemas/Pbx.FxsTemplate'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         TimeZone:
           type: string
           nullable: true
@@ -24968,8 +24968,8 @@ components:
         DN:
           allOf:
             - $ref: '#/components/schemas/Pbx.Peer'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         EnableReCaptcha:
           type: boolean
           nullable: true
@@ -25346,8 +25346,8 @@ components:
             Trunk:
               allOf:
                 - $ref: '#/components/schemas/Pbx.Trunk'
-              x-ms-navigationProperty: true
               nullable: true
+              x-ms-navigationProperty: true
     Pbx.ServicePrincipal:
       allOf:
         - $ref: '#/components/schemas/Pbx.DN'
@@ -27414,8 +27414,8 @@ components:
         RoutingRule:
           allOf:
             - $ref: '#/components/schemas/Pbx.InboundRule'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         TemplateFileName:
           type: string
           nullable: true
@@ -27454,8 +27454,8 @@ components:
         Client:
           allOf:
             - $ref: '#/components/schemas/Pbx.OAuthClient'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         ClientId:
           pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
           type: string
@@ -29261,8 +29261,8 @@ components:
         GroupRights:
           allOf:
             - $ref: '#/components/schemas/Pbx.Rights'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         Id:
           maximum: 2147483647
           minimum: -2147483648
@@ -29281,8 +29281,8 @@ components:
         Rights:
           allOf:
             - $ref: '#/components/schemas/Pbx.Rights'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         Tags:
           type: array
           items:
@@ -29681,8 +29681,8 @@ components:
         DN:
           allOf:
             - $ref: '#/components/schemas/Pbx.Peer'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         HotDesking:
           type: boolean
           nullable: true
@@ -30431,8 +30431,8 @@ components:
         EmergencyDNPrompt:
           allOf:
             - $ref: '#/components/schemas/Pbx.Peer'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         EmergencyPlayPrompt:
           type: string
           nullable: true
@@ -31238,8 +31238,8 @@ components:
         PhonebookOverride:
           allOf:
             - $ref: '#/components/schemas/Pbx.Peer'
-          x-ms-navigationProperty: true
           nullable: true
+          x-ms-navigationProperty: true
         RoutingDirectory:
           type: array
           items:
