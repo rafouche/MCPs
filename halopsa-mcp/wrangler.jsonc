@@ -15,8 +15,26 @@
   "vars": {
     "PIPELINE_AGENT_ID": "17",
     "ON_CALL_SHIFT_TYPE_ID": "1",
-    "ON_CALL_SMS_DOMAIN": "altec.text.email"
+    "ON_CALL_SMS_DOMAIN": "altec.text.email",
+    // ---- Billing write tools (src/billing.ts) ----
+    // Collection paths that accept a POST. Anything else is refused. Agents, roles,
+    // API applications, credentials and webhooks are refused in code whatever is here.
+    "HALO_WRITE_PATHS": "/RecurringInvoice,/RecurringInvoice/process,/ClientContract,/Client,/Item,/SoftwareLicence,/Pax8Details,/Control,/Invoice",
+    // Collection paths that accept DELETE /{id}. Kept narrower than the write list on purpose.
+    // A posted or QuickBooks-synced invoice is never deleted, whatever is here.
+    "HALO_DELETE_PATHS": "/RecurringInvoice,/Invoice,/SoftwareLicence",
+    // The only /Control (global settings) keys that may be written.
+    "HALO_CONTROL_KEYS": "autocreaterecurringinvoices,autosendemailforautorinvoices,automaticallysendinvoiceemails,enableinvoiceapprovals,mergerecurringinvoices",
+    // "enabled" allows real /Control writes. Leave "dry_run_only" until it is proven on this
+    // tenant that a POST with only the changed keys leaves every other setting alone (README).
+    "HALO_CONTROL_WRITES": "dry_run_only",
+    // Records per bulk call. 20 fits the free plan's 50 outbound calls per request
+    // (a read before and after each record). The code never goes above 50.
+    "HALO_BULK_MAX": "20"
   },
+  // Audit log of every real billing write. No id: wrangler creates the namespace on the
+  // first deploy (automatic provisioning). Without this binding no billing write is sent.
+  "kv_namespaces": [{ "binding": "HALO_AUDIT" }],
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
   "keep_vars": true

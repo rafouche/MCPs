@@ -144,6 +144,28 @@ conversations, and three Halo tools made up about 80% of that text. Rules since 
   (the raw list was over the caller's 60,000-character cap, so its end was being cut off). Both take `full: true`.
 - New tools: return what the caller needs to act, compact JSON for long lists, and a `full` switch for the rest.
 
+## halopsa-mcp: billing write tools (2026-11-27)
+
+`src/billing.ts`, spread into `TOOLS` and dispatched first in `runTool`. 13 tools: `halo_api_post`,
+`halo_api_delete`, `set_recurring_invoice_active`, `create_recurring_invoice`, `update_recurring_invoice`,
+`update_recurring_invoice_line`, `update_contract`, `update_client`, `update_item`, `upsert_software_licence`,
+`update_halo_settings`, `create_invoice_from_recurring`, `get_billing_audit`. Same Halo application and credentials
+(the API agent is Allie, id 17, Administration role, scope `all`). **Allie must never get these**: her allowlist
+is an explicit name list in `rafouche/AllieService` (`src/Packs.HelpDesk/Generated/Upstream.g.cs`), and they are
+not in mcp-gateway's `readTools` either. `halo_api_get` IS in her list (the old description was wrong).
+Every write: `dry_run` defaults to true; a real write needs `dry_run: false` plus `confirm` = the target path the
+dry run returns; re-read with retries and a field-level diff; an audit entry in KV `HALO_AUDIT` (no binding = no
+write; the entry keeps the record as it was). What may be written is config in `wrangler.jsonc`:
+`HALO_WRITE_PATHS`, `HALO_DELETE_PATHS`, `HALO_CONTROL_KEYS`, `HALO_CONTROL_WRITES` (`dry_run_only` until a partial
+POST to `/Control` is proven harmless), `HALO_BULK_MAX` (20: the free plan's 50 outbound calls). Hard blocks in
+code: agent/role/application/credential/webhook paths, secret-looking body fields, deleting a posted or
+QuickBooks-synced invoice, `/Control` keys outside the list. Line writes always send the template's complete line
+set. Built from the tenant swagger and read-only calls; **nothing was written to the tenant**, so replace-vs-merge
+for `lines`, whether `disabled` is honored on POST, `/Control` partial POSTs and `/RecurringInvoice/process` are
+unverified: see `halopsa-mcp/README.md` ("Not verified yet") and record answers there. `halo_api_get` gained
+`fields` (Worker-side field filter, dotted for nested lists) and `page_no`/`page_size`. Mock test:
+`halopsa-mcp/test/billing.sim.mjs`.
+
 ## Emergency path: halopsa-mcp `escalate_emergency`
 The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).
 `escalate_emergency` emails the ticket's contact a FIXED template (caller

@@ -6,3 +6,4 @@ MCPs.txt
 .DS_Store
 .dev.vars
 halopsa-mcp/test/.emergency-worker.mjs
+halopsa-mcp/test/.billing-worker.mjs
