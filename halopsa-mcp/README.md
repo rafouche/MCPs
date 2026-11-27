@@ -53,7 +53,7 @@ agent **Allie (id 17)**, because that is the agent the API application runs as.
 | `HALO_CONTROL_KEYS` | `autocreaterecurringinvoices,autosendemailforautorinvoices,automaticallysendinvoiceemails,enableinvoiceapprovals,mergerecurringinvoices` | The only `/Control` keys that may be written. |
 | `HALO_CONTROL_WRITES` | `dry_run_only` | `enabled` allows real `/Control` writes. See "Not verified yet". |
 | `HALO_BULK_MAX` | `20` | Records per call. |
-| KV `HALO_AUDIT` | binding without an id | wrangler creates the namespace on the first deploy. After that deploy, copy the id from the Cloudflare dashboard into the binding so it is pinned. |
+| KV `HALO_AUDIT` | `f411c09823be41d49a5e977e22e2d6e9` | Namespace `halopsa-mcp-halo-audit`, created by wrangler on the 2026-11-27 deploy (version `f69a76b8`). |
 
 The contract path on this tenant is `/ClientContract` (the same path `get_contract` reads).
 

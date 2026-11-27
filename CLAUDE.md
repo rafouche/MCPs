@@ -164,7 +164,8 @@ set. Built from the tenant swagger and read-only calls; **nothing was written to
 for `lines`, whether `disabled` is honored on POST, `/Control` partial POSTs and `/RecurringInvoice/process` are
 unverified: see `halopsa-mcp/README.md` ("Not verified yet") and record answers there. `halo_api_get` gained
 `fields` (Worker-side field filter, dotted for nested lists) and `page_no`/`page_size`. Mock test:
-`halopsa-mcp/test/billing.sim.mjs`.
+`halopsa-mcp/test/billing.sim.mjs`. Deployed 2026-11-27 (f4285c1, version f69a76b8); KV `HALO_AUDIT` =
+`halopsa-mcp-halo-audit` (f411c09823be41d49a5e977e22e2d6e9). `halo_api_get` `fields` verified live on `/Control`.
 
 ## Emergency path: halopsa-mcp `escalate_emergency`
 The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).

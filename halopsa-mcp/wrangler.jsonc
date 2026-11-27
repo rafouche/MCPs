@@ -32,9 +32,9 @@
     // (a read before and after each record). The code never goes above 50.
     "HALO_BULK_MAX": "20"
   },
-  // Audit log of every real billing write. No id: wrangler creates the namespace on the
-  // first deploy (automatic provisioning). Without this binding no billing write is sent.
-  "kv_namespaces": [{ "binding": "HALO_AUDIT" }],
+  // Audit log of every real billing write (namespace "halopsa-mcp-halo-audit", created by
+  // wrangler on the 2026-11-27 deploy). Without this binding no billing write is sent.
+  "kv_namespaces": [{ "binding": "HALO_AUDIT", "id": "f411c09823be41d49a5e977e22e2d6e9" }],
   // A deploy keeps variables set in the Cloudflare dashboard instead of
   // replacing them (a token entered as plain text there must not be wiped).
   "keep_vars": true
