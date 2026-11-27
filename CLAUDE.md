@@ -165,7 +165,10 @@ for `lines`, whether `disabled` is honored on POST, `/Control` partial POSTs and
 unverified: see `halopsa-mcp/README.md` ("Not verified yet") and record answers there. `halo_api_get` gained
 `fields` (Worker-side field filter, dotted for nested lists) and `page_no`/`page_size`. Mock test:
 `halopsa-mcp/test/billing.sim.mjs`. Deployed 2026-11-27 (f4285c1, version f69a76b8); KV `HALO_AUDIT` =
-`halopsa-mcp-halo-audit` (f411c09823be41d49a5e977e22e2d6e9). `halo_api_get` `fields` verified live on `/Control`.
+`halopsa-mcp-halo-audit` (f411c09823be41d49a5e977e22e2d6e9). `halo_api_get` `fields` verified live on `/Control`. First real write
+2026-11-27: `set_recurring_invoice_active` on `-143` (already disabled): HTTP 201, verified, lines and header
+untouched by a header-only POST, audit entry written. The audit before-copy no longer carries the nested `client`
+record (it held the QuickBooks settings block). New sessions see the tools; a running session keeps its old list.
 
 ## Emergency path: halopsa-mcp `escalate_emergency`
 The one sending path HelpDeskAgent keeps under -RequireApproval (v2.13.x).

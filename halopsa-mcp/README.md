@@ -104,17 +104,17 @@ Checked against the tenant's own swagger (`/api/swagger/v2/swagger.json`, read 2
 
 ### Not verified yet (each needs one approved write)
 
-Nothing was written to the tenant while building this. These are the open questions, and the tools are built so
+One write has been made so far (item 2). These are the open questions, and the tools are built so
 the answer cannot cause damage either way:
 
 1. **Does a POST with `lines` replace the line set or merge into it?** Unknown. Every line tool sends the complete
    set, which is right under both. What differs is removal: if Halo merges, leaving a line out does not delete it,
    and the read-back diff will show the line still there. Test: on a disabled template, `update_recurring_invoice`
    with the full set minus nothing (a no-op), then a one-line quantity change and back.
-2. **Does a header-only POST (`{id, disabled}`) leave lines and other header fields alone?** Expected (it is how
-   every other Halo update in this Worker behaves), not proven for invoices. The swagger has a `_sparse_update`
-   flag on this record, which is why it is called out. The first real write (`-143`, set disabled again) answers
-   it: `unexpected_changes` must be empty and the two lines unchanged. The audit entry holds the before-copy.
+2. **Does a header-only POST (`{id, disabled}`) leave lines and other header fields alone?** **Yes, verified
+   2026-11-27** on `-143` (audit `audit:8204177461935:2842mg`): HTTP 201, both lines and every header field
+   unchanged; Halo itself changed only `last_modified`, `change_seq` (1 to 2) and `last_change_agent` (17, the API
+   agent). Halo answers a successful POST with 201, not 200.
 3. **Is `disabled` the field Halo honors on POST?** It is the field Halo returns. Proven only by flipping a
    template and reading it back; the approved no-op on `-143` does not prove it.
 4. **Does a POST to `/Control` with only the changed keys leave the other settings alone?** Unknown, so real

@@ -62,7 +62,7 @@ t("bulk write lands, is verified and diffed", r.ok?.sent && r.ok.verified === tr
 const a = await call(st, "get_billing_audit", {});
 t("audit entry written and readable", a.ok?.count === 1 && a.ok.entries[0].tool === "set_recurring_invoice_active" && a.ok.entries[0].http_status === 200 && a.ok.entries[0].path === "/RecurringInvoice", a);
 const a1 = await call(st, "get_billing_audit", { key: a.ok.entries[0].key });
-t("audit entry keeps the record as it was", a1.ok?.entry.before["/RecurringInvoice/-143"].disabled === true, a1);
+t("audit entry keeps the record as it was, without the nested client", a1.ok?.entry.before["/RecurringInvoice/-143"].disabled === true && a1.ok.entry.before["/RecurringInvoice/-143"].lines.length === 2 && a1.ok.entry.before["/RecurringInvoice/-143"].client === undefined, a1);
 
 st = mk();
 r = await call(st, "halo_api_post", { path: "/Tickets", body: { id: 1, status_id: 2 } });

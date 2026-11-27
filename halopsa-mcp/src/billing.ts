@@ -130,7 +130,7 @@ function invoiceDeleteBlock(path: string, rec: any): string | null {
 // ---- shaping what the caller sees ------------------------------------------------------------------------------
 const LINE_KEYS = ["id", "ihid", "_itemid", "item_code", "item_shortdescription", "qty_order", "unit_price", "unit_cost", "net_amount", "tax_code", "isinactive", "sequenceid"];
 const DROP_TOP = ["client", "quickbooks_details"]; // nested read-only copies of other records; never sent, never diffed
-const VOLATILE = /(^|\.)(last_modified|change_seq|alastupdate|auto_increase_last_date|token_expiry|lastupdate|dateupdated)$/i;
+const VOLATILE = /(^|\.)(last_modified|last_change_agent|change_seq|alastupdate|auto_increase_last_date|token_expiry|lastupdate|dateupdated)$/i;
 const lineSummary = (l: any) => Object.fromEntries(LINE_KEYS.filter((k) => l?.[k] !== undefined).map((k) => [k, l[k]]));
 function slim(rec: any, full: boolean): any {
   if (!rec || typeof rec !== "object" || Array.isArray(rec)) return rec;
@@ -211,10 +211,12 @@ async function execute(c: Ctx, args: Record<string, unknown>, plan: Plan): Promi
   if (String(args.confirm ?? "") !== plan.confirm) throw new Error(`${plan.tool}: confirm ${args.confirm === undefined ? "is missing" : `"${args.confirm}" does not match`}. This write needs confirm: "${plan.confirm}". Nothing was sent.`);
   if (!c.env.HALO_AUDIT) throw new Error(`${plan.tool}: the audit log (KV binding HALO_AUDIT) is not bound to this Worker, so no billing write is sent. Nothing was sent.`);
   const ids = plan.readPaths.map((p) => p.split("/").pop());
+  // The rollback copy: the record itself, without the nested copies of other records (client, QuickBooks settings).
+  const beforeAudit = Object.fromEntries(Object.entries(before).map(([p, r]) => [p, strip(r)]));
   const entry: Record<string, unknown> = { ts: new Date().toISOString(), tool: plan.tool, method: plan.method, path: plan.path, record_ids: ids, body: plan.body ?? null };
   let res: { status: number; ok: boolean; text: string; json: any };
   try { res = await halo(c, plan.method, plan.path, { body: plan.body }); } catch (e: any) {
-    const a = await audit(c.env, { ...entry, http_status: null, ok: false, error: String(e?.message ?? e), before });
+    const a = await audit(c.env, { ...entry, http_status: null, ok: false, error: String(e?.message ?? e), before: beforeAudit });
     throw new Error(`${plan.tool}: ${plan.method} ${plan.path} did not complete (${e?.message ?? e}). It may or may not have reached Halo - read the record before retrying. Audit: ${a.key ?? a.error}`);
   }
   // Re-read, with short waits: Halo can accept a write before it reads back.
@@ -230,7 +232,7 @@ async function execute(c: Ctx, args: Record<string, unknown>, plan: Plan): Promi
   }
   const created = res.ok && Array.isArray(res.json) ? res.json.map((x: any) => x?.id).filter((x: any) => x !== undefined) : res.ok && res.json && typeof res.json === "object" && res.json.id !== undefined ? [res.json.id] : [];
   const extra = res.ok && plan.afterHook ? await plan.afterHook(c, res.json).catch((e: any) => ({ after_check_error: String(e?.message ?? e) })) : {};
-  const a = await audit(c.env, { ...entry, http_status: res.status, ok: res.ok, error: res.ok ? undefined : res.text.slice(0, 4000), response_ids: created.length ? created : undefined, before });
+  const a = await audit(c.env, { ...entry, http_status: res.status, ok: res.ok, error: res.ok ? undefined : res.text.slice(0, 4000), response_ids: created.length ? created : undefined, before: beforeAudit });
   if (!res.ok) throw new Error(`${plan.tool}: ${plan.method} ${plan.path} failed (${res.status}): ${res.text.slice(0, 4000)} | Audit: ${a.key ?? a.error}`);
   const records = plan.readPaths.map((p) => {
     const d = diff(before[p], after[p]);
